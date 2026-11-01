@@ -80,3 +80,16 @@ All periods end at the **date of the last sale** in the export (the anchor).
 | L3M | The last 3 complete calendar months; the anchor's month counts only if the anchor is its last day | month | the 3 months before |
 
 A comparison shows `n/a` when the earlier period starts before the first sale in the export.
+
+The small line charts on the KPI cards show one point per day in L14D. In L6W and L3M they
+show one point per 7-day block, counted back from the period's last day so the latest point is
+a full week; leftover days at the start of the period (in L3M usually one to three) are left
+out of the line chart, but not out of the totals.
+
+### Week-over-week and month-over-month growth
+
+The trend charts of L6W and L3M label every bar with its growth over the bar before:
+`net sales of the bucket ÷ net sales of the previous bucket − 1`, and the same for orders.
+The first bar compares with the week or month just before the period, but only if that bucket
+lies completely within the sales history; otherwise, and whenever the previous bucket has no
+sales, the growth is `n/a`. The daily trend (L14D) has no growth labels.
