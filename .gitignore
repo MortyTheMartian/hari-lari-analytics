@@ -1,0 +1,29 @@
+# Real data and generated reports never leave this machine
+data/input/*
+!data/input/.gitkeep
+data/output/*
+!data/output/.gitkeep
+*.csv
+!config/*.csv
+!tests/fixtures/*.csv
+*.xlsx
+*.pdf
+*Zone.Identifier
+
+# Local environment
+.env
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
