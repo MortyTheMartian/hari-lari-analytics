@@ -28,7 +28,7 @@ The exact definition of every metric and dimension is in [METRICS.md](METRICS.md
 You need [uv](https://docs.astral.sh/uv/). It installs Python 3.13 and all dependencies:
 
 ```bash
-git clone https://github.com/<owner>/hari-lari-analytics.git
+git clone https://github.com/MortyTheMartian/hari-lari-analytics.git
 cd hari-lari-analytics
 uv sync
 ```
