@@ -1,0 +1,23 @@
+sales_item,adjusted_item,adjusted_category,note
+Tomato Focaccia,Focaccia Tomato,,renamed
+Mushroom Focaccia,Focaccia Mushroom,,renamed
+Sea Salt Focaccia,Focaccia Plain (Sea Salt),,renamed
+Cheese Bacon,Focaccia Cheese Bacon,,renamed
+Focaccia Banana,Focaccia Banana Butterscotch,,discontinued
+Focaccia Butterscotch,Focaccia Banana Butterscotch,,renamed
+Banana Butterscotch,Focaccia Banana Butterscotch,,
+Naci Campur,Nasi Campur,,typo; sold at 50000 in Jul 2026
+Kombucha,Kombucha Dr Brew,,renamed; sold at 45000 in Jul 2026
+Kombucha Serenitea,Kombucha Dr Brew,,flavor now a library variant
+Kombucha Ispahan,Kombucha Dr Brew,,flavor now a library variant
+Oat/coconut milk,Extra Oat Milk,,renamed add-on
+Raw Chocolate,Raw Cacao Latte,,
+Mango Smoothie Bowl,Mango Miles Bowl,,
+Dragon Fruit Bowl,Pink Peak Bowl,,
+Blueberry Banana Smoothie,,Smoothie Drinks,discontinued
+Coconut Matcha,,Non Coffee,discontinued
+Soft Drink,,Soft Drinks & Water,generic soft drink entry
+croissant plain,Plain Croissant,,
+pastries,Pastries (unspecified),Pastries,generic pastry entry
+towel rent,,Other,non-food
+Custom Amount,,Custom Amount,open-price entry in Moka

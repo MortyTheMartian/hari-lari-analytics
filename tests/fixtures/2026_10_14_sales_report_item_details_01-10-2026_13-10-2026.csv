@@ -1,0 +1,10 @@
+Outlet,Receipt Number,Date,Time,Category,Brand,Items,Variant,SKU,Quantity,Modifier Applied,Discount Applied,Gross Sales,Discounts,Refunds,Net Sales,Gratuity,Tax,Sales Type,Collected By,Served By,Customer,Payment Method,Event Type,Reason of Refund
+Demo Cafe,R005,13-10-2026,11:00:00,Uncategorized,Unbranded,Custom Amount,,,1,,,15000.0,0.0,0.0,15000.0,0.0,0.0,No Sales Type,Demo Staff,,,BCA,Payment,
+Demo Cafe,R004,12-10-2026,10:00:00,Mains,Unbranded,Nasi Campur,,,1,,,35000.0,0.0,0.0,35000.0,0.0,0.0,No Sales Type,Demo Staff,,,BCA,Payment,
+Demo Cafe,R004,12-10-2026,10:00:00,Mains,Unbranded,Nasi Campur,,,1,,,35000.0,0.0,0.0,35000.0,0.0,0.0,No Sales Type,Demo Staff,,,BCA,Payment,
+Demo Cafe,R004,12-10-2026,10:00:00,Cakes,Unbranded,Mystery Cake,,,1,,,30000.0,0.0,0.0,30000.0,0.0,0.0,No Sales Type,Demo Staff,,,BCA,Payment,
+Demo Cafe,R003,06-10-2026,09:00:30,Espresso Based,Unbranded,Full Refund for: R003 - Cappucino,Hot,,-1,,,0.0,0.0,40000.0,-40000.0,0.0,0.0,No Sales Type,Demo Staff,,,Gopay,Refund,Accidental Charge
+Demo Cafe,R003,06-10-2026,09:00:00,Coffee,Unbranded,Cappucino,Hot,,1,,,40000.0,0.0,0.0,40000.0,0.0,0.0,No Sales Type,Demo Staff,,,Gopay,Payment,
+Demo Cafe,R002,05-10-2026,08:00:00,Coffee,Unbranded,Latte,cold,,1,,FOUNDER25,40000.0,10000.0,0.0,30000.0,0.0,0.0,No Sales Type,Demo Staff,,demo@example.com,Cash,Payment,
+Demo Cafe,R001,05-10-2026,07:00:00,Uncategorized,Unbranded,Latte,Hot,,1,,,40000.0,0.0,0.0,40000.0,0.0,0.0,No Sales Type,Demo Staff,,,BCA,Payment,
+Demo Cafe,R001,05-10-2026,07:00:00,Focaccia,Unbranded,Tomato Focaccia,,,1,,,28000.0,0.0,0.0,28000.0,0.0,0.0,No Sales Type,Demo Staff,,,BCA,Payment,
