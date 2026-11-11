@@ -17,7 +17,8 @@ Every run reads the full sales history and writes two files to `data/output/<run
   three sections are _last 14 days_ (by day), _last 6 complete ISO weeks_ (by week) and
   _last 3 complete months_ (by month), with three pages each: an overview (KPI cards, trend
   chart with week-over-week or month-over-month growth, key figures), adjusted categories with
-  order penetration, and top items, orders by hour of day, payment types and discounts. Every
+  order penetration, category AOV and the AOV split into contributive AOVs per category (with
+  a total line), and top items, orders by hour of day, payment types and discounts. Every
   section compares with the equally long period before it.
 - **`hari_lari_sales_lines_<last sale date>.xlsx`**: the cleaned sales lines as an Excel table
   for your own pivots, plus a sheet describing every column. Customer and staff names are

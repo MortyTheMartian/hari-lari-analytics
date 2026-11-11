@@ -275,6 +275,10 @@ class PdfReport:
             cell.text.set_color(self.p.muted)
             cell.text.set_fontsize(6.8)
             cell.text.set_fontweight("semibold")
+        for cell in getattr(table, "col_group_cells", {}).values():
+            cell.text.set_color(self.p.text)
+            cell.text.set_fontsize(7)
+            cell.text.set_fontweight("semibold")
         return table
 
     def _bar_column(self, name: str, title: str, vmax: float, width: float) -> ColumnDefinition:
@@ -577,62 +581,133 @@ class PdfReport:
         for i, r in enumerate(s.kpis.itertuples()):
             table.cells[(i, 3)].text.set_color(self._color(r.change, r.up_is_good))
 
+    def _delta_column(self, name: str, group: str, fmt) -> ColumnDefinition:
+        return ColumnDefinition(
+            name,
+            title="Δ",
+            group=group,
+            width=0.75,
+            textprops={"ha": "right", "weight": "semibold"},
+            formatter=lambda v: "n/a" if pd.isna(v) else fmt(v),
+            text_cmap=self._color,
+        )
+
     def _categories(self, s: Section) -> Figure:
         fig = self._section_page(s, "Categories")
-        c = s.categories
-        hint = "Sorted by net sales" + (
-            " · Δ in percentage points vs prior period" if s.prior_ok else ""
+        hint = (
+            "Sorted by net sales · AOV = Σ contributive AOV = Σ penetration × category AOV · "
+            "a category's share of AOV equals its % of net"
+            + (" · Δ vs prior period" if s.prior_ok else "")
         )
-        self._card(fig, 0.035, 0.07, 0.56, 0.78, "Adjusted categories", hint)
+        self._card(fig, 0.035, 0.07, 0.93, 0.78, "Adjusted categories & contributive AOV", hint)
+        c = pd.concat([s.categories, s.category_total.to_frame().T], ignore_index=True)
+        c.loc[len(c) - 1, "adjusted_category"] = "Total"
+        no_prior = pd.Series(np.nan, index=c.index)
         df = pd.DataFrame(
             {
                 "Category": c["adjusted_category"],
                 "Net Sales": c["net_sales"].map(idr),
-                "share": c["share"].fillna(0),
-                "Items": c["items_sold"],
-                "Orders": c["orders"],
+                "share": c["share"].fillna(0).astype(float),
+                "Items": c["items_sold"].map(idr),
+                "Orders": c["orders"].map(idr),
                 "Penetration": c["penetration"].map(pct),
-                "delta": c["delta_pp"] if s.prior_ok else np.nan,
+                "pen_delta": c["delta_pp"] if s.prior_ok else no_prior,
+                "Category AOV": c["category_aov"].map(idr),
+                "aov_change": c["category_aov_change"] if s.prior_ok else no_prior,
+                "Contributive AOV": c["contributive_aov"].map(idr),
+                "contrib_delta": c["contributive_aov_delta"] if s.prior_ok else no_prior,
             }
-        )
-        row = min(0.06, 0.64 / (len(df) + 1))
-        ax = fig.add_axes((0.047, 0.76 - row * (len(df) + 1), 0.536, row * (len(df) + 1)))
-        self._table(
+        ).astype({"pen_delta": float, "aov_change": float, "contrib_delta": float})
+        n = len(df)
+        row = min(0.048, 0.56 / (n + 1))
+        top = 0.745
+        ax = fig.add_axes((0.047, top - row * (n + 1), 0.906, row * (n + 1)))
+        table = self._table(
             ax,
             df,
             [
-                ColumnDefinition("Category", title="CATEGORY", width=1.5, textprops={"ha": "left"}),
+                ColumnDefinition("Category", title="CATEGORY", width=1.4, textprops={"ha": "left"}),
                 ColumnDefinition(
                     "Net Sales",
                     title="NET SALES",
-                    width=1.0,
+                    width=0.95,
                     textprops={"ha": "right", "weight": "bold"},
                 ),
-                self._bar_column("share", "% OF NET", df["share"].max(), 1.4),
+                self._bar_column("share", "% OF NET", df["share"].iloc[:-1].max(), 1.2),
                 ColumnDefinition("Items", title="ITEMS", width=0.55, textprops={"ha": "right"}),
                 ColumnDefinition("Orders", title="ORDERS", width=0.6, textprops={"ha": "right"}),
                 ColumnDefinition(
-                    "Penetration", title="PENETR.", width=0.75, textprops={"ha": "right"}
+                    "Penetration",
+                    title="SHARE",
+                    group="ORDER PENETRATION",
+                    width=0.7,
+                    textprops={"ha": "right"},
+                ),
+                self._delta_column("pen_delta", "ORDER PENETRATION", lambda v: f"{v:+.1f} pp"),
+                ColumnDefinition(
+                    "Category AOV",
+                    title="IDR",
+                    group="CATEGORY AOV",
+                    width=0.75,
+                    textprops={"ha": "right"},
+                ),
+                self._delta_column(
+                    "aov_change", "CATEGORY AOV", lambda v: ">+999%" if v > 9.99 else f"{v:+.1%}"
                 ),
                 ColumnDefinition(
-                    "delta",
-                    title="Δ PP",
+                    "Contributive AOV",
+                    title="IDR",
+                    group="CONTRIBUTIVE AOV",
                     width=0.75,
-                    textprops={"ha": "right", "weight": "semibold"},
-                    formatter=lambda v: "n/a" if pd.isna(v) else f"{v:+.1f}",
-                    text_cmap=self._color,
+                    textprops={"ha": "right", "weight": "bold"},
                 ),
+                self._delta_column("contrib_delta", "CONTRIBUTIVE AOV", lambda v: f"{v:+,.0f}"),
             ],
             "Category",
             size=8.5,
         )
+        self._style_total_row(table, n - 1, df.columns.get_loc("share"), s.prior_ok)
+        fig.text(
+            0.05,
+            0.09,
+            "Reading a change in contributive AOV: a moving penetration means the category is in "
+            "more or fewer orders (an inclusion question);\na moving category AOV means orders "
+            "with the category spend more or less on it (a pricing or basket-size question).\n"
+            "Orders are counted per receipt, so they don't add up across categories: the total "
+            "is all receipts, and its penetration is 100%. Net sales, items and contributive AOV "
+            "add up.",
+            fontsize=7.5,
+            color=self.p.muted,
+            linespacing=1.6,
+        )
+        return fig
 
+    def _style_total_row(self, table: Table, idx: int, share_col: int, prior_ok: bool) -> None:
+        """Bold total row below a solid line; its share is written out instead of drawn."""
+        for cell in table.rows[idx].cells:
+            if hasattr(cell, "text"):
+                cell.text.set_fontweight("bold")
+        pen_delta = table.cells[(idx, table.column_names.index("pen_delta"))]
+        pen_delta.text.set_text("" if prior_ok else "n/a")
+        x0, x1 = table.rows[idx].get_xrange()
+        table.ax.plot([x0, x1], [idx, idx], color=self.p.muted, lw=0.8)
+        sub = table.subplots[(idx, share_col)]
+        sub.cla()
+        sub.set_xlim(0, 1)
+        sub.set_ylim(0, 1)
+        sub.axis("off")
+        sub.text(0, 0.5, "100.0%", va="center", fontsize=7.5, fontweight="bold", color=self.p.text)
+
+    def _penetration_chart(self, fig: Figure, s: Section, rect=(0.607, 0.07, 0.358, 0.78)) -> None:
+        """Order penetration per category as a dot plot; not on any page at the moment."""
+        x, y, w, h = rect
+        c = s.categories
         hint = "Share of orders containing the category" + (
             " · ○ prior period" if s.prior_ok else ""
         )
-        self._card(fig, 0.607, 0.07, 0.358, 0.78, "Order penetration", hint)
+        self._card(fig, x, y, w, h, "Order penetration", hint)
         p = c.sort_values("penetration").fillna({"penetration": 0, "prior_penetration": 0})
-        ax = fig.add_axes((0.71, 0.12, 0.23, 0.63))
+        ax = fig.add_axes((x + 0.103, y + 0.05, w - 0.128, h - 0.15))
         yy = np.arange(len(p))
         if s.prior_ok:
             ax.hlines(yy, p["prior_penetration"], p["penetration"], color=self.p.grid, lw=3)
@@ -663,7 +738,6 @@ class PdfReport:
         ax.spines["bottom"].set_visible(False)
         ax.set_xlim(0, max(p[["penetration", "prior_penetration"]].max().max(), 0.1) * 1.18)
         ax.set_ylim(-0.6, len(p) - 0.4)
-        return fig
 
     def _details(self, s: Section) -> Figure:
         fig = self._section_page(s, "Items, hours & payments")

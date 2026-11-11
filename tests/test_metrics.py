@@ -1,6 +1,7 @@
 import pandas as pd
+import pytest
 
-from hari_lari_analytics.metrics import category_penetration, compute_metrics
+from hari_lari_analytics.metrics import category_penetration, compute_metrics, contributive_aov
 
 
 def test_totals(lines):
@@ -55,3 +56,13 @@ def test_empty_input_gives_zeroes():
     ).iloc[0]
     assert empty.orders == 0
     assert pd.isna(empty.aov)
+
+
+def test_contributive_aov_is_penetration_times_category_aov_and_sums_to_aov(lines):
+    split = contributive_aov(lines).set_index("adjusted_category")
+    assert split.loc["Coffee", "penetration"] == 0.5
+    assert split.loc["Coffee", "category_aov"] == 70_000 / 2
+    assert split["contributive_aov"].to_dict() == pytest.approx(
+        (split["penetration"] * split["category_aov"]).to_dict()
+    )
+    assert split["contributive_aov"].sum() == pytest.approx(compute_metrics(lines).iloc[0].aov)

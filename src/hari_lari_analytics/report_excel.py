@@ -58,6 +58,9 @@ PIVOT_TIPS = [
     "Average Order Value = Net Sales IDR / Orders.",
     "% Category Order Penetration = orders containing the category / all orders in the same "
     "filter. It is easiest to read in the PDF report.",
+    "Category AOV = net sales of the category / orders containing the category. "
+    "Contributive AOV = penetration × Category AOV = net sales of the category / all orders; "
+    "it adds up to the Average Order Value over all categories.",
 ]
 
 

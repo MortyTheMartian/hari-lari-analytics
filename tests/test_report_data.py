@@ -78,6 +78,44 @@ def test_section_figures(lines):
     assert section.trading_days == 3
 
 
+ONE_WEEK = Period(
+    key="W",
+    title="One week",
+    start=date(2026, 10, 12),
+    end=date(2026, 10, 18),
+    grain="sale_week",
+    prior_start=date(2026, 10, 5),
+    prior_end=date(2026, 10, 11),
+)
+
+
+def test_category_total_counts_orders_but_sums_sales_and_contributive_aov(lines):
+    section = build_section(lines, ONE_WEEK, FIRST_SALE)
+    cats, total = section.categories, section.category_total
+    # R004 holds Mains and Cakes: summed per category it would count twice
+    assert cats["orders"].sum() == 3
+    assert total["orders"] == 2
+    assert total["net_sales"] == cats["net_sales"].sum() == 115_000
+    assert total["items_sold"] == cats["items_sold"].sum()
+    assert total["penetration"] == 1
+    assert total["contributive_aov"] == total["category_aov"] == 115_000 / 2
+    assert cats["contributive_aov"].sum() == pytest.approx(total["contributive_aov"])
+
+
+def test_contributive_aov_changes_add_up_to_the_aov_change(lines):
+    section = build_section(lines, ONE_WEEK, FIRST_SALE)
+    cats = section.categories.set_index("adjusted_category")
+    # sold only in the prior week, kept with zero sales
+    assert cats.loc["Coffee", "net_sales"] == 0
+    assert cats.loc["Coffee", "delta_pp"] == -100
+    assert cats.loc["Coffee", "contributive_aov_delta"] == -70_000 / 2
+    assert pd.isna(cats.loc["Mains", "category_aov_change"])
+    assert section.category_total["contributive_aov_delta"] == 115_000 / 2 - 98_000 / 2
+    assert cats["contributive_aov_delta"].sum() == pytest.approx(
+        section.category_total["contributive_aov_delta"]
+    )
+
+
 def test_empty_section(lines):
     section = build_section(lines, last_3_months(date(2026, 10, 13)), FIRST_SALE)
     assert section.empty

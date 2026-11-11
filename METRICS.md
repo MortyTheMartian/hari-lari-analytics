@@ -31,6 +31,8 @@ Amounts are whole Indonesian Rupiah (IDR).
 | Average Order Value | Net Sales IDR ÷ Orders |
 | Items Sold | Sum of Quantity (refund lines subtract) |
 | % Category Order Penetration | Orders containing at least one line of the category ÷ all orders, both within the same filter |
+| Category AOV | Net Sales IDR of the category ÷ orders containing the category |
+| Contributive AOV | % Category Order Penetration × Category AOV = Net Sales IDR of the category ÷ all orders |
 | First Sale Timestamp | Earliest payment line, excluding fully refunded receipts |
 | Last Sale Timestamp | Latest payment line, excluding fully refunded receipts |
 
@@ -40,6 +42,29 @@ because one receipt can contain several. Always count them from the lines.
 Penetration always uses the orders of the current filter as its denominator. For example, in
 the *last 14 days* section, "Coffee 60%" means 60% of all receipts in those 14 days contained a
 coffee; filtered to payment type BCA, it would be the share of BCA receipts.
+
+### Contributive AOV
+
+The Contributive AOVs split the AOV into one slice per category:
+
+```text
+Net Sales        = Orders × AOV
+AOV              = Σ Contributive AOV over all categories
+Contributive AOV = % Category Order Penetration × Category AOV
+```
+
+The slices add up to the AOV exactly, and a category's share of the AOV equals its share of
+net sales. A change in a slice has two possible causes: the category appears in more or fewer
+orders (penetration: an inclusion question), or orders with the category spend more or less
+on it (Category AOV: a pricing or basket-size question).
+
+The **Total** line of the Categories page sums Net Sales, Items Sold and Contributive AOV
+over the categories. Its Orders are all distinct receipts, not the sum of the category orders.
+Its penetration is therefore 100%, and its Category AOV and Contributive AOV both equal the
+AOV. When there is a prior period, categories sold only in the prior period stay in the table
+with zero sales, so that the changes in Contributive AOV add up to the change in AOV.
+A category whose lines all sit on fully refunded receipts has no orders and no Category AOV,
+but its (usually zero) net sales still count towards its Contributive AOV.
 
 ## Dimensions
 

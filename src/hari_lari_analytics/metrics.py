@@ -58,3 +58,22 @@ def category_penetration(
         result = with_category.assign(total_orders=valid["receipt_nr"].nunique())
     result["penetration"] = result["orders_with_category"] / result["total_orders"]
     return result.sort_values([*by, "penetration"], ascending=[True] * len(by) + [False])
+
+
+def contributive_aov(lines: pd.DataFrame, category: str = "adjusted_category") -> pd.DataFrame:
+    """Split the AOV of `lines` into one slice per category.
+
+    contributive_aov = penetration × category_aov = category net sales ÷ all orders, so the
+    slices add up to the AOV exactly. A category whose lines all sit on fully refunded receipts
+    has no orders and no category AOV, but still contributes its net sales.
+
+    Returns the metrics of `compute_metrics` by category plus total_orders, penetration,
+    category_aov and contributive_aov.
+    """
+    result = compute_metrics(lines, [category])
+    total = lines.loc[lines["counts_as_order"], "receipt_nr"].nunique()
+    result["total_orders"] = total
+    result["penetration"] = result["orders"] / total if total else np.nan
+    result["category_aov"] = result["net_sales"] / result["orders"].replace(0, np.nan)
+    result["contributive_aov"] = result["net_sales"] / total if total else np.nan
+    return result

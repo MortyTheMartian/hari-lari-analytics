@@ -8,7 +8,7 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
-from hari_lari_analytics.metrics import category_penetration, compute_metrics
+from hari_lari_analytics.metrics import compute_metrics, contributive_aov
 from hari_lari_analytics.periods import Period
 
 GRAIN_FREQ = {"sale_date": "D", "sale_week": "W-MON", "sale_month": "MS"}
@@ -43,6 +43,7 @@ class Section:
     trend: pd.DataFrame
     spark: pd.DataFrame  # sparkline points: per day for L14D, per 7-day block otherwise
     categories: pd.DataFrame
+    category_total: pd.Series  # orders and penetration counted over all receipts, not summed
     items: pd.DataFrame
     hours: pd.DataFrame
     payments: pd.DataFrame
@@ -133,17 +134,83 @@ def _spark(cur: pd.DataFrame, period: Period) -> pd.DataFrame:
     return spark[["net_sales", "orders", "aov", "items_sold"]].astype(float).fillna(0)
 
 
-def _categories(cur: pd.DataFrame, prior: pd.DataFrame, prior_ok: bool) -> pd.DataFrame:
-    cats = compute_metrics(cur, ["adjusted_category"])
-    pen = category_penetration(cur).set_index("adjusted_category")["penetration"]
-    prior_pen = category_penetration(prior).set_index("adjusted_category")["penetration"]
-    cats["share"] = cats["net_sales"] / cats["net_sales"].sum()
-    cats["penetration"] = cats["adjusted_category"].map(pen)
-    cats["prior_penetration"] = (
-        cats["adjusted_category"].map(prior_pen).fillna(0) if prior_ok else np.nan
+CATEGORY_COLUMNS = [
+    "net_sales",
+    "items_sold",
+    "orders",
+    "share",
+    "penetration",
+    "category_aov",
+    "contributive_aov",
+]
+
+
+def _with_prior(table: pd.DataFrame, prior: pd.DataFrame | pd.Series | None) -> pd.DataFrame:
+    """Add the prior values and the changes; `prior` is None when there is no comparison."""
+
+    def before(column: str):
+        return np.nan if prior is None else prior[column]
+
+    table["prior_penetration"] = before("penetration")
+    table["prior_category_aov"] = before("category_aov")
+    table["prior_contributive_aov"] = before("contributive_aov")
+    table["delta_pp"] = (table["penetration"] - table["prior_penetration"]) * 100
+    table["category_aov_change"] = table["category_aov"] / table["prior_category_aov"] - 1
+    table["contributive_aov_delta"] = table["contributive_aov"] - table["prior_contributive_aov"]
+    return table
+
+
+def _categories(
+    cur: pd.DataFrame, prior: pd.DataFrame, prior_ok: bool
+) -> tuple[pd.DataFrame, pd.Series]:
+    """One row per category, sorted by net sales, and the total over all categories.
+
+    With a comparison, categories sold only in the prior period are kept with zero current
+    sales, so that the changes in contributive AOV add up to the change in AOV.
+    """
+    key = "adjusted_category"
+    cats = contributive_aov(cur).set_index(key)
+    before = contributive_aov(prior).set_index(key) if prior_ok else None
+    if before is not None:
+        gone = before.index.difference(cats.index)
+        if len(gone):
+            zero = {"net_sales": 0, "items_sold": 0, "orders": 0, "penetration": 0.0}
+            cats = pd.concat([cats, pd.DataFrame(zero, index=gone).rename_axis(key)])
+            cats["contributive_aov"] = cats["contributive_aov"].fillna(0.0)
+        before = before.reindex(cats.index).fillna({"penetration": 0.0, "contributive_aov": 0.0})
+    total_net = cats["net_sales"].sum()
+    cats["share"] = cats["net_sales"] / total_net if total_net else np.nan
+    cats = _with_prior(cats[CATEGORY_COLUMNS], before)
+    cats = cats.sort_values("net_sales", ascending=False, kind="stable").reset_index()
+
+    c = compute_metrics(cur).iloc[0]
+    total = pd.DataFrame(
+        [
+            {
+                "net_sales": c["net_sales"],
+                "items_sold": c["items_sold"],
+                "orders": c["orders"],
+                "share": 1.0 if total_net else np.nan,
+                "penetration": 1.0 if c["orders"] else np.nan,
+                "category_aov": c["aov"],
+                "contributive_aov": c["aov"],
+            }
+        ]
     )
-    cats["delta_pp"] = (cats["penetration"] - cats["prior_penetration"]) * 100
-    return cats.sort_values("net_sales", ascending=False).reset_index(drop=True)
+    if prior_ok:
+        p = compute_metrics(prior).iloc[0]
+        before_total = pd.Series(
+            {
+                "penetration": 1.0 if p["orders"] else np.nan,
+                "category_aov": p["aov"],
+                "contributive_aov": p["aov"],
+            }
+        )
+    else:
+        before_total = None
+    total = _with_prior(total, before_total).iloc[0]
+    total["delta_pp"] = np.nan
+    return cats, total
 
 
 def build_section(lines: pd.DataFrame, period: Period, first_date: date) -> Section:
@@ -154,6 +221,7 @@ def build_section(lines: pd.DataFrame, period: Period, first_date: date) -> Sect
     p = compute_metrics(prior).iloc[0]
 
     spark = _spark(cur, period)
+    categories, category_total = _categories(cur, prior, prior_ok)
 
     total_net = cur["net_sales"].sum()
     items = compute_metrics(cur, ["adjusted_item_variant", "adjusted_category"])
@@ -190,7 +258,8 @@ def build_section(lines: pd.DataFrame, period: Period, first_date: date) -> Sect
         },
         trend=_trend(cur, prior, lines, period, prior_ok, first_date),
         spark=spark,
-        categories=_categories(cur, prior, prior_ok),
+        categories=categories,
+        category_total=category_total,
         items=items,
         hours=hours,
         payments=pay.reset_index(drop=True),
