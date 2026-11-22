@@ -27,3 +27,7 @@ dist/
 .vscode/
 .idea/
 .DS_Store
+
+# Moka API extraction: tokens, raw API responses and schema dumps stay local
+extraction/moka/.token.json
+extraction/moka/output/
