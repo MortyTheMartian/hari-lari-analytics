@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import time
 import urllib.error
@@ -52,7 +53,7 @@ class MokaClient:
                     status, body, hdr = r.status, r.read(), r.headers
             except urllib.error.HTTPError as e:
                 status, body, hdr = e.code, e.read(), e.headers
-            except (urllib.error.URLError, TimeoutError):
+            except (urllib.error.URLError, http.client.HTTPException, OSError):  # drops, resets
                 status, body, hdr = 0, b"", {}
             retry_after = hdr.get("Retry-After", "") if hdr else ""
             self.log.append(

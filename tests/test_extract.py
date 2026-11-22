@@ -266,3 +266,21 @@ def test_upload_dir_copies_files_under_prefix(tmp_path):
 
     upload_dir(tmp_path, "gs://b/raw/2026-11-23", client=Client())
     assert sorted(uploaded) == ["raw/2026-11-23/manifest.json", "raw/2026-11-23/tables/a.parquet"]
+
+
+def test_client_retries_on_dropped_connection(tmp_path):
+    import http.client
+
+    store = FileTokenStore(tmp_path / "t.json")
+    store.save(token(created=10**10))
+    calls = []
+
+    def opener(req, timeout):
+        calls.append(1)
+        if len(calls) == 1:
+            raise http.client.RemoteDisconnected("Remote end closed connection without response")
+        return FakeResp(200, b'{"ok": 1}')
+
+    c = MokaClient(TokenManager(store), sleep=lambda s: None, opener=opener)
+    assert c.get("/v1/x") == {"ok": 1}
+    assert [r[2] for r in c.log] == [0, 200]
