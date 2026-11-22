@@ -14,10 +14,18 @@ dependencies = [
     "openpyxl>=3.1.5",
     "pandas>=3.1.0",
     "plottable>=0.1.5",
+    "pyarrow>=18.0.0",
+]
+
+[project.optional-dependencies]
+gcp = [
+    "google-cloud-secret-manager>=2.20.0",
+    "google-cloud-storage>=2.18.0",
 ]
 
 [project.scripts]
 hari-lari-report = "hari_lari_analytics.cli:main"
+hari-lari-extract = "hari_lari_analytics.extract.cli:main"
 
 [build-system]
 requires = ["hatchling"]

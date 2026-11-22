@@ -4,7 +4,7 @@
   output/schema.csv              information_schema.columns-like dump with an example value
   output/probe_log.csv           status per endpoint (errors, empty results)
 
-Run: uv run python extraction/moka/probe_schema.py
+Run: uv run python extraction/moka/probe_schema.py  (from the repo root)
 """
 
 import csv
@@ -12,7 +12,33 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
-import moka_client as moka
+import urllib.error
+import urllib.parse
+import urllib.request
+
+from hari_lari_analytics.extract.cli import DEFAULT_TOKEN_FILE, load_env
+from hari_lari_analytics.extract.tokens import BASE, FileTokenStore, TokenManager
+
+load_env()
+_tokens = TokenManager(FileTokenStore(DEFAULT_TOKEN_FILE))
+
+
+class moka:  # noqa: N801 - tiny shim keeping the old call sites unchanged
+    @staticmethod
+    def get(path, params=None):
+        url = BASE + path + ("?" + urllib.parse.urlencode(params) if params else "")
+        req = urllib.request.Request(
+            url, headers={"Authorization": f"Bearer {_tokens.access_token()}"}
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                status, body = r.status, r.read().decode()
+        except urllib.error.HTTPError as e:
+            status, body = e.code, e.read().decode()
+        try:
+            return status, json.loads(body)
+        except json.JSONDecodeError:
+            return status, body
 
 OUT = Path(__file__).parent / "output"
 RAW = OUT / "raw"
