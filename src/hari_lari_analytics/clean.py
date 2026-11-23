@@ -10,6 +10,13 @@ import pandas as pd
 from hari_lari_analytics.load import LIBRARY_ITEM
 
 UNCATEGORIZED = "Uncategorized"
+MODIFIER_COLUMNS = [
+    "modifier_id",
+    "modifier_option_id",
+    "modifier_name",
+    "modifier_option_name",
+    "modifier_price",
+]
 REFUND_ITEM = re.compile(r"Refund for: \S+ - (.+)$")
 
 
@@ -54,11 +61,14 @@ def clean_sales(sales: pd.DataFrame, library: pd.DataFrame, aliases: pd.DataFram
             "payment_type": _blank_to_na(sales["Payment Method"]),
         }
     )
+    for column in MODIFIER_COLUMNS:  # the back-office export has no modifier data
+        df[column] = pd.Series(pd.NA, index=df.index, dtype=object)
+    df["modifier_price"] = df["modifier_price"].astype("Int64")
     df["discounted"] = df["discount_code"].notna() | df["discounts"].gt(0)
     notes: list[str] = []
 
     _attribute_refunds(df, notes)
-    df["counts_as_order"] = ~df["receipt_nr"].isin(_fully_refunded_receipts(df))
+    df["counts_as_order"] = ~df["receipt_nr"].isin(fully_refunded_receipts(df))
 
     resolved = _resolve_items(df, library, aliases, notes)
     df["adjusted_item"] = df["item"].map(lambda i: resolved[i].adjusted_item)
@@ -92,7 +102,7 @@ def _attribute_refunds(df: pd.DataFrame, notes: list[str]) -> None:
         df.loc[refund_idx[found], column] = matched[column].to_numpy()[found]
 
 
-def _fully_refunded_receipts(df: pd.DataFrame) -> pd.Index:
+def fully_refunded_receipts(df: pd.DataFrame) -> pd.Index:
     per_receipt = df.groupby("receipt_nr").agg(
         has_refund=("is_refund", "any"), net_sales=("net_sales", "sum")
     )

@@ -1,6 +1,7 @@
 # Metrics and dimensions
 
-All figures are computed from the line-level Moka *Item Details* export after cleaning.
+All figures are computed from line-level Moka sales data after cleaning: either the back-office
+*Item Details* export or the Moka API (`--source`, see the README). Both give the same lines.
 Amounts are whole Indonesian Rupiah (IDR).
 
 ## Cleaning rules
@@ -17,7 +18,37 @@ Amounts are whole Indonesian Rupiah (IDR).
   receipt as separate lines.
 - **Variants** are capitalized consistently (`cold` → `Cold`).
 - **Personal data** (Customer, Collected By, Served By) is dropped.
-- **Timestamps** are Moka's local time; there is no timezone conversion.
+- **Timestamps** are Moka's local time (Bali); there is no timezone conversion. The API labels
+  its timestamps `+07:00`, but the clock time already is Bali time, so the extraction drops the
+  offset instead of converting it.
+
+### Source: Moka API
+
+`load_api.py` builds the same lines from the API tables of one extraction run:
+
+- **Lines** are the `transaction_lines`, joined to their payment for the receipt number,
+  timestamp and payment type (the payment's `payment_type_label`). The discount code is the
+  `discount_name` in `transaction_line_discounts`; if a line has several, they are joined
+  with ` + `.
+- **Refunds.** A refund is a second payment with the same receipt number whose
+  `parent_payment_id` points to the original payment. It repeats the refunded lines with
+  positive amounts. They become lines with Event Type `Refund`: negative quantity, Gross Sales
+  and Discounts 0, the amount in Refunds and the negative amount in Net Sales, so
+  `Gross − Discounts − Refunds = Net Sales` holds on every line. The refunded item, variant
+  and category are those of the line itself, and the reason comes from `transaction_refunds`.
+  The run notes it when the refunded line amounts differ from the refund amount in Moka
+  (partial refunds have not been seen yet).
+- **Ids.** Every line also carries `payment_id`, `item_id`, `variant_id` and `category_id`.
+- **Modifiers** (add-ons and choices such as *Chicken* or *Poached*, in use since 21 Nov 2026)
+  are on the line as `modifier_id`, `modifier_option_id`, `modifier_name`,
+  `modifier_option_name` and `modifier_price`, linked through the payment and the line's uuid
+  (`transaction_line_modifiers`). They are NULL for lines without modifiers, which is nearly
+  all lines. A line stays one row, because Moka already includes the modifier prices in the
+  line's gross sales; `modifier_price` is informational and must not be added to the sales. A
+  line with several modifiers lists them joined by ` + `, ordered by option id, so the ids,
+  names and option names line up; `modifier_price` is then the sum of their unit prices. The
+  CSV source has no modifier data, so the columns are NULL there. The Excel export shows the
+  modifier name, option and price.
 
 ## Metrics
 
@@ -94,9 +125,26 @@ For every item name in the sales export, in this order:
 
 Open-price entries (`Custom Amount` in Moka) get their own category, `Custom Amount`.
 
+**With the API source** the items are matched by Moka id instead of by name:
+
+1. If `config/item_aliases.csv` lists the name the item was sold under, the alias wins:
+   `adjusted_item` replaces the name (empty: keep the sold name) and `adjusted_category` (if
+   filled) sets the category.
+2. Otherwise a live item gives today's name and category through its item id, so an item
+   that was renamed in Moka needs no alias.
+3. A deleted item without alias keeps its sold name (unless it matches a live item, ignoring
+   capitalization) and the category it last had in Moka. An item that is not in the catalog
+   at all keeps its latest category in the sales data and is listed in the run output.
+
+In every case the adjusted name is matched with the live items, ignoring capitalization, to
+get today's spelling and category.
+
 ## Report periods
 
-All periods end at the **date of the last sale** in the export (the anchor).
+All periods end at the **anchor**, the last day of the report. Sales after the anchor are
+ignored. The anchor is set with `--anchor`; by default it is the date of the last sale for the
+CSV source, and yesterday (Bali date) for the API source, so the report that is sent on a
+Monday morning covers up to and including Sunday.
 
 | Section | Period | Trend by | Compared with |
 | --- | --- | --- | --- |

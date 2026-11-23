@@ -32,6 +32,7 @@ for _font in FONTS.glob("*.ttf"):
 
 W, H = 11.69, 8.27  # A4 landscape, inches
 MAX_PAYMENT_TYPES = 4
+COVER_PNG_DPI = 150  # 1753 x 1240 px: sharp on a phone, far below Telegram's photo limits
 
 
 @dataclass(frozen=True)
@@ -105,19 +106,23 @@ class PdfReport:
         notes: list[str],
         sources: list[str],
         palette: Palette = DAYLIGHT,
+        anchor: date | None = None,
     ):
         self.lines = lines
         self.notes = notes
         self.sources = sources
         self.p = palette
         self.first_date: date = lines["sale_ts"].min().date()
-        self.anchor: date = lines["sale_ts"].max().date()
+        self.anchor: date = anchor or lines["sale_ts"].max().date()
         self.generated = datetime.now()
 
-    def build(self, path: Path, periods: list[Period]) -> None:
+    def build(self, path: Path, periods: list[Period], cover_png: Path | None = None) -> None:
         sections = [build_section(self.lines, period, self.first_date) for period in periods]
         with matplotlib.rc_context(self._rc()), PdfPages(path) as pdf:
-            pdf.savefig(self._cover(sections))
+            cover = self._cover(sections)
+            pdf.savefig(cover)
+            if cover_png is not None:
+                cover.savefig(cover_png, dpi=COVER_PNG_DPI)
             full = [self._overview, self._categories, self._details]
             for s in sections:
                 for page in [self._empty] if s.empty else full:
@@ -886,6 +891,12 @@ class PdfReport:
 
 
 def write_pdf(
-    path: Path, lines: pd.DataFrame, periods: list[Period], notes: list[str], sources: list[str]
+    path: Path,
+    lines: pd.DataFrame,
+    periods: list[Period],
+    notes: list[str],
+    sources: list[str],
+    anchor: date | None = None,
+    cover_png: Path | None = None,
 ) -> None:
-    PdfReport(lines, notes, sources).build(path, periods)
+    PdfReport(lines, notes, sources, anchor=anchor).build(path, periods, cover_png)

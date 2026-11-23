@@ -36,6 +36,9 @@ LIBRARY_COLUMNS = [LIBRARY_ITEM, "Category", "Variant name"]
 
 ALIAS_COLUMNS = ["sales_item", "adjusted_item", "adjusted_category"]
 
+CATEGORY_GROUP_COLUMNS = ["category", "category_group_level_1", "category_group_level_2"]
+CATEGORY_GROUPS_LEVEL_1 = ["food", "drink", "consignment"]
+
 
 class InputError(Exception):
     """The input files are missing, ambiguous or do not have the expected structure."""
@@ -126,4 +129,28 @@ def load_aliases(path: Path) -> pd.DataFrame:
     duplicated = df.loc[df["sales_item"].duplicated(), "sales_item"].tolist()
     if duplicated:
         raise InputError(f"{path.name}: sales_item listed more than once: {duplicated}")
+    return df
+
+
+def load_category_groups(path: Path) -> pd.DataFrame:
+    """Read the category group file (adjusted category -> level 1 and optional level 2 group)."""
+    if not path.exists():
+        return pd.DataFrame(columns=CATEGORY_GROUP_COLUMNS)
+    df = _read_csv(path, CATEGORY_GROUP_COLUMNS)
+    for column in CATEGORY_GROUP_COLUMNS:
+        df[column] = df[column].str.strip()
+    df["category_group_level_1"] = df["category_group_level_1"].str.lower()
+    if (df["category"] == "").any():
+        raise InputError(f"{path.name}: a row has an empty category")
+    duplicated = df.loc[df["category"].duplicated(), "category"].tolist()
+    if duplicated:
+        raise InputError(f"{path.name}: category listed more than once: {duplicated}")
+    invalid = df.loc[
+        ~df["category_group_level_1"].isin(CATEGORY_GROUPS_LEVEL_1), "category_group_level_1"
+    ]
+    if not invalid.empty:
+        raise InputError(
+            f"{path.name}: category_group_level_1 must be one of "
+            f"{CATEGORY_GROUPS_LEVEL_1}, got {sorted(set(invalid))}"
+        )
     return df

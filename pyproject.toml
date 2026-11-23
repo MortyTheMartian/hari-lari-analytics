@@ -26,6 +26,9 @@ gcp = [
 [project.scripts]
 hari-lari-report = "hari_lari_analytics.cli:main"
 hari-lari-extract = "hari_lari_analytics.extract.cli:main"
+hari-lari-telegram = "hari_lari_analytics.deliver.cli:main"
+hari-lari-drive = "hari_lari_analytics.deliver.drive_cli:main"
+hari-lari-weekly = "hari_lari_analytics.weekly.cli:main"
 
 [build-system]
 requires = ["hatchling"]

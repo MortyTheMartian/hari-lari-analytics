@@ -24,3 +24,27 @@ def add_dimensions(lines: pd.DataFrame) -> pd.DataFrame:
     df["item_variant"] = _item_variant(df["item"], df["variant"])
     df["adjusted_item_variant"] = _item_variant(df["adjusted_item"], df["variant"])
     return df
+
+
+UNMAPPED = "unmapped"
+
+
+def add_category_groups(lines: pd.DataFrame, groups: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Add `category_group_level_1` and `_level_2` by adjusted category, plus a note if needed.
+
+    Categories without a row in `config/category_group.csv` get level 1 `unmapped` (a warning,
+    not a failure). An empty level 2 stays missing.
+    """
+    df = lines.copy()
+    level_1 = groups.set_index("category")["category_group_level_1"]
+    level_2 = groups.set_index("category")["category_group_level_2"].replace("", pd.NA)
+    df["category_group_level_1"] = df["adjusted_category"].map(level_1).fillna(UNMAPPED)
+    df["category_group_level_2"] = df["adjusted_category"].map(level_2).astype(object)
+    unmapped = sorted(df.loc[df["category_group_level_1"] == UNMAPPED, "adjusted_category"].unique())
+    notes = []
+    if unmapped:
+        notes.append(
+            f"{len(unmapped)} categor(y/ies) have no group in config/category_group.csv and are "
+            f"'{UNMAPPED}': " + ", ".join(unmapped)
+        )
+    return df, notes
