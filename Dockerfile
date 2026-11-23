@@ -1,0 +1,24 @@
+FROM python:3.13-slim
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONUNBUFFERED=1 \
+    TZ=Asia/Makassar
+
+WORKDIR /app
+
+# Dependencies first (cached layer), then the project itself
+COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --frozen --no-dev --extra gcp --no-install-project
+
+COPY src ./src
+COPY config ./config
+RUN uv sync --frozen --no-dev --extra gcp
+
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Phase 5: the whole weekly job. `hari-lari-extract` and `hari-lari-telegram` are in the
+# image too (override with `gcloud run jobs execute --command`).
+ENTRYPOINT ["hari-lari-weekly"]

@@ -1,0 +1,12 @@
+.git
+.venv
+.env
+.pytest_cache
+.ruff_cache
+__pycache__
+data
+extraction
+tests
+docs
+*.pdf
+*Zone.Identifier
