@@ -21,7 +21,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from hari_lari_analytics.reporting.compiler import Query
-from hari_lari_analytics.reporting.registry import Registry, default_registry
+from hari_lari_analytics.reporting.registry import Registry, RegistryError, default_registry
 from hari_lari_analytics.reporting.result import Result, Shape
 from hari_lari_analytics.reporting.windows import Calendar
 
@@ -61,9 +61,16 @@ class Requirements:
     metrics: tuple[str, ...] = ()  # added when the query lacks them
     dimensions: tuple[str, ...] = ()  # checked: the query must group by them
     compare: bool = False  # checked: the query must ask for a comparison
+    totals: bool = False  # added: the total row
+    # added or checked: every group of both windows is in the result (keep_prior_only, or a
+    # top N with its "Other" row), so that the groups add up to the total
+    all_groups: bool = False
+    only_dimensions: tuple[str, ...] | None = None  # checked: exactly these dimensions
+    sums: tuple[str, ...] = ()  # checked: metrics summed across rows must add up over the dims
 
 
 Fn = Callable[[Result, Any, TransformContext], Result]
+Requires = Callable[[Any, Registry], Requirements]
 
 
 @dataclass(frozen=True)
@@ -73,7 +80,7 @@ class Transform:
     options: type[BaseModel]
     shapes: tuple[Shape, ...]
     produces: Shape | None  # the shape of the output; None: the same as the input
-    requires: Callable[[Any], Requirements] | None
+    requires: Requires | None
     description: str
 
 
@@ -85,9 +92,11 @@ def transform(
     options: type[BaseModel] = NoOptions,
     shapes: Iterable[Shape] = ("single", "rows", "series"),
     produces: Shape | None = None,
-    requires: Callable[[Any], Requirements] | None = None,
+    requires: Requires | None = None,
 ) -> Callable[[Fn], Fn]:
-    """Register a transform under `name`; its docstring is its description."""
+    """Register a transform under `name`; its docstring is its description.
+
+    `requires(options, registry)` returns the `Requirements` of the transform on its query."""
 
     def register(fn: Fn) -> Fn:
         if name in TRANSFORMS:
@@ -164,30 +173,61 @@ def run_pipeline(result: Result, steps: Iterable[str | dict], ctx: TransformCont
     return result
 
 
-def plan_query(query: Query, steps: Iterable[str | dict]) -> Query:
+def plan_query(
+    query: Query, steps: Iterable[str | dict], registry: Registry | None = None
+) -> Query:
     """The query with what its transforms require added, or a `TransformError` if it cannot."""
+    registry = registry or default_registry()
     buckets_before = query.buckets_before
     metrics = list(query.metrics)
+    totals, keep_prior_only = query.totals, query.keep_prior_only
     for raw in steps:
         name, raw_options = parse_step(raw)
         spec = get(name)
         if spec.requires is None:
             parse_options(name, raw_options)
             continue
-        need = spec.requires(parse_options(name, raw_options))
+        need = spec.requires(parse_options(name, raw_options), registry)
         if need.compare and query.compare == "none":
             raise TransformError(f"transform {name} needs a comparison: set `compare` on the query")
+        grouped = ", ".join(query.dimensions) or "none"
         for dim in need.dimensions:
             if dim not in query.dimensions:
                 raise TransformError(
                     f"transform {name} needs the dimension {dim}, "
-                    f"which the query does not group by ({', '.join(query.dimensions) or 'none'})"
+                    f"which the query does not group by ({grouped})"
                 )
+        if need.only_dimensions is not None and list(need.only_dimensions) != query.dimensions:
+            wanted = ", ".join(need.only_dimensions) or "no dimension"
+            raise TransformError(
+                f"transform {name} needs a query grouped by {wanted}, not by {grouped}"
+            )
+        if need.all_groups:
+            if query.top is not None and not query.top.other:
+                raise TransformError(
+                    f"transform {name} needs every group, so that the groups add up to the "
+                    "total: with `top`, set `other: true`"
+                )
+            keep_prior_only = keep_prior_only or query.top is None
+        for metric in need.sums:
+            try:
+                problem = registry.sum_problem(metric, query.dimensions)
+            except RegistryError as error:
+                raise TransformError(f"transform {name}: {error}") from None
+            if problem:
+                raise TransformError(f"transform {name}: {problem}")
+        totals = totals or need.totals
         buckets_before = max(buckets_before, need.buckets_before)
         metrics += [m for m in need.metrics if m not in metrics]
-    if buckets_before == query.buckets_before and metrics == query.metrics:
+    update = {
+        "buckets_before": buckets_before,
+        "metrics": metrics,
+        "totals": totals,
+        "keep_prior_only": keep_prior_only,
+    }
+    if all(getattr(query, k) == v for k, v in update.items()):
         return query
-    return query.model_copy(update={"buckets_before": buckets_before, "metrics": metrics})
+    return query.model_copy(update=update)
 
 
 # --- helpers shared by the transforms -----------------------------------------------------------
@@ -214,6 +254,7 @@ def time_dimension(result: Result) -> str | None:
 
 from hari_lari_analytics.reporting.transforms import (  # noqa: E402, F401
     classify,
+    decompose,
     quality,
     shape,
     share,

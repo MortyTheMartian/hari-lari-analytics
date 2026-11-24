@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=../../../src/hari_lari_analytics/reporting/schema/component.schema.json
+id: period_cards
+title: Periods
+params: { period: L14D }
+query:
+  model: fct_orders
+  metrics: [net_sales, orders]
+  window: $period
+  compare: prior
+facet: { by: period, values: [WTD, L14D, full], layout: row }
+visual: { type: summary_card }

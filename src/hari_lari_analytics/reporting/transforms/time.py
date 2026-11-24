@@ -7,7 +7,7 @@ import dataclasses
 import numpy as np
 import pandas as pd
 
-from hari_lari_analytics.reporting.registry import Metric
+from hari_lari_analytics.reporting.registry import Metric, Registry
 from hari_lari_analytics.reporting.result import Result
 from hari_lari_analytics.reporting.transforms import (
     Options,
@@ -101,7 +101,7 @@ class GrowthOptions(Options):
     keep_before: bool = False  # keep the bucket(s) before the window, which `buckets_before` adds
 
 
-def _growth_requires(options: GrowthOptions) -> Requirements:
+def _growth_requires(options: GrowthOptions, registry: Registry) -> Requirements:
     return Requirements(buckets_before=1, metrics=tuple(options.metrics or ()))
 
 

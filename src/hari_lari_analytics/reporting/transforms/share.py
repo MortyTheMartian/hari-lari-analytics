@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from hari_lari_analytics.reporting.registry import Registry
 from hari_lari_analytics.reporting.result import Result
 from hari_lari_analytics.reporting.transforms import (
     Options,
@@ -24,8 +25,8 @@ class CumulativeShareOptions(Options):
     sort: bool = True  # sort the rows by the metric, largest first (a Pareto order)
 
 
-def _requires(options: CumulativeShareOptions) -> Requirements:
-    return Requirements(metrics=(options.metric,))
+def _requires(options: CumulativeShareOptions, registry: Registry) -> Requirements:
+    return Requirements(metrics=(options.metric,), sums=(options.metric,))
 
 
 @transform("cumulative_share", CumulativeShareOptions, shapes=("rows",), requires=_requires)

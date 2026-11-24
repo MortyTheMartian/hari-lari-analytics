@@ -401,7 +401,8 @@ contributive_aov:
 - **`additivity`**: `full` (sums across any dimension), `order_grain` (sums across dimensions of
   grain `order` only) or `none`. The engine never sums a metric on its own. The loader checks
   every transform and visual option that sums rows (a stacked bar, a cumulative share, a total
-  drawn outside SQL) and refuses the wrong combination of metric and dimension.
+  drawn outside SQL) and refuses the wrong combination of metric and dimension
+  (`Registry.sum_problem`; a transform names the metrics it sums in its requirements).
 - **`up_is_good`**: colours the changes (discounts and refunds are `false`); `null` is neutral
   and leaves the change uncoloured (`share`, the first and last sale). Every metric states it.
 - **`min_n`**: the sample-size rule. The compiler returns `n_orders` per row (and every count
@@ -690,7 +691,12 @@ input; `ctx` holds the registry and the run's calendar, which is in memory. A tr
   cannot (a dimension the query does not group by, a comparison the query does not ask for).
   `growth_vs_previous` asks for one bucket before the window, `cumulative_share` and the lifecycle
   mode of `classify` for their metric, `classify` also for a comparison, `pivot` for its two
-  dimensions, and `decompose` will ask for the drivers of its identity.
+  dimensions, and `decompose` for the metrics of its identity and a comparison; for a `sum_over`
+  also exactly the identity's dimension, the total row and every group of both windows
+  (`keep_prior_only` is added; with `top`, `other: true` is required). A transform that sums a
+  metric across rows names it (`cumulative_share` does), and `plan_query` refuses a metric that
+  does not add up over the query's dimensions (`Registry.sum_problem`, the additivity rule
+  above); the visuals that sum rows will use the same check.
 
 | Transform | What it does |
 | --- | --- |
@@ -738,8 +744,28 @@ its slice (prior-only members included, so the slices add up), and `then:` split
 with its own product identity. When a value is zero or missing (a category that is new or gone),
 the product split is undefined and the member's change is shown whole, labelled new or gone.
 
-The result has one row per driver: label, prior and current value, effect, and share of the
-change.
+The result (shape `decomposition`, `meta.decomposition` names the identity, the KPI and the
+depth) has one row per driver, or per member of a `sum_over`, then the KPI as the total row.
+Columns: `level` (1; 2 for the split of a member; 0 for the KPI), `metric` (whose format the
+values have), `label` (the metric's, or the member's display name), `sign` (-1 for a subtracted
+term), `status`, `prior`, `current`, `delta` and `change` of the row's own values, `effect` (in
+the unit of the KPI), `share_of_change` (effect over the change of the KPI; NULL when the KPI did
+not move), `is_total`, `is_other` with a top N, and the sample-size columns of the row the values
+come from (a member's own orders, so an insight can skip a small category). For a `sum_over` the
+member is in the column named by the dimension.
+
+- `status` is `new` (no slice in the prior period) or `gone` (no slice now), both shown whole
+  and never split further, or `undefined`: a product with a missing or non-positive value, whose
+  change is not split (its effects are NULL). Without a valid comparison every effect is NULL.
+- Options: `identity`; `depth: 2` (only for an identity with `then`) adds the split of each
+  member as rows of level 2 directly below it, whose effects add up to the member's; `order`:
+  `effect` (default: members by the size of their effect, "Other" last) or `query`.
+- The transform checks that the effects add up to the change of the KPI (relative tolerance
+  1e-6) and fails otherwise, for example when groups are missing.
+
+On the run of 2026-11-22 the effects add up for every identity of `kpi_tree.yml` on every model
+it exists on, in L14D, L6W, L8W, L1M, WTD and MTD (L3M has no valid comparison yet), with the
+split of every member where the identity has `then`.
 
 ## Components
 
@@ -785,25 +811,53 @@ transforms:
 visual: { type: heatmap, format: decimal }
 ```
 
-The fields: `id`, `title` and `hint` (short Jinja strings with access to `meta`), `description`
-(shown in the gallery), `params` (defaults), `query`, `transforms`, `facet`, `visual` and
-`insights`. The loader (plan 7.12) validates a component with pydantic and fails with the file
-name and field:
+The fields: `id`, `title` and `hint` (short Jinja strings with access to `meta`, `facet` and the
+parameters), `description` (shown in the gallery), `params` (defaults), `query`, `transforms`,
+`facet`, `visual` and `insights`. The loader (`components.py`, plan 7.12) validates a component
+with pydantic and the registries, without any data (the queries are compiled on a fixed
+calendar), and fails with the file name and field, listing every schema error at once:
 
-- unknown keys are errors (a typo such as `metrcis` fails);
-- the model, every transform, the visual and every insight rule must exist;
-- every metric and dimension must exist in the registry and be available on the model;
-- the requirements of each transform are met or added;
-- the visual accepts the result shape the query and transforms produce;
-- `options` fit the transform's schema, `visual` fits the visual's schema;
+- unknown keys are errors (a typo such as `metrcis` fails with `query.metrcis: Extra inputs are
+  not permitted`); `title` and `query` are required; the id is snake_case and the file name;
+- the model, every metric and dimension exist and are available on the model; the query
+  compiles (window name, comparison, top, bins, grain, filters); a Python source exists and its
+  options fit;
+- every transform exists and its options fit its schema; the result shape is followed through
+  the steps, so a transform on the wrong shape fails with its position (`transforms.1:
+  sort_limit does not work on a result of shape decomposition`);
+- the requirements of each transform are met or added (`plan_query`), and the planned query
+  compiles too;
 - the additivity check described above;
-- every parameter is bound by a default or by the report.
+- the facet (see below);
+- every parameter is bound by a default or by the report, and every default is used;
+- not yet: the visual and the insight rules are only checked for their form (a `type` and a list
+  of names) until their registries exist (plan 8.1 and 8.3).
 
-The first line points the editor at the JSON Schema, so the YAML autocompletes and shows errors
-while typing.
+**Parameters.** A value written `$name` anywhere in the query, transforms, facet or visual is a
+parameter and replaced as a whole value of any type (a window name, a category, a number for
+`top.n`, a list for a filter); a name used as `{{ name }}` in the title or hint is one too. A
+component whose parameters all have a default is checked completely when loaded, so the CLI can
+run it on its own. A parameter without a default (`$category`, which only a report binds, and
+whose real values should not sit in a component in git) is allowed: the component is checked
+when loaded except for the values that hold it, and completely when bound
+(`Component.bind(params, with_)`). Binding takes the defaults, then the report's parameters;
+those the component does not use are ignored. The result is a `BoundComponent` with the planned
+query and the shape of its result, which `run(ctx)` executes with its transforms.
 
-A report slot may override fields of a component without copying it, as a deep merge:
-`{ component: top_items, with: { query: { top: { n: 10 } } } }`.
+The first line points the editor at the JSON Schema, `schema/component.schema.json`, so the YAML
+autocompletes and shows errors while typing:
+`# yaml-language-server: $schema=../schema/component.schema.json`. The schema is written from the
+pydantic models and lists the models, metrics, dimensions, window forms, sources and every
+transform with its options; any field of the query, facet and transform options may also hold a
+`$parameter`. A test fails when the committed file is out of date; `uv run python -m
+hari_lari_analytics.reporting.components` rewrites it (the `schema` command of plan 7.14 will
+too).
+
+A report slot may override fields of a component without copying it, as a deep merge (mappings
+merge key by key, lists and other values are replaced; the id cannot change):
+`{ component: top_items, with: { query: { top: { n: 10 } } } }`. The merged component is
+validated like a file, and an override may introduce a parameter, such as
+`where: { adjusted_category: $category }`.
 
 ## Facets
 
@@ -814,13 +868,25 @@ facet:
   layout: grid(2x3)                # row, column or grid(n x m): how the slot is split
 ```
 
-- **By dimension**: the component runs once per value, with the value added to `where`. The top
-  N is decided once, over the component's own window, so all facets show the same values in the
-  same order.
-- **By period**: binds `$period` per facet, for the three period cards on the cover.
-- **By metric**: runs once and hands one metric per facet to the visual, for the four KPI cards.
+- **By dimension**: the component runs once per value, with the value added to `where`
+  (replacing a filter on the same dimension). `values` is a list (an empty value is written
+  `null`), `all` (every value sold in the component's window, in the dimension's sort order) or
+  `{ top: N, by: metric }` (the first N by a metric that is not relative, over the component's
+  window). `all` and the top N are decided once, by one query over the component's window and
+  filters, so all facets show the same values in the same order. A window without sales gives no
+  facets.
+- **By period**: binds `$period` per facet, for the three period cards on the cover; `values` is
+  the list of windows, and the component must use `$period`.
+- **By metric**: runs once and hands one metric per facet to the visual, for the four KPI cards;
+  `values` is `all` (the metrics of the query as written) or a list of them.
 
-The facet engine returns one `Result` per facet with its label; the slot is split by `layout`
+`layout` is `row` (the default), `column` or `grid(<rows>x<columns>)`. A grid has a fixed number
+of cells, so the loader refuses more facets than cells and refuses `values: all` of a dimension,
+whose number of values is known only when it runs (use `top`). `run_facets(component, ctx,
+params, with_)` in `facets.py` returns one `Facet` per cell: its key (the value, the window name
+or the metric), its label (the value's display name from `dimensions.yml`, the window's title or
+the metric's label), its `Result` and, by metric, the metric. A component without a facet gives
+one facet without a label, so the builder treats every slot alike; the slot is split by `layout`
 and the visual is drawn once per cell.
 
 ## Visuals
@@ -1063,7 +1129,10 @@ No step needed Python beyond what the framework provides. With `facet: { by: per
   items, payment types, discounts, orders by hour, the trend and the sparklines.
 - **Transforms and decompose** (7.10, 7.11): one hand-computed test each; decompose effects add
   up to the change exactly, and the worked example above is a test.
-- **Loader** (7.12): one test per validation rule, each with a readable message.
+- **Loader and facets** (7.12, 7.13): one test per validation rule, each with a readable
+  message; the fixture components of `tests/fixtures/components/` load, fit the JSON Schema
+  (checked with `jsonschema`, a development dependency) and run; facets of every kind on the
+  fixture and the top 5 categories of the run of 2026-11-22.
 - **Visuals and layouts** (8.2, 8.4): every visual renders on the fixture; no text overflows.
 - **Snapshots** (8.7): a golden result per component.
 - **Ported components** (9.3): parity of the numbers with `report_data.Section`.

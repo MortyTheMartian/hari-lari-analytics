@@ -55,6 +55,19 @@ class Classification:
 
 
 @dataclass(frozen=True)
+class DecompositionSpec:
+    """What `decompose` split (shape `decomposition`): the KPI, the identity, and for a
+    `sum_over` its dimension, whose values are in the df column of that name."""
+
+    identity: str
+    kind: str  # product, sum or sum_over
+    kpi: str
+    depth: int  # 2: each member of a sum_over is split with the identity's `then`
+    dimension: str | None = None
+    then: str | None = None
+
+
+@dataclass(frozen=True)
 class ResultMeta:
     shape: Shape
     window: ResolvedWindow | None  # None for a @query source without a window
@@ -70,6 +83,7 @@ class ResultMeta:
     params: dict = field(default_factory=dict)
     matrix: MatrixSpec | None = None  # set by `pivot`
     classifications: dict[str, Classification] = field(default_factory=dict)  # by column
+    decomposition: DecompositionSpec | None = None  # set by `decompose`
 
     @property
     def n_columns(self) -> dict[str, Metric]:

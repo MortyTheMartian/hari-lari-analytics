@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from pydantic import Field
 
-from hari_lari_analytics.reporting.registry import Dimension, Metric
+from hari_lari_analytics.reporting.registry import Dimension, Metric, Registry
 from hari_lari_analytics.reporting.result import MatrixSpec, Result
 from hari_lari_analytics.reporting.transforms import (
     Options,
@@ -272,7 +272,7 @@ class PivotOptions(Options):
     value: str | None = None  # the df column in the cells; default: the one metric of the result
 
 
-def _pivot_requires(options: PivotOptions) -> Requirements:
+def _pivot_requires(options: PivotOptions, registry: Registry) -> Requirements:
     return Requirements(dimensions=(options.rows, options.columns))
 
 

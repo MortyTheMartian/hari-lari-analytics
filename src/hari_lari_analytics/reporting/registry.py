@@ -17,6 +17,7 @@ from graphlib import CycleError, TopologicalSorter
 from importlib import resources
 from typing import Literal
 
+import pandas as pd
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
@@ -115,6 +116,12 @@ class Dimension(_Strict):
     @property
     def bin_list(self) -> list[Bin]:
         return parse_bins(self.bins) if self.bins else []
+
+    def value_label(self, value) -> str:
+        """The display name of a value: from `labels`, `null_label` for an empty value."""
+        if pd.isna(value):
+            return self.null_label or "(none)"
+        return self.labels.get(value, str(value))
 
 
 class Identity(_Strict):
@@ -302,6 +309,23 @@ class Registry:
             aggregates=[m for m in ordered if self.metrics[m].kind in ("sql", "filtered")],
             computed=[m for m in ordered if self.metrics[m].kind in ("derived", "relative")],
         )
+
+    def sum_problem(self, metric_id: str, dimension_ids: Iterable[str]) -> str | None:
+        """Why the rows of `metric_id` grouped by `dimension_ids` must not be summed, or None.
+
+        A `full` metric sums over anything, an `order_grain` one (orders) only over dimensions
+        with one value per receipt (grain order or day), a metric of additivity `none` never."""
+        metric = self.metric(metric_id)
+        if metric.additivity == "none":
+            return f"{metric_id} is not additive (a ratio or a time), so its rows cannot be summed"
+        if metric.additivity == "order_grain":
+            several = [d for d in dimension_ids if self.dimension(d).grain in ("item", "line")]
+            if several:
+                return (
+                    f"{metric_id} counts orders, and a receipt can fall into several groups of "
+                    f"{', '.join(several)}, so its rows do not add up"
+                )
+        return None
 
     def metrics_on(self, model: str) -> list[str]:
         return [m for m in self.order if model in self.metrics[m].models]

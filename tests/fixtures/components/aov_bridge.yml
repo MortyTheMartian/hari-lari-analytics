@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=../../../src/hari_lari_analytics/reporting/schema/component.schema.json
+id: aov_bridge
+title: Why the average order value moved
+hint: "{{ meta.window.compare_label }}"
+params: { period: L6W }
+query:
+  model: fct_orders
+  metrics: [aov]
+  window: $period
+  compare: prior
+transforms:
+  - decompose: { identity: aov_basket }
+visual: { type: waterfall }
+insights: [top_drivers]

@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from pydantic import Field, model_validator
 
+from hari_lari_analytics.reporting.registry import Registry
 from hari_lari_analytics.reporting.result import Classification, Result
 from hari_lari_analytics.reporting.transforms import (
     Options,
@@ -81,7 +82,7 @@ class ClassifyOptions(Options):
         return self
 
 
-def _requires(options: ClassifyOptions) -> Requirements:
+def _requires(options: ClassifyOptions, registry: Registry) -> Requirements:
     if options.mode == "lifecycle":
         return Requirements(compare=True, metrics=(options.by,))
     return Requirements()

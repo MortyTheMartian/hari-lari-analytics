@@ -1,0 +1,1543 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "FacetSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "by": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "adjusted_category",
+                    "adjusted_item",
+                    "adjusted_item_variant",
+                    "basket_size",
+                    "bucket",
+                    "category",
+                    "category_group_level_1",
+                    "category_group_level_2",
+                    "discount_code",
+                    "discounted",
+                    "event_kind",
+                    "event_name",
+                    "has_consignment",
+                    "has_discount",
+                    "has_drink",
+                    "has_food",
+                    "has_modifier",
+                    "has_promotion",
+                    "has_refund",
+                    "hour_of_day",
+                    "is_holiday",
+                    "is_refund",
+                    "item",
+                    "item_variant",
+                    "modifier_name",
+                    "modifier_option_name",
+                    "order_line_count",
+                    "payment_type",
+                    "sale_date",
+                    "sale_hour",
+                    "sale_iso_week",
+                    "sale_month",
+                    "sale_quarter",
+                    "sale_week",
+                    "sale_year",
+                    "variant",
+                    "weekday"
+                  ],
+                  "description": "a dimension of dimensions.yml"
+                },
+                {
+                  "enum": [
+                    "period",
+                    "metric"
+                  ]
+                }
+              ],
+              "description": "a dimension, period or metric"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "values": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "const": "all",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                {
+                  "$ref": "#/$defs/TopValues"
+                }
+              ],
+              "default": "all",
+              "title": "Values"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "layout": {
+          "anyOf": [
+            {
+              "default": "row",
+              "title": "Layout",
+              "type": "string"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        }
+      },
+      "required": [
+        "by"
+      ],
+      "title": "FacetSpec",
+      "type": "object"
+    },
+    "Query": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "fct_orders",
+                "fct_sales_lines"
+              ],
+              "description": "the model to query"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "metrics": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "aov",
+                      "avg_item_price",
+                      "category_aov",
+                      "contributive_aov",
+                      "discount_rate",
+                      "discounts",
+                      "drink_attach_rate",
+                      "drink_orders",
+                      "first_sale_ts",
+                      "food_and_drink_orders",
+                      "food_attach_rate",
+                      "food_orders",
+                      "gross_sales",
+                      "items_per_order",
+                      "items_sold",
+                      "last_sale_ts",
+                      "net_sales",
+                      "net_sales_per_trading_day",
+                      "orders",
+                      "penetration",
+                      "refunds",
+                      "share"
+                    ],
+                    "description": "a metric of metrics.yml"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                    "description": "a parameter"
+                  }
+                ]
+              },
+              "minItems": 1,
+              "title": "Metrics",
+              "type": "array"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "dimensions": {
+          "anyOf": [
+            {
+              "default": [],
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "adjusted_category",
+                      "adjusted_item",
+                      "adjusted_item_variant",
+                      "basket_size",
+                      "bucket",
+                      "category",
+                      "category_group_level_1",
+                      "category_group_level_2",
+                      "discount_code",
+                      "discounted",
+                      "event_kind",
+                      "event_name",
+                      "has_consignment",
+                      "has_discount",
+                      "has_drink",
+                      "has_food",
+                      "has_modifier",
+                      "has_promotion",
+                      "has_refund",
+                      "hour_of_day",
+                      "is_holiday",
+                      "is_refund",
+                      "item",
+                      "item_variant",
+                      "modifier_name",
+                      "modifier_option_name",
+                      "order_line_count",
+                      "payment_type",
+                      "sale_date",
+                      "sale_hour",
+                      "sale_iso_week",
+                      "sale_month",
+                      "sale_quarter",
+                      "sale_week",
+                      "sale_year",
+                      "variant",
+                      "weekday"
+                    ],
+                    "description": "a dimension of dimensions.yml"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                    "description": "a parameter"
+                  }
+                ]
+              },
+              "title": "Dimensions",
+              "type": "array"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "window": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(L\\d+[DWM]|last_n_(days|weeks|months)\\(\\d+\\)|WTD|MTD|full)$",
+              "description": "L<n>D, L<n>W, L<n>M, last_n_days(n), ..., WTD, MTD or full"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "compare": {
+          "anyOf": [
+            {
+              "default": "none",
+              "enum": [
+                "prior",
+                "last_year",
+                "none"
+              ],
+              "title": "Compare",
+              "type": "string"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "where": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "format": "date",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "default": {},
+              "title": "Where",
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "enum": [
+                  "adjusted_category",
+                  "adjusted_item",
+                  "adjusted_item_variant",
+                  "basket_size",
+                  "bucket",
+                  "category",
+                  "category_group_level_1",
+                  "category_group_level_2",
+                  "discount_code",
+                  "discounted",
+                  "event_kind",
+                  "event_name",
+                  "has_consignment",
+                  "has_discount",
+                  "has_drink",
+                  "has_food",
+                  "has_modifier",
+                  "has_promotion",
+                  "has_refund",
+                  "hour_of_day",
+                  "is_holiday",
+                  "is_refund",
+                  "item",
+                  "item_variant",
+                  "modifier_name",
+                  "modifier_option_name",
+                  "order_line_count",
+                  "payment_type",
+                  "sale_date",
+                  "sale_hour",
+                  "sale_iso_week",
+                  "sale_month",
+                  "sale_quarter",
+                  "sale_week",
+                  "sale_year",
+                  "variant",
+                  "weekday"
+                ],
+                "description": "a dimension of dimensions.yml"
+              }
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "totals": {
+          "anyOf": [
+            {
+              "default": false,
+              "title": "Totals",
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "keep_prior_only": {
+          "anyOf": [
+            {
+              "default": false,
+              "title": "Keep Prior Only",
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "top": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TopSpec"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "grain": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "enum": [
+                    "day",
+                    "week",
+                    "month",
+                    "block_7d"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Grain"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "bins": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              "default": {},
+              "title": "Bins",
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "enum": [
+                  "adjusted_category",
+                  "adjusted_item",
+                  "adjusted_item_variant",
+                  "basket_size",
+                  "bucket",
+                  "category",
+                  "category_group_level_1",
+                  "category_group_level_2",
+                  "discount_code",
+                  "discounted",
+                  "event_kind",
+                  "event_name",
+                  "has_consignment",
+                  "has_discount",
+                  "has_drink",
+                  "has_food",
+                  "has_modifier",
+                  "has_promotion",
+                  "has_refund",
+                  "hour_of_day",
+                  "is_holiday",
+                  "is_refund",
+                  "item",
+                  "item_variant",
+                  "modifier_name",
+                  "modifier_option_name",
+                  "order_line_count",
+                  "payment_type",
+                  "sale_date",
+                  "sale_hour",
+                  "sale_iso_week",
+                  "sale_month",
+                  "sale_quarter",
+                  "sale_week",
+                  "sale_year",
+                  "variant",
+                  "weekday"
+                ],
+                "description": "a dimension of dimensions.yml"
+              }
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "buckets_before": {
+          "anyOf": [
+            {
+              "default": 0,
+              "minimum": 0,
+              "title": "Buckets Before",
+              "type": "integer"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        }
+      },
+      "required": [
+        "model",
+        "metrics",
+        "window"
+      ],
+      "title": "Query",
+      "type": "object"
+    },
+    "SourceQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "lines_export",
+                "notes"
+              ],
+              "description": "a Python source (@query)"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "options": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "default": {},
+              "title": "Options",
+              "type": "object"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "title": "SourceQuery",
+      "type": "object"
+    },
+    "TopSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "title": "N",
+              "type": "integer"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "by": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "aov",
+                "avg_item_price",
+                "category_aov",
+                "contributive_aov",
+                "discount_rate",
+                "discounts",
+                "drink_attach_rate",
+                "drink_orders",
+                "first_sale_ts",
+                "food_and_drink_orders",
+                "food_attach_rate",
+                "food_orders",
+                "gross_sales",
+                "items_per_order",
+                "items_sold",
+                "last_sale_ts",
+                "net_sales",
+                "net_sales_per_trading_day",
+                "orders",
+                "penetration",
+                "refunds",
+                "share"
+              ],
+              "description": "a metric of metrics.yml"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "other": {
+          "anyOf": [
+            {
+              "default": false,
+              "title": "Other",
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        }
+      },
+      "required": [
+        "n",
+        "by"
+      ],
+      "title": "TopSpec",
+      "type": "object"
+    },
+    "TopValues": {
+      "additionalProperties": false,
+      "properties": {
+        "top": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "title": "Top",
+              "type": "integer"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "by": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "aov",
+                "avg_item_price",
+                "category_aov",
+                "contributive_aov",
+                "discount_rate",
+                "discounts",
+                "drink_attach_rate",
+                "drink_orders",
+                "first_sale_ts",
+                "food_and_drink_orders",
+                "food_attach_rate",
+                "food_orders",
+                "gross_sales",
+                "items_per_order",
+                "items_sold",
+                "last_sale_ts",
+                "net_sales",
+                "net_sales_per_trading_day",
+                "orders",
+                "penetration",
+                "refunds",
+                "share"
+              ],
+              "description": "a metric of metrics.yml"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        }
+      },
+      "required": [
+        "top",
+        "by"
+      ],
+      "title": "TopValues",
+      "type": "object"
+    },
+    "VisualSpec": {
+      "additionalProperties": true,
+      "description": "The visual and its options; the options are checked by the visual registry (plan 8.1).",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "VisualSpec",
+      "type": "object"
+    },
+    "Band": {
+      "additionalProperties": false,
+      "properties": {
+        "upto": {
+          "title": "Upto",
+          "type": "number"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "upto",
+        "label"
+      ],
+      "title": "Band",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "title": "Id",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hint"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "params": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        ]
+      },
+      "default": {},
+      "title": "Params",
+      "type": "object"
+    },
+    "query": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Query"
+        },
+        {
+          "$ref": "#/$defs/SourceQuery"
+        }
+      ],
+      "title": "Query"
+    },
+    "transforms": {
+      "default": [],
+      "items": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "classify",
+              "cumulative_share",
+              "decompose",
+              "fill_domain",
+              "growth_vs_previous",
+              "per_trading_day",
+              "pivot",
+              "rank",
+              "sort_limit",
+              "suppress_small_n"
+            ],
+            "description": "a transform without options"
+          },
+          {
+            "type": "object",
+            "description": "Add a class column: thresholds on a column (ABC classes), quadrants of two columns against",
+            "properties": {
+              "classify": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "description": "`mode: thresholds` needs `by`, `bands` and `otherwise`; `quadrants` needs `x` and `y`;\n`lifecycle` needs `by`. Options of another mode are refused.",
+                    "properties": {
+                      "mode": {
+                        "enum": [
+                          "thresholds",
+                          "quadrants",
+                          "lifecycle"
+                        ],
+                        "title": "Mode",
+                        "type": "string"
+                      },
+                      "into": {
+                        "default": "class",
+                        "title": "Into",
+                        "type": "string"
+                      },
+                      "by": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "By"
+                      },
+                      "bands": {
+                        "default": [],
+                        "items": {
+                          "$ref": "#/$defs/Band"
+                        },
+                        "title": "Bands",
+                        "type": "array"
+                      },
+                      "otherwise": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Otherwise"
+                      },
+                      "x": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "X"
+                      },
+                      "y": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Y"
+                      },
+                      "x_split": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "enum": [
+                              "median",
+                              "mean"
+                            ],
+                            "type": "string"
+                          }
+                        ],
+                        "default": "median",
+                        "title": "X Split"
+                      },
+                      "y_split": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "enum": [
+                              "median",
+                              "mean"
+                            ],
+                            "type": "string"
+                          }
+                        ],
+                        "default": "median",
+                        "title": "Y Split"
+                      },
+                      "labels": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "default": {},
+                        "propertyNames": {
+                          "enum": [
+                            "high_high",
+                            "high_low",
+                            "low_high",
+                            "low_low"
+                          ]
+                        },
+                        "title": "Labels",
+                        "type": "object"
+                      },
+                      "rising_at": {
+                        "default": 0.25,
+                        "title": "Rising At",
+                        "type": "number"
+                      },
+                      "fading_at": {
+                        "default": -0.25,
+                        "title": "Fading At",
+                        "type": "number"
+                      },
+                      "min_n": {
+                        "anyOf": [
+                          {
+                            "minimum": 1,
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": 15,
+                        "title": "Min N"
+                      }
+                    },
+                    "required": [
+                      "mode"
+                    ],
+                    "title": "ClassifyOptions",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "classify"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Add the running share of a fully additive metric, largest rows first.",
+            "properties": {
+              "cumulative_share": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "metric": {
+                        "title": "Metric",
+                        "type": "string"
+                      },
+                      "into": {
+                        "default": "cumulative_share",
+                        "title": "Into",
+                        "type": "string"
+                      },
+                      "sort": {
+                        "default": true,
+                        "title": "Sort",
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "metric"
+                    ],
+                    "title": "CumulativeShareOptions",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "cumulative_share"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Split the change of a KPI over the drivers of one KPI-tree identity, so that the effects",
+            "properties": {
+              "decompose": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "identity": {
+                        "title": "Identity",
+                        "type": "string"
+                      },
+                      "depth": {
+                        "default": 1,
+                        "maximum": 2,
+                        "minimum": 1,
+                        "title": "Depth",
+                        "type": "integer"
+                      },
+                      "order": {
+                        "default": "effect",
+                        "enum": [
+                          "effect",
+                          "query"
+                        ],
+                        "title": "Order",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "identity"
+                    ],
+                    "title": "DecomposeOptions",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "decompose"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Add the missing values of a dimension's domain (bins, all weekdays, the hours between the",
+            "properties": {
+              "fill_domain": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "dimensions": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Dimensions"
+                      },
+                      "values": {
+                        "additionalProperties": {
+                          "items": {},
+                          "type": "array"
+                        },
+                        "default": {},
+                        "title": "Values",
+                        "type": "object"
+                      }
+                    },
+                    "title": "FillDomainOptions",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "fill_domain"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Add `<metric>_growth`: each bucket over the one before it, per group, as a ratio.",
+            "properties": {
+              "growth_vs_previous": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "metrics": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Metrics"
+                      },
+                      "grains": {
+                        "default": [
+                          "week",
+                          "month",
+                          "block_7d"
+                        ],
+                        "items": {
+                          "enum": [
+                            "day",
+                            "week",
+                            "month",
+                            "block_7d"
+                          ],
+                          "type": "string"
+                        },
+                        "title": "Grains",
+                        "type": "array"
+                      },
+                      "keep_before": {
+                        "default": false,
+                        "title": "Keep Before",
+                        "type": "boolean"
+                      }
+                    },
+                    "title": "GrowthOptions",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "growth_vs_previous"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Divide the summing metrics by the trading days of each row, which the query counted per",
+            "properties": {
+              "per_trading_day": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "metrics": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Metrics"
+                      }
+                    },
+                    "title": "PerTradingDayOptions",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "per_trading_day"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Turn two dimensions into a matrix: one row per value of `rows`, one column per value of",
+            "properties": {
+              "pivot": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "rows": {
+                        "title": "Rows",
+                        "type": "string"
+                      },
+                      "columns": {
+                        "title": "Columns",
+                        "type": "string"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Value"
+                      }
+                    },
+                    "required": [
+                      "rows",
+                      "columns"
+                    ],
+                    "title": "PivotOptions",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "pivot"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Add a rank column (1 = best) over the regular rows; Other and total rows get no rank.",
+            "properties": {
+              "rank": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "by": {
+                        "title": "By",
+                        "type": "string"
+                      },
+                      "desc": {
+                        "default": true,
+                        "title": "Desc",
+                        "type": "boolean"
+                      },
+                      "into": {
+                        "default": "rank",
+                        "title": "Into",
+                        "type": "string"
+                      },
+                      "method": {
+                        "default": "min",
+                        "enum": [
+                          "min",
+                          "dense",
+                          "first"
+                        ],
+                        "title": "Method",
+                        "type": "string"
+                      },
+                      "within": {
+                        "default": [],
+                        "items": {
+                          "type": "string"
+                        },
+                        "title": "Within",
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "by"
+                    ],
+                    "title": "RankOptions",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "rank"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Sort the rows by a column and keep the first n; `Other` and total rows stay at the end.",
+            "properties": {
+              "sort_limit": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "by": {
+                        "title": "By",
+                        "type": "string"
+                      },
+                      "desc": {
+                        "default": true,
+                        "title": "Desc",
+                        "type": "boolean"
+                      },
+                      "n": {
+                        "anyOf": [
+                          {
+                            "minimum": 1,
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "N"
+                      }
+                    },
+                    "required": [
+                      "by"
+                    ],
+                    "title": "SortLimitOptions",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "sort_limit"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Blank the metrics of the rows below the sample-size rule, instead of greying them out.",
+            "properties": {
+              "suppress_small_n": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "metrics": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Metrics"
+                      }
+                    },
+                    "title": "SuppressSmallNOptions",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "suppress_small_n"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "title": "Transforms",
+      "type": "array"
+    },
+    "facet": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FacetSpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "visual": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VisualSpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "the visual and its options (plan 8.1)"
+    },
+    "insights": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Insights",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "query"
+  ],
+  "title": "Hari Lari reporting component",
+  "type": "object"
+}

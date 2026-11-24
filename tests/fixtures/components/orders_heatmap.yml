@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=../../../src/hari_lari_analytics/reporting/schema/component.schema.json
+id: orders_heatmap
+title: Orders per trading day
+hint: By weekday and hour · {{ meta.window.current.label }}
+params: { period: L6W }
+query:
+  model: fct_orders
+  dimensions: [weekday, hour_of_day]
+  metrics: [orders]
+  window: $period
+transforms:
+  - per_trading_day
+  - pivot: { rows: weekday, columns: hour_of_day }
+visual: { type: heatmap, format: decimal }
