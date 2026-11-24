@@ -59,7 +59,8 @@ def test_every_metric_has_its_attributes():
     for metric in REG.metrics.values():
         assert metric.label and metric.description, metric.id
         assert metric.format and metric.additivity, metric.id
-        assert metric.min_n, metric.id
+        for model in metric.models:  # the sales models have orders as their sample size
+            assert REG.min_n(metric.id, model), (metric.id, model)
 
 
 @pytest.mark.parametrize("model", MODELS)
@@ -191,7 +192,9 @@ def test_metric_specs_for_the_visuals():
     assert REG.metric("share").up_is_good is None  # neutral
     assert REG.metric("food_orders").format == "count"  # inherited from orders
     assert REG.metric("food_attach_rate").min_n == {"drink_orders": 30}
-    assert REG.metric("aov").min_n == {"orders": 30}
+    assert REG.metric("aov").min_n is None  # the default of the model
+    assert REG.min_n("aov", "fct_orders") == {"orders": 30}  # models.yml: sample_size orders
+    assert REG.min_n("food_attach_rate", "fct_sales_lines") == {"drink_orders": 30}
 
 
 def test_dimension_details():

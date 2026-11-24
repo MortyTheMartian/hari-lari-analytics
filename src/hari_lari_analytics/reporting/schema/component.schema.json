@@ -124,6 +124,20 @@
               "description": "a parameter"
             }
           ]
+        },
+        "within": {
+          "anyOf": [
+            {
+              "default": false,
+              "title": "Within",
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
         }
       },
       "required": [
@@ -353,6 +367,109 @@
               },
               "default": {},
               "title": "Where",
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "enum": [
+                  "adjusted_category",
+                  "adjusted_item",
+                  "adjusted_item_variant",
+                  "basket_size",
+                  "bucket",
+                  "category",
+                  "category_group_level_1",
+                  "category_group_level_2",
+                  "discount_code",
+                  "discounted",
+                  "event_kind",
+                  "event_name",
+                  "has_consignment",
+                  "has_discount",
+                  "has_drink",
+                  "has_food",
+                  "has_modifier",
+                  "has_promotion",
+                  "has_refund",
+                  "hour_of_day",
+                  "is_holiday",
+                  "is_refund",
+                  "item",
+                  "item_variant",
+                  "modifier_name",
+                  "modifier_option_name",
+                  "order_line_count",
+                  "payment_type",
+                  "sale_date",
+                  "sale_hour",
+                  "sale_iso_week",
+                  "sale_month",
+                  "sale_quarter",
+                  "sale_week",
+                  "sale_year",
+                  "variant",
+                  "weekday"
+                ],
+                "description": "a dimension of dimensions.yml"
+              }
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+              "description": "a parameter"
+            }
+          ]
+        },
+        "focus": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "format": "date",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "default": {},
+              "title": "Focus",
               "type": "object",
               "propertyNames": {
                 "type": "string",

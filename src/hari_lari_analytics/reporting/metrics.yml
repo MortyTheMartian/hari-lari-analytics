@@ -13,10 +13,12 @@
 # format: idr, idr_compact, count, decimal, pct or timestamp. up_is_good: true, false, or null
 # for neutral (no colour). additivity: full (sums over any dimension), order_grain (sums over
 # order and day dimensions only) or none. min_n: the sample-size rule, the smallest count per
-# row or period that the report makes claims about.
+# row or period that the report makes claims about, such as { drink_orders: 30 }. Without one,
+# a metric gets the default below for the sample_size count of its model (models.yml: orders
+# on the sales models), and no rule on a model without a sample_size.
 
 defaults:
-  min_n: { orders: 30 }
+  min_n: 30
 
 gross_sales:
   label: Gross Sales

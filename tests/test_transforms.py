@@ -60,8 +60,8 @@ def made(df: dict, metrics: list[str] = (), dimensions: list[str] = (), counts=(
          shape="rows", **meta) -> Result:  # fmt: skip
     """A result by hand: `df` has the columns of the convention; `metrics` and `counts` give the
     specs of the metric columns and of the `n_<count>` columns."""
-    specs = {m: REG.metric(m) for m in metrics}
-    specs |= {f"n_{c}": REG.metric(c) for c in counts if f"n_{c}" in df}
+    specs = {m: REG.metric_on(m, "fct_sales_lines") for m in metrics}
+    specs |= {f"n_{c}": REG.metric_on(c, "fct_sales_lines") for c in counts if f"n_{c}" in df}
     frame = pd.DataFrame(df)
     if "is_total" not in frame:
         frame["is_total"] = False

@@ -59,7 +59,8 @@ def made(rows: list[dict], shape: str = "single", dimensions=(), compare_ok=True
     df["n_orders"] = 100
     df["prior_n_orders"] = 100
     names = {c.removeprefix("prior_") for c in df.columns} - {"is_total", "n_orders", *dimensions}
-    metrics = {m: REG.metric(m) for m in sorted(names)} | {"n_orders": REG.metric("orders")}
+    metrics = {m: REG.metric_on(m, "fct_sales_lines") for m in sorted(names)}
+    metrics["n_orders"] = REG.metric_on("orders", "fct_sales_lines")
     meta = ResultMeta(
         shape=shape,
         window=window(compare_ok),

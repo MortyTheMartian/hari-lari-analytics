@@ -1,10 +1,10 @@
 # Data checks, run on every build (docs/components.md, "Checks"). An error stops the build;
 # `severity: warn` only reports. A list item is the short form (a column, or an expression)
-# or a mapping with `severity` and `message`.
+# or a mapping with `severity` and `message`. The primary keys of models.yml are checked for
+# uniqueness too, without an entry here.
 
 models:
   stg_transactions:
-    unique: [payment_id]
     not_null: [payment_id, receipt_nr, sale_ts]
 
   stg_transaction_lines:
@@ -31,7 +31,6 @@ models:
 
   fct_sales_lines:
     sample_columns: [receipt_nr, item]
-    unique: [[payment_id, line_uuid]]
     not_null: [receipt_nr, sale_ts, item, adjusted_item, adjusted_category, net_sales]
     accepted_values:
       event_type: [Payment, Refund]
@@ -47,17 +46,12 @@ models:
 
   fct_orders:
     sample_columns: [receipt_nr]
-    unique: [receipt_nr]
     not_null: [receipt_nr, sale_ts, net_sales, counts_as_order]
     expressions:
       - gross_sales - discounts - refunds = net_sales
 
-  dim_items:
-    unique: [adjusted_item]
-
   dim_categories:
     sample_columns: [adjusted_category]
-    unique: [adjusted_category]
     expressions:
       - expr: category_group_level_1 <> 'unmapped' or first_sale_date is null
         severity: warn
@@ -65,7 +59,6 @@ models:
 
   dim_calendar:
     sample_columns: [date]
-    unique: [date]
     expressions:
       - expr: is_trading_day or is_closure
         severity: warn

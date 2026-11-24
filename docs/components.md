@@ -121,6 +121,7 @@ are found with `importlib.resources`. The hand-maintained CSVs stay in `config/`
 src/hari_lari_analytics/reporting/
   __init__.py
   db.py               # open DuckDB, load seeds, build the models in layer order
+  model_specs.py      # load and validate models.yml
   checks.py           # run checks.yml; a broken check fails the build
   registry.py         # load and validate metrics.yml, dimensions.yml, kpi_tree.yml
   windows.py          # window resolver, built on periods.py
@@ -153,6 +154,7 @@ src/hari_lari_analytics/reporting/
   dimensions.yml
   kpi_tree.yml
   insights.yml
+  models.yml          # description, primary key, time column, ... of every model
   checks.yml
   schema/             # written by `hari-lari-component schema`
     component.schema.json
@@ -254,6 +256,33 @@ them in dependency order. One Python function is registered: `title_case`, Pytho
 The parity rule of plan 7.3: on the saved fixture and on a real run, `fct_sales_lines` equals the
 pandas lines row for row.
 
+**`models.yml`** (plan 7A.3) describes every model, one entry per SQL file; a missing or extra
+entry fails the load. The compiler, the registry, the checks and the JSON Schema read it, so a new
+model (expenses, say) needs no change in Python:
+
+```yaml
+fct_orders:
+  description: One receipt that counts as an order, dated at its payment
+  primary_key: receipt_nr      # a column or a list; checked for uniqueness on every build
+  time: sale_date              # the date column the windows filter on
+  calendar: true               # the trading days of dim_calendar apply to its rows
+  sample_size: orders          # the count of the default sample-size rule
+  exposed: true                # components may query it
+```
+
+- **`time`**: a model without one cannot be queried, since every query has a window.
+- **`calendar`**: needs `time`. Without it, `trading_days` is empty and the per-trading-day
+  metrics stay blank.
+- **`sample_size`**: a `count` metric on the model. The default `min_n` of `metrics.yml` counts
+  it; a model without one (no orders) has no default sample-size rule.
+- **`exposed`**: only `dim_` and `fct_` models can be. The schema of a component offers the
+  exposed models that have a time column and at least one metric.
+
+Today `fct_sales_lines` and `fct_orders` have all six fields, `dim_calendar` has a time column and
+the calendar, and no primary key is declared where duplicates are legitimate
+(`int_item_resolution`) or where the grain is not settled yet (discounts, modifiers, refunds,
+`stg_items`).
+
 ## Checks
 
 `checks.yml` holds data tests in the style of dbt, for any model (staging included). They run on
@@ -262,13 +291,14 @@ warnings), and a broken check will fail the Monday job with the admin alert, lik
 checks of plan 1.11, once the job builds the component report (plan 9.6); until then the live
 job does not run them. A check is an error unless it says `severity: warn`; warnings become data
 notes. Each failure names the check (or its `message`) and shows up to five sample rows, using
-the model's `sample_columns`.
+the model's `sample_columns`. The primary keys of `models.yml` are checked for uniqueness first,
+without an entry here; repeating one as a `unique` check (a column or a list of columns) in
+`checks.yml` is refused.
 
 ```yaml
 models:
   fct_sales_lines:
     sample_columns: [receipt_nr, item]
-    unique: [[payment_id, line_uuid]]          # a column or a list of columns
     not_null: [receipt_nr, sale_ts, adjusted_item, adjusted_category]
     accepted_values:
       category_group_level_1: [food, drink, consignment, unmapped]
@@ -310,7 +340,7 @@ Running totals and cumulative shares are transforms, not metrics.
 
 ```yaml
 defaults:
-  min_n: { orders: 30 }        # fewer orders in a row or period: greyed out, no insight
+  min_n: 30                    # fewer orders in a row or period: greyed out, no insight
 
 net_sales:
   label: Net Sales
@@ -408,7 +438,9 @@ contributive_aov:
   and leaves the change uncoloured (`share`, the first and last sale). Every metric states it.
 - **`min_n`**: the sample-size rule. The compiler returns `n_orders` per row (and every count
   named in a `min_n`). Visuals grey out rows below it and show their `n`; insight rules skip
-  them. The default is 30 orders. Every count it names must be a `count` metric on every model
+  them. A metric without its own rule gets the default (30) on the `sample_size` count of the
+  model it is queried on (`orders` on both sales models, see `models.yml`), and no rule on a
+  model without one. Every count an explicit rule names must be a `count` metric on every model
   of the metric.
 
 Every metric of METRICS.md is defined (the four money metrics, orders, AOV, items sold,
@@ -577,7 +609,8 @@ query:
   metrics: [net_sales, share, items_sold, orders, penetration, category_aov, contributive_aov]
   window: $period
   compare: prior                    # prior | last_year | none
-  where: { payment_type: [Cash] }   # optional; values become bound parameters
+  where: { payment_type: [Cash] }   # optional; narrows the universe; values are bound parameters
+  focus: { adjusted_category: Coffee }  # optional; keeps only these groups, totals unchanged
   totals: true                      # add the total row
   keep_prior_only: true             # keep groups that sold only in the comparison window
   top: { n: 15, by: net_sales, other: false }   # optional; other: true adds "Other (k)"
@@ -625,13 +658,38 @@ window, the top-N mapping, the aggregates, a frame of output rows with the curre
 aggregates joined, the trading days, then the derived and relative metrics and the changes.
 `meta.sql` shows the full statement.
 
+**`where` and `focus`** (plan 7A.2). `where` narrows the universe: the rows it drops are gone,
+and the totals, and so every relative metric (share, penetration, contributive AOV), cover only
+what it keeps. `focus` keeps the universe and only picks the members to show: the groups, the
+top N and the total rows are computed over the focused rows, while a relative metric still
+divides by the total of everything the `where` keeps, in the same window and bucket. The total
+row (`totals: true`) is therefore the focus as a whole, and its share and penetration are those
+of the focus. A focus on a dimension the query does not group by returns that slice: one row,
+or one row per bucket in a series, and with a list the values together. An example with 1,000
+orders and 50 M IDR in a week, Coffee in 300 orders with 15 M, Latte in 200 orders with 9 M:
+
+| Query | `where: { adjusted_category: Coffee }` | `focus: { adjusted_category: Coffee }` |
+|---|---|---|
+| no dimension: penetration, share | 100%, 100% (refused, see below) | 30%, 30% |
+| by `adjusted_item_variant`: share of Latte | 60% of Coffee | 18% of everything; total row 30% |
+| by `adjusted_item_variant`: penetration of Latte | 67% of the orders with coffee | 20% of all orders |
+
+Both are useful: `where` for values within a slice (the items' shares of a category, as a pie),
+`focus` for a member's place in the whole (a category's penetration trend, a category deep
+dive). The compiler refuses a `where` together with a relative metric when the query has no
+dimension besides time and no focus, because every value would then be relative to its own
+rows (100% for a share or penetration); the message suggests `focus`. A focus on a calendar
+dimension (weekday, holiday) restricts the trading days of the rows, as a `where` does, but
+not those of the totals.
+
 **Top N.** `top` ranks the groups by `by` over the current window (ties by the dimension values)
 and maps every other group, in both windows, to `Other (k)` in the same statement, so the orders
 of "Other" are distinct receipts, not a sum, and the prior of "Other" holds everything outside
 the top N, including groups sold only in the prior window. Without `other: true` that row is
 dropped from the output, but the totals and every relative metric (share, penetration) still
-cover all groups. `by` may be any metric except a relative one. `keep_prior_only` does not
-combine with `top` or with a time dimension.
+cover all groups. `by` may be any metric except a relative one. Under a `focus`, the top N and
+"Other" are ranked among the focused groups only. `keep_prior_only` does not combine with
+`top` or with a time dimension.
 
 **Series.** A query with a time dimension returns a series: `bucket` groups by the query's
 `grain` (default: the window's), and `sale_date`, `sale_week` and `sale_month` group by their own
@@ -857,7 +915,7 @@ A report slot may override fields of a component without copying it, as a deep m
 merge key by key, lists and other values are replaced; the id cannot change):
 `{ component: top_items, with: { query: { top: { n: 10 } } } }`. The merged component is
 validated like a file, and an override may introduce a parameter, such as
-`where: { adjusted_category: $category }`.
+`focus: { adjusted_category: $category }`.
 
 ## Facets
 
@@ -866,10 +924,16 @@ facet:
   by: adjusted_category            # a dimension, or `period`, or `metric`
   values: { top: 5, by: net_sales } # or `all`, or a list such as [Coffee, Mains]
   layout: grid(2x3)                # row, column or grid(n x m): how the slot is split
+  within: false                    # by dimension: true filters each facet with where
 ```
 
-- **By dimension**: the component runs once per value, with the value added to `where`
-  (replacing a filter on the same dimension). `values` is a list (an empty value is written
+- **By dimension**: the component runs once per value, with the value as its `focus`
+  (replacing a focus on the same dimension), so a share or penetration in each facet stays one
+  of the whole filter: the penetration of each category. `within: true` adds the value to the
+  `where` instead (replacing a filter on the same dimension), so each facet is its own universe:
+  the items' shares within each category. The loader compiles one facet's query, so `within`
+  on a component without a dimension besides time and with a relative metric fails when
+  loaded. `values` is a list (an empty value is written
   `null`), `all` (every value sold in the component's window, in the dimension's sort order) or
   `{ top: N, by: metric }` (the first N by a metric that is not relative, over the component's
   window). `all` and the top N are decided once, by one query over the component's window and
@@ -1021,11 +1085,14 @@ pages:
     grid: { columns: 12, rows: [1, 1] }
     slots:
       - { component: penetration_aov_trend, row: 1, col: 1, span: 8,
-          with: { query: { where: { adjusted_category: $category } } } }
+          with: { query: { focus: { adjusted_category: $category } } } }
       - { component: top_items, row: 1, col: 9, span: 4,
-          with: { query: { where: { adjusted_category: $category }, top: { n: 8 } } } }
+          with: { query: { focus: { adjusted_category: $category }, top: { n: 8 } } } }
       ...
 ```
+
+The slots use `focus`, not `where`: the penetration of the category is over all orders, and
+its top items are ranked within the category while their shares stay shares of everything.
 
 The builder (plan 8.5) resolves the anchor, expands every repeat (binding the parameters and the
 page chrome), replaces a repeated group by its `when_empty` page when the window has no sales,

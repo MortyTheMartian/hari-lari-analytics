@@ -7,7 +7,9 @@ facet:
   layout: grid(2x3)                 # row, column or grid(<rows>x<columns>)
 ```
 
-- **By dimension**: the component runs once per value, with the value added to its `where`.
+- **By dimension**: the component runs once per value, with the value as its `focus`, so a
+  share or penetration stays one of the whole filter; `within: true` adds the value to the
+  `where` instead, so each facet is its own universe (the items' shares within each category).
   `all` takes every value sold in the component's window, in the dimension's order; `top` the
   first N by a metric over that window. Both are decided once, before the facets run, so all
   facets show the same values in the same order.
@@ -68,6 +70,7 @@ class FacetSpec(BaseModel):
     by: str  # a dimension, `period` or `metric`
     values: Literal["all"] | list[FacetValue] | TopValues = "all"
     layout: str = "row"  # row, column or grid(<rows>x<columns>)
+    within: bool = False  # by dimension: each facet as its own universe (where, not focus)
 
     @field_validator("layout")
     @classmethod
@@ -113,6 +116,8 @@ def check_facet(
     """Check a facet against the component's (planned) query; raise a `FacetError`."""
     values = facet.values
     count = len(values) if isinstance(values, list) else None
+    if facet.within and facet.by in (PERIOD, METRIC):
+        raise FacetError(f"within is for a facet by dimension, not by {facet.by}")
     if facet.by == PERIOD:
         if not isinstance(values, list) or not values:
             raise FacetError("by period needs a list of windows, such as [L14D, L6W, L3M]")
@@ -153,6 +158,10 @@ def check_facet(
                 compile_query(values_query(facet, query), registry, calendar)
             except (QueryError, RegistryError) as error:
                 raise FacetError(f"values: {error}") from None
+        try:
+            compile_query(facet_query(facet, query, None), registry, calendar)
+        except (QueryError, RegistryError) as error:
+            raise FacetError(f"the query of one facet: {error}") from None
         if isinstance(values, TopValues):
             count = values.top
     if facet.cells is not None and count is not None and count > facet.cells:
@@ -176,9 +185,21 @@ def values_query(facet: FacetSpec, query: Query) -> Query:
         metrics=[metric],
         dimensions=[facet.by],
         window=query.window,
-        where=query.where,
+        where={k: v for k, v in query.where.items() if k != facet.by or not facet.within},
+        focus={k: v for k, v in query.focus.items() if k != facet.by},
         top=top,
     )
+
+
+def facet_query(facet: FacetSpec, query: Query, value: Any) -> Query:
+    """The query of the facet of one dimension value. By default the value is the focus, so
+    relative metrics keep the totals of the component's whole filter; with `within` it is a
+    filter, so each facet is its own universe. Either replaces a focus on the same dimension,
+    and `within` also a filter on it."""
+    focus = {k: v for k, v in query.focus.items() if k != facet.by}
+    if facet.within:
+        return query.model_copy(update={"where": {**query.where, facet.by: value}, "focus": focus})
+    return query.model_copy(update={"focus": {**focus, facet.by: value}})
 
 
 def _python(value: Any) -> Any:
@@ -239,7 +260,6 @@ def run_facets(
     dim = ctx.registry.dimension(facet.by)
     facets = []
     for value in facet_values(facet, query, ctx):
-        where = {**query.where, facet.by: value}
-        result = bound.with_query(query.model_copy(update={"where": where})).run(ctx)
+        result = bound.with_query(facet_query(facet, query, value)).run(ctx)
         facets.append(Facet(value, dim.value_label(value), result))
     return facets

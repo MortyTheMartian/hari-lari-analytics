@@ -234,7 +234,7 @@ def test_a_parameter_without_a_default_is_checked_when_bound(ctx):
     with pytest.raises(ComponentError, match=r"\$category are not bound"):
         trend.bind()
     bound = trend.bind({"category": "Coffee"})
-    assert bound.query.where == {"adjusted_category": "Coffee"}
+    assert bound.query.focus == {"adjusted_category": "Coffee"}
     assert bound.query.buckets_before == 1  # growth_vs_previous
     assert bound.run(ctx).meta.shape == "series"
 
@@ -298,9 +298,9 @@ def test_with_can_add_a_parameter():
     c = component()
     bound = c.bind(
         {"category": "Coffee"},
-        {"query": {"model": "fct_sales_lines", "where": {"adjusted_category": "$category"}}},
+        {"query": {"model": "fct_sales_lines", "focus": {"adjusted_category": "$category"}}},
     )
-    assert bound.query.where == {"adjusted_category": "Coffee"}  # fmt: skip
+    assert bound.query.focus == {"adjusted_category": "Coffee"}  # fmt: skip
 
 
 def test_with_is_validated():

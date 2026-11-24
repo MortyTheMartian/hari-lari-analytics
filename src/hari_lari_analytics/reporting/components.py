@@ -456,7 +456,11 @@ def component_json_schema(registry: Registry | None = None) -> dict:
     registry = registry or default_registry()
     schema = ComponentSpec.model_json_schema()
     defs = schema["$defs"]
-    models = sorted(set().union(*(m.models for m in registry.metrics.values())))
+    models = sorted(
+        m
+        for m, spec in registry.models.items()
+        if spec.exposed and spec.time and registry.metrics_on(m)
+    )
 
     def metrics() -> dict:
         return _enum(registry.metrics, "a metric of metrics.yml")
@@ -469,6 +473,7 @@ def component_json_schema(registry: Registry | None = None) -> dict:
     q["metrics"]["items"] = metrics()
     q["dimensions"]["items"] = dimensions()
     q["where"]["propertyNames"] = dimensions()
+    q["focus"]["propertyNames"] = dimensions()
     q["window"] = {
         "type": "string",
         "pattern": _WINDOW_PATTERN,

@@ -8,7 +8,7 @@ query:
   dimensions: [bucket]
   metrics: [net_sales, penetration, category_aov]
   window: $period
-  where: { adjusted_category: $category }
+  focus: { adjusted_category: $category }
   compare: prior
 transforms:
   - growth_vs_previous

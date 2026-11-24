@@ -1,7 +1,8 @@
 """Data checks in the style of dbt tests, defined in `checks.yml` and run on every build.
 
 Per model: `unique`, `not_null`, `accepted_values`, `relationships` and `expressions` (a SQL
-condition every row must meet); plus `totals`, conditions over whole models in which
+condition every row must meet), and a `unique` check of the primary key of `models.yml`; plus
+`totals`, conditions over whole models in which
 `sum(model.column)` (or min, max, count) stands for that aggregate. A check is an error unless
 it says `severity: warn`. Errors stop the build with `DataCheckError`; warnings are returned,
 for the data notes of a report.
@@ -10,6 +11,7 @@ for the data notes of a report.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib import resources
 from typing import Literal
@@ -19,6 +21,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from hari_lari_analytics.load import InputError
+from hari_lari_analytics.reporting.model_specs import ModelSpec, default_models
 
 Severity = Literal["error", "warn"]
 SAMPLE = 5
@@ -172,9 +175,20 @@ def _literal(value: str | int | bool) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def compile_checks(checks: CheckFile) -> list[Check]:
+def compile_checks(checks: CheckFile, models: Mapping[str, ModelSpec] | None = None) -> list[Check]:
+    """The checks of `checks`, plus a unique check of each primary key in `models`."""
     compiled: list[Check] = []
-    for model, spec in checks.models.items():
+    specs = dict(checks.models)
+    for model_id, model in (models or {}).items():
+        if model.primary_key:
+            spec = specs.get(model_id, ModelChecks())
+            if any(u.columns == model.primary_key for u in spec.unique):
+                raise ValueError(
+                    f"checks.yml: {model_id}: the primary key is unique by models.yml already"
+                )
+            pk = Unique(columns=model.primary_key)
+            specs[model_id] = spec.model_copy(update={"unique": [pk, *spec.unique]})
+    for model, spec in specs.items():
         sample = spec.sample_columns
 
         def cols(*columns: str, sample=sample) -> str:
@@ -227,9 +241,17 @@ def compile_checks(checks: CheckFile) -> list[Check]:
     return compiled
 
 
-def run_checks(con: duckdb.DuckDBPyConnection, checks: CheckFile | None = None) -> CheckReport:
+def run_checks(
+    con: duckdb.DuckDBPyConnection,
+    checks: CheckFile | None = None,
+    models: Mapping[str, ModelSpec] | None = None,
+) -> CheckReport:
+    """Run `checks` (default: `checks.yml` with the primary keys of `models.yml`)."""
+    if checks is None:
+        checks = load_checks()
+        models = default_models() if models is None else models
     results = []
-    for check in compile_checks(checks or load_checks()):
+    for check in compile_checks(checks, models):
         try:
             failures = con.execute(f"select count(*) from ({check.sql})").fetchone()[0]
             sample = con.execute(f"{check.sql} limit {SAMPLE}").fetchall() if failures else []
@@ -239,9 +261,13 @@ def run_checks(con: duckdb.DuckDBPyConnection, checks: CheckFile | None = None) 
     return CheckReport(results)
 
 
-def check(con: duckdb.DuckDBPyConnection, checks: CheckFile | None = None) -> CheckReport:
+def check(
+    con: duckdb.DuckDBPyConnection,
+    checks: CheckFile | None = None,
+    models: Mapping[str, ModelSpec] | None = None,
+) -> CheckReport:
     """Run the checks; raise `DataCheckError` if an error-level check fails."""
-    report = run_checks(con, checks)
+    report = run_checks(con, checks, models)
     if report.errors:
         raise DataCheckError(report)
     return report

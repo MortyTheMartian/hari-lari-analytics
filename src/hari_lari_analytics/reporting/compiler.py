@@ -2,7 +2,9 @@
 
 A query names a model, metrics, dimensions, a window and a comparison, plus optional filters,
 totals, a top N, bins and buckets before the window (see docs/components.md, "Queries and the
-compiler"). The statement computes the current and the comparison window together:
+compiler"). The model's entry in `models.yml` gives the date column the windows filter on,
+whether trading days apply and the count of the sample-size columns. The statement computes
+the current and the comparison window together:
 
 1. the rows of each window, with the dimensions as `_t` (the time bucket) and `_n0, _n1, ...`;
    a top N maps the other groups to "Other (k)" or drops them;
@@ -15,7 +17,11 @@ compiler"). The statement computes the current and the comparison window togethe
 5. the derived and relative metrics (a relative metric reads the total of its time bucket in a
    series, otherwise the total of the window), then the changes.
 
-Filter values are bound parameters. Grouping happens here; reshaping is left to transforms.
+`where` narrows the universe: the totals, and so every relative metric, cover what it keeps.
+`focus` keeps only some groups after that: the rows and total rows shown are those of the
+focused members, while a relative metric still reads the totals of the whole universe (step 2
+also aggregates them, as `<side>_u`). Filter values are bound parameters. Grouping happens
+here; reshaping is left to transforms.
 """
 
 from __future__ import annotations
@@ -82,6 +88,7 @@ class Query(_Strict):
     window: str
     compare: Compare = "none"
     where: dict[str, WhereValue] = {}
+    focus: dict[str, WhereValue] = {}
     totals: bool = False
     keep_prior_only: bool = False
     top: TopSpec | None = None
@@ -198,6 +205,14 @@ class _Compiler:
         q, reg = self.q, self.reg
         if q.window.startswith("$"):
             raise QueryError(f"window: the parameter {q.window} is not bound")
+        model = reg.model(q.model)
+        if not model.exposed:
+            raise QueryError(f"model: {q.model} is not exposed to components (models.yml)")
+        if model.time is None:
+            raise QueryError(
+                f"model: {q.model} has no time column in models.yml, so no window applies to it"
+            )
+        self.model = model
         for field, items in (("metrics", q.metrics), ("dimensions", q.dimensions)):
             if len(set(items)) != len(items):
                 raise QueryError(f"{field}: an entry is listed twice")
@@ -257,9 +272,9 @@ class _Compiler:
 
     def _plan_metrics(self) -> None:
         q, reg = self.q, self.reg
-        counts = ["orders"]
+        counts = [self.model.sample_size] if self.model.sample_size else []
         for metric_id in q.metrics:
-            counts += [c for c in reg.metric(metric_id).min_n if c not in counts]
+            counts += [c for c in reg.min_n(metric_id, q.model) if c not in counts]
         self.counts = counts
         if q.top:
             sort = [q.top.by]
@@ -270,30 +285,47 @@ class _Compiler:
             raise QueryError(f"top: cannot rank by the relative metric {q.top.by}")
 
     def _plan_filters(self) -> None:
-        """Bind the filter values; `self.where` holds (dimension, value, parameter names)."""
-        self.where: list[tuple[Dimension, WhereValue, list[str]]] = []
-        for dim_id, value in self.q.where.items():
+        """Bind the filter values; `self.where` and `self.focus` hold (dimension, value,
+        parameter names)."""
+        self.where = self._bind_filter("where", self.q.where)
+        self.focus = self._bind_filter("focus", self.q.focus)
+        relative = [m for m in self.plan.computed if self.reg.metric(m).totals]
+        if self.where and relative and not self.n_dims and not self.focus:
+            dim_id = next(iter(self.q.where))
+            raise QueryError(
+                f"where: {dim_id} narrows the totals to its own rows, so "
+                f"{', '.join(relative)} would be those of the whole (100% for a share or "
+                f"penetration); use focus: {{ {dim_id}: ... }} to keep the totals of "
+                "everything, or group by a dimension to get values within the filter"
+            )
+
+    def _bind_filter(
+        self, field: str, filters: dict[str, WhereValue]
+    ) -> list[tuple[Dimension, WhereValue, list[str]]]:
+        bound = []
+        for dim_id, value in filters.items():
             dim = self.reg.dimension(dim_id)
             if dim_id == TIME_BUCKET:
-                raise QueryError(f"where: cannot filter on {TIME_BUCKET}; use the window")
+                raise QueryError(f"{field}: cannot filter on {TIME_BUCKET}; use the window")
             dim.column_on(self.q.model)
             values = value if isinstance(value, list) else [value]
             if isinstance(value, list) and not value:
-                raise QueryError(f"where: {dim_id} has an empty list")
+                raise QueryError(f"{field}: {dim_id} has an empty list")
             if any(isinstance(v, str) and v.startswith("$") for v in values):
-                raise QueryError(f"where: {dim_id}: a parameter is not bound")
+                raise QueryError(f"{field}: {dim_id}: a parameter is not bound")
             names: list[str] = []
             bins = self.bins.get(dim_id) or dim.bin_list
             if bins and value is not None:
                 labels = {b.label for b in bins}
                 unknown = [v for v in values if str(v) not in labels]
                 if unknown:
-                    raise QueryError(f"where: {dim_id}: {unknown} are not bins of {dim_id}")
+                    raise QueryError(f"{field}: {dim_id}: {unknown} are not bins of {dim_id}")
             elif value is not None:
                 for v in values:
-                    names.append(f"w{len(self.params)}")
+                    names.append(f"{field[0]}{len(self.params)}")
                     self.params[names[-1]] = v
-            self.where.append((dim, value, names))
+            bound.append((dim, value, names))
+        return bound
 
     def _plan_buckets(self) -> None:
         self.frame_buckets: list[_FrameBucket] = []
@@ -342,10 +374,11 @@ class _Compiler:
         )
         return f"case {whens} end"
 
-    def _filters(self, alias: str, model: str | None = None) -> list[str]:
-        """The where conditions on `alias` (a row of the model, or of dim_calendar)."""
+    def _filters(self, alias: str, model: str | None = None, filters=None) -> list[str]:
+        """The conditions of `filters` (default: the where) on `alias` (a row of the model, or
+        of dim_calendar)."""
         conditions = []
-        for dim, value, names in self.where:
+        for dim, value, names in self.where if filters is None else filters:
             if model == "dim_calendar" and dim.grain != "day":
                 continue  # a trading day does not depend on the payment type or the item
             column = self._column(dim, alias, model)
@@ -441,6 +474,8 @@ class _Compiler:
             )
         ctes += self._frame()
         ctes.append(("jt", self._trading_days()))
+        if self.focus and self._needs_total():
+            ctes += self._universe(sides)
         ctes.append(("f", self._computed()))
         sql = "with\n" + ",\n".join(f"{name} as (\n{_indent(body)}\n)" for name, body in ctes)
         sql += "\n" + self._final()
@@ -463,8 +498,9 @@ class _Compiler:
         )
 
     def _metric_specs(self) -> dict[str, Metric]:
-        specs = {m: self.reg.metric(m) for m in self.q.metrics}
-        specs |= {f"n_{c}": self.reg.metric(c) for c in self.counts}
+        """The metric of every column, with its sample-size rule on the query's model."""
+        specs = {m: self.reg.metric_on(m, self.q.model) for m in self.q.metrics}
+        specs |= {f"n_{c}": self.reg.metric_on(c, self.q.model) for c in self.counts}
         return specs
 
     def _frame_buckets(self) -> str:
@@ -493,19 +529,21 @@ class _Compiler:
     def _rows(self, side: str) -> str:
         select = ["m.*"]
         join = ""
+        day = f"m.{self.model.time}"
         if self.time:
             select += ["b._ord", "b._t"]
             if side == "prior":
-                join = "\njoin prior_b as b on m.sale_date between b._t and b._te"
+                join = f"\njoin prior_b as b on {day} between b._t and b._te"
             else:
                 op = ">=" if side == "cur" else "<"
-                join = (
-                    f"\njoin frame_b as b on m.sale_date between b._t and b._te and b._ord {op} 0"
-                )
+                join = f"\njoin frame_b as b on {day} between b._t and b._te and b._ord {op} 0"
         select += [f"{self._dim_expr(d)} as _n{i}" for i, d in enumerate(self.n_dims)]
         if not self.q.top:
             select.append("false as _other")
-        where = [f"m.sale_date between ${side}_lo and ${side}_hi", *self._filters("m")]
+        if self.focus:
+            focus = " and ".join(self._filters("m", filters=self.focus))
+            select.append(f"coalesce({focus}, false) as _f")
+        where = [f"{day} between ${side}_lo and ${side}_hi", *self._filters("m")]
         return (
             f"select {', '.join(select)}\nfrom {self.q.model} as m{join}\n"
             f"where {' and '.join(where)}"
@@ -521,9 +559,10 @@ class _Compiler:
             f"{self._ranking_expr(top.by)} desc nulls last",
             *(f"{k} nulls last" for k in keys),
         ]
+        focus = "\nwhere _f" if self.focus else ""
         return (
             f"select {', '.join(keys)}, row_number() over (order by {', '.join(order)}) as _rank\n"
-            f"from cur_r\ngroup by {', '.join(keys)}"
+            f"from cur_r{focus}\ngroup by {', '.join(keys)}"
         )
 
     def _keyed(self, side: str) -> str:
@@ -561,9 +600,67 @@ class _Compiler:
         select = [*keys, f"{level} as _lvl", "bool_or(_other) as _other", "count(*) as _rows"]
         select += [f"{self._aggregate(m)} as {m}" for m in self.plan.aggregates]
         sql = "select\n    " + ",\n    ".join(select) + f"\nfrom {source}"
+        if self.focus:
+            sql += "\nwhere _f"
         if sets:
             sql += "\ngroup by grouping sets (" + ", ".join(f"({', '.join(s)})" for s in sets) + ")"
         return sql
+
+    def _universe(self, sides: list[str]) -> list[tuple[str, str]]:
+        """The totals of everything the where keeps, per bucket (level 1) and for the window
+        (level 2), which the relative metrics read under a focus instead of the focus totals."""
+        ctes = []
+        aggregates = [f"{self._aggregate(m)} as {m}" for m in self.plan.aggregates]
+        for side in sides:
+            if self.time:
+                level = "case when grouping(_t) = 1 then 2 else 1 end"
+                sets = "(_ord, _t)" + (", ()" if side != "extra" else "")
+                select = ["_ord", f"{level} as _lvl", "count(*) as _rows", *aggregates]
+                group = f"\ngroup by grouping sets ({sets})"
+            else:
+                select = ["null::integer as _ord", "2 as _lvl", "count(*) as _rows", *aggregates]
+                group = ""
+            body = "select\n    " + ",\n    ".join(select) + f"\nfrom {side}_r{group}"
+            ctes.append((f"{side}_u", body))
+        cur = "cur_u"
+        if self.extra:
+            ctes.append(
+                ("cur_all_u", "select * from cur_u\nunion all by name\nselect * from extra_u")
+            )
+            cur = "cur_all_u"
+        if self.compare_run:
+            prior_lo, prior_hi = "$prior_lo", "$prior_hi"
+        else:
+            prior_lo, prior_hi = "null::date", "null::date"
+        frame = (
+            "select 2 as _lvl, null::integer as _ord, $cur_lo as _lo, $cur_hi as _hi, "
+            f"{prior_lo} as _plo, {prior_hi} as _phi"
+        )
+        if self.time:
+            frame = (
+                "select 1 as _lvl, b._ord, b._lo, b._hi, b._plo, b._phi\nfrom frame_b as b\n"
+                f"union all\n{frame}"
+            )
+        on = "c._lvl = f._lvl and c._ord is not distinct from f._ord"
+        joins = f"from u_frame as f\nleft join {cur} as c on {on}"
+        if self.compare_run:
+            joins += f"\nleft join prior_u as p on {on.replace('c.', 'p.')}"
+        select = ["f.*", *self._joined_values("f")]
+        ctes.append(("u_frame", frame))
+        ctes.append(("uj", "select\n    " + ",\n    ".join(select) + "\n" + joins))
+        prior = (
+            self._trading_days_expr("_plo", "_phi", member=False)
+            if self.compare_run
+            else "null::bigint"
+        )
+        ctes.append(
+            (
+                "ut",
+                f"select j.*,\n    {self._trading_days_expr('_lo', '_hi', member=False)} as _td,"
+                f"\n    {prior} as _ptd\nfrom uj as j",
+            )
+        )
+        return ctes
 
     def _joined_values(self, frame: str) -> list[str]:
         """The aggregates of the current (c) and prior (p) side on a row of the frame."""
@@ -634,9 +731,18 @@ class _Compiler:
         ctes.append(("j", "select\n    " + ",\n    ".join(select) + "\n" + joins))
         return ctes
 
-    def _trading_days_expr(self, lo: str, hi: str) -> str:
+    def _trading_days_expr(self, lo: str, hi: str, member: bool = True) -> str:
+        """The trading days of a row of `j`; `member=False` for the totals of the universe,
+        which neither the focus nor the row's own calendar values restrict. NULL for a model
+        to which the calendar does not apply."""
+        if not self.model.calendar:
+            return "null::bigint"
         conditions = ["c.is_trading_day", f"c.date between j.{lo} and j.{hi}"]
         conditions += self._filters("c", "dim_calendar")
+        if not member:
+            count = f"(select count(*) from dim_calendar as c where {' and '.join(conditions)})"
+            return f"case when j.{lo} is not null then {count} end"
+        conditions += self._filters("c", "dim_calendar", self.focus)
         day = [(i, d) for i, d in enumerate(self.n_dims) if self.dims[d].grain == "day"]
         if day:
             same = " and ".join(
@@ -657,24 +763,28 @@ class _Compiler:
             f"    {prior} as _ptd\nfrom j"
         )
 
+    def _needs_total(self) -> bool:
+        return any(self.reg.metric(m).totals for m in self.plan.computed)
+
     def _computed(self) -> str:
         sides = ["cur", *(["prior"] if self.compare_run else [])]
         select = ["j.*"]
         for side in sides:
             prefix = "" if side == "cur" else "prior_"
             select += [f"{self._value(m, side)} as {prefix}{m}" for m in self.plan.computed]
-        needs_total = any(self.reg.metric(m).totals for m in self.plan.computed)
         sql = "select\n    " + ",\n    ".join(select) + "\nfrom jt as j"
-        if needs_total:
+        if self._needs_total():
             if self.time is None:
                 on = "t._lvl = 2"
             else:
-                member_total = 1 if self.n_dims else 0
+                # the universe has a level-1 row per bucket; without a focus, a series without
+                # groups has its bucket totals at level 0
+                member_total = 1 if self.n_dims or self.focus else 0
                 on = (
                     "t._ord is not distinct from j._ord and "
                     f"t._lvl = case when j._lvl = 2 then 2 else {member_total} end"
                 )
-            sql += f"\nleft join jt as t on {on}"
+            sql += f"\nleft join {'ut' if self.focus else 'jt'} as t on {on}"
         return sql
 
     def _final(self) -> str:

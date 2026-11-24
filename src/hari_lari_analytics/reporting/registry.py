@@ -1,16 +1,18 @@
 """The semantic layer: `metrics.yml`, `dimensions.yml` and `kpi_tree.yml`, loaded and validated.
 
-The three files are checked against each other and against the models in `models/`: every
-reference names an existing metric, dimension or model, there are no cycles, and every metric
-and identity exists on at least one model. The registry then gives the query compiler the SQL
-of each metric: the aggregate of a sql or filtered metric on a model, and the expression of a
-derived or relative metric over the columns of other metrics.
+The three files are checked against each other and against the models of `models.yml`: every
+reference names an existing metric, dimension or model, there are no cycles, every metric and
+identity exists on at least one model, and the `sample_size` of a model is a count metric on
+it. The registry then gives the query compiler the SQL of each metric: the aggregate of a sql
+or filtered metric on a model, and the expression of a derived or relative metric over the
+columns of other metrics.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from functools import cache
 from graphlib import CycleError, TopologicalSorter
@@ -21,7 +23,7 @@ import pandas as pd
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from hari_lari_analytics.reporting.db import model_sql
+from hari_lari_analytics.reporting.model_specs import ModelSpec, default_models
 
 Format = Literal["idr", "idr_compact", "count", "decimal", "pct", "timestamp"]
 Additivity = Literal["full", "order_grain", "none"]
@@ -77,7 +79,7 @@ class MetricSpec(_Strict):
 
 
 class MetricDefaults(_Strict):
-    min_n: dict[str, int] = {"orders": 30}
+    min_n: int = Field(default=30, ge=1)  # of the model's sample_size count (models.yml)
 
 
 class SortSpec(_Strict):
@@ -209,7 +211,9 @@ class Metric:
     format: Format
     up_is_good: bool | None  # None: neutral, the change is not coloured
     additivity: Additivity
-    min_n: dict[str, int]
+    # the sample-size rule; None in the registry for the default of the model (see
+    # `Registry.min_n`), always resolved in the metric specs of a result
+    min_n: dict[str, int] | None
     aggregates: dict[str, Aggregate]  # sql and filtered: per model
     expression: str | None  # derived and relative
     inputs: frozenset[str]  # metrics the expression uses as values of the group
@@ -253,6 +257,27 @@ class Registry:
     dimensions: dict[str, Dimension]
     identities: dict[str, Identity]
     order: tuple[str, ...]  # every metric after the metrics it depends on
+    models: dict[str, ModelSpec]
+    default_min_n: int = 30
+
+    def model(self, model_id: str) -> ModelSpec:
+        try:
+            return self.models[model_id]
+        except KeyError:
+            raise RegistryError(f"unknown model {model_id!r}") from None
+
+    def min_n(self, metric_id: str, model: str) -> dict[str, int]:
+        """The sample-size rule of a metric on a model: its own, or the default count of the
+        model's `sample_size` (none for a model without one)."""
+        own = self.metric(metric_id).min_n
+        if own is not None:
+            return dict(own)
+        count = self.model(model).sample_size
+        return {count: self.default_min_n} if count else {}
+
+    def metric_on(self, metric_id: str, model: str) -> Metric:
+        """The metric as a result carries it: with its sample-size rule on `model`."""
+        return dataclasses.replace(self.metric(metric_id), min_n=self.min_n(metric_id, model))
 
     def metric(self, metric_id: str) -> Metric:
         try:
@@ -393,14 +418,31 @@ def load_registry(
     metrics: str | None = None,
     dimensions: str | None = None,
     kpi_tree: str | None = None,
-    models: Iterable[str] | None = None,
+    models: Mapping[str, ModelSpec] | None = None,
 ) -> Registry:
-    """Load and validate the registries; the texts default to the packaged YAML files."""
-    models = frozenset(models if models is not None else model_sql())
-    dims = _load_dimensions(_read("dimensions.yml", dimensions, {}), models)
-    metric_map, order = _load_metrics(_read("metrics.yml", metrics, {}), dims, models)
+    """Load and validate the registries; the texts default to the packaged YAML files, the
+    models to `models.yml`."""
+    specs = dict(models if models is not None else default_models())
+    names = frozenset(specs)
+    dims = _load_dimensions(_read("dimensions.yml", dimensions, {}), names)
+    defaults, metric_specs = _metric_specs(_read("metrics.yml", metrics, {}))
+    metric_map, order = _load_metrics(metric_specs, dims, names)
+    _check_sample_sizes(specs, metric_map)
     identities = _load_identities(_read("kpi_tree.yml", kpi_tree, []), metric_map, dims)
-    return Registry(metric_map, dims, identities, order)
+    return Registry(metric_map, dims, identities, order, specs, defaults.min_n)
+
+
+def _check_sample_sizes(models: dict[str, ModelSpec], metrics: dict[str, Metric]) -> None:
+    for model in models.values():
+        count = model.sample_size
+        if count is None:
+            continue
+        metric = metrics.get(count)
+        where = f"models.yml: {model.id}: sample_size {count}"
+        if metric is None or metric.format != "count":
+            raise RegistryError(f"{where} is not a count metric")
+        if model.id not in metric.models:
+            raise RegistryError(f"{where} is not on the model")
 
 
 @cache
@@ -490,10 +532,8 @@ def _file_order(graph: dict[str, set[str]]) -> tuple[str, ...]:
 
 
 def _load_metrics(
-    raw: dict, dims: dict[str, Dimension], models: frozenset[str]
+    specs: dict[str, MetricSpec], dims: dict[str, Dimension], models: frozenset[str]
 ) -> tuple[dict[str, Metric], tuple[str, ...]]:
-    defaults, specs = _metric_specs(raw)
-
     graph: dict[str, set[str]] = {}
     refs: dict[str, tuple[set[str], set[str]]] = {}
     for metric_id, spec in specs.items():
@@ -584,9 +624,7 @@ def _load_metrics(
 
         if kind == "filtered" and spec.label is None:
             raise RegistryError(f"{where}: missing label")
-        min_n = spec.min_n if spec.min_n is not None else (
-            base.min_n if base is not None else dict(defaults.min_n)
-        )  # fmt: skip
+        min_n = spec.min_n if spec.min_n is not None else (base.min_n if base else None)
         metric = Metric(
             id=metric_id,
             kind=kind,
@@ -608,7 +646,7 @@ def _load_metrics(
 
     for metric in metrics.values():
         where = f"metrics.yml: {metric.id}"
-        for count, n in metric.min_n.items():
+        for count, n in (metric.min_n or {}).items():
             other = metrics.get(count)
             if other is None or other.format != "count":
                 raise RegistryError(f"{where}: min_n uses {count}, which is not a count metric")

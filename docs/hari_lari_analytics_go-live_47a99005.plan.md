@@ -1,6 +1,6 @@
 ---
 name: Hari Lari go-live
-overview: "Put the Moka extraction and weekly report live in Google Cloud: Monday 04:00 WITA download, build the reports, send them to a new Telegram group. Then build a reporting framework in which a new component or report is mostly YAML: checked models, a semantic layer (metrics, dimensions, KPI tree), one query compiler with composable transforms, driver decomposition, rule-based insights, grid layouts and four outputs (PDF, PNG, Telegram text, Excel). Prove it on new components, port today's report with number parity, then build driving reports from a backlog ranked by the decision each one supports, starting with recipe margins from config/item_margins.csv. Finally, make the repository publishable: business config out of git, a fictional demo café for tests and docs, a publish guard and a one-time history rewrite."
+overview: "Put the Moka extraction and weekly report live in Google Cloud: Monday 04:00 WITA download, build the reports, send them to a new Telegram group. Then build a reporting framework in which a new component or report is mostly YAML: checked models, a semantic layer (metrics, dimensions, KPI tree), one query compiler with composable transforms, driver decomposition, rule-based insights, grid layouts and four outputs (PDF, PNG, Telegram text, Excel). Prove it on new components, port today's report with number parity, then build driving reports from a backlog ranked by the decision each one supports, starting with recipe margins from config/item_margins.csv. Finally, make the repository publishable: business config out of git, a fictional demo café for tests and docs, a publish guard and a one-time history rewrite. After a comparison with Lightdash, refine the architecture (phase 7A) and keep a cheap frontend possible: every report also writes a JSON bundle that an optional read-only, scale-to-zero frontend can render (phase 12)."
 todos:
   - id: p0-decisions
     content: "Phase 0: decide project, deliverables, members, alert target, anchor rule (You)"
@@ -29,8 +29,11 @@ todos:
   - id: p7-core
     content: "Phase 7: framework core - models with order and item attributes, calendar events, data checks, semantic layer and KPI tree, windows, query compiler, transforms, decompose, component loader, facets, dev CLI, tracer check"
     status: completed
+  - id: p7a-refine
+    content: "Phase 7A: architecture refinements from the Lightdash comparison - relative metrics under filters (focus), models.yml, project.yml, SQL parsing with DuckDB, merge phase 7 to main, CI, release path with automatic dry run, report filters, schedule and delivery in the report YAML"
+    status: in_progress
   - id: p8-present
-    content: "Phase 8: presentation and outputs - visual registry, core visuals, insight engine, grid layouts, report builder (PDF, PNG, Telegram text, XLSX), previews, gallery and snapshots, authoring guide"
+    content: "Phase 8: presentation and outputs - renderer-neutral visual contract, visual registry, core visuals, insight engine, grid layouts, report builder (PDF, PNG, Telegram text, XLSX, JSON bundle), semantic manifest, previews, gallery and snapshots, authoring guide"
     status: pending
   - id: p9-prove-port
     content: "Phase 9: prove and port - three new components in YAML only, close the gaps, port today's report with number parity, category deep dive, two side-by-side Mondays, cut over"
@@ -47,8 +50,11 @@ todos:
   - id: p11-publish
     content: "Phase 11: make the repo publishable - purge the token backup ref now, business config out of git (CONFIG_DIR, bucket), demo café data, fictional names in tests, clean docs, identifiers as settings, publish guard, history rewrite, go public"
     status: pending
+  - id: p12-frontend
+    content: "Phase 12 (optional): read-only reporting frontend at near-zero cost - decide hosting and sign-in, bundle history, marts export, mobile frontend over the JSON bundle, Telegram or Google sign-in, optional query endpoint on the same compiler, tests"
+    status: pending
   - id: sync-doc
-    content: Sync docs/go-live-plan.md with the status, suggested LLM and the revised phases 7 to 11
+    content: Sync docs/go-live-plan.md with the status, suggested LLM and the revised phases 7 to 12, including 7A
     status: pending
 isProject: false
 ---
@@ -84,10 +90,11 @@ flowchart LR
   Model --> Semantic["3 semantic layer: metrics, dimensions, KPI tree"]
   Semantic --> Compiler["4 query compiler and transforms"]
   Compiler --> Report["5 report builder: visuals, insights, grid layouts"]
-  Report --> Outputs["PDF, PNG, Telegram text, XLSX"]
+  Report --> Outputs["PDF, PNG, Telegram text, XLSX, JSON bundle"]
   Outputs --> Deliver["6 deliver: Telegram and Drive"]
+  Outputs -.-> Frontend["optional: read-only frontend, phase 12"]
   Secrets[SecretManager] <--> Job
-  Job --> Bucket["Cloud Storage: raw, tables, reports"]
+  Job --> Bucket["Cloud Storage: raw, tables, reports, marts"]
 ```
 
 ## Design choices
@@ -97,9 +104,11 @@ flowchart LR
 - **Full pull every week, nothing incremental.**
 - **Region `asia-southeast2` (Jakarta).**
 - **Cost:** expect about 0 USD a month, inside the free tier.
-- **Sequence:** go live with today's PDF fed from the API (phases 1 to 6). Build the framework (phases 7 and 8), prove it on new components and swap in the component report once its numbers match the old one (phase 9). Phase 10 builds the driving reports on top.
+- **Sequence:** go live with today's PDF fed from the API (phases 1 to 6). Build the framework (phases 7 and 8), prove it on new components and swap in the component report once its numbers match the old one (phase 9). Phase 7A refines the core before phase 8 builds on it. Phase 10 builds the driving reports on top, and phase 12 adds an optional frontend over the same outputs.
 - **Framework first, measured on new work.** The goal of phases 7 to 9 is a framework in which a new component takes under 30 minutes and usually only YAML, and in which reports explain why a number moved. Success is measured on components the old report never had (9.1), not on reproducing the old PDF pixel for pixel.
 - **Own framework, borrowed concepts.** Models follow dbt's layers and stay plain SQL; metric kinds follow dbt's semantic layer (MetricFlow). The presentation layer, the KPI tree and the push delivery are ours. Design: [docs/components.md](hari-lari-analytics/docs/components.md).
+- **Compared with Lightdash (24 Nov 2026).** The layers match Lightdash's: models, a semantic layer, charts and dashboards as YAML, validation. Ours is stronger on comparisons, the KPI tree and sample sizes. Phase 7A takes over what it does better: model metadata in YAML, report-level filters, schedules and deliveries as code, and validation in CI. We do not take over its server, UI, join engine, permissions, caching or pre-aggregates, because a push report on a few MB needs none of them.
+- **Push first, frontend optional.** Telegram stays the main channel. Every report also writes a JSON bundle (8.9) with the results and their display strings, so a later frontend (phase 12) only renders and never computes. It then shows the same numbers as the PDF, runs without a server between visits, and costs close to nothing.
 
 ## Known data issues to fix
 
@@ -244,20 +253,53 @@ A report places components into a 12-column page grid; the three period sections
 - **7.14** Write the developer CLI `hari-lari-component`: `run <id> --period L6W [--anchor] [--sql] [--csv]` prints the result and its SQL; `validate` checks every component and report; `new <id> [--from <id>]` scaffolds a component with its snapshot test; `schema` writes the JSON Schema. Status: done (2026-11-24: `reporting/cli.py`, script `hari-lari-component` in `pyproject.toml`. `run` builds the models of the latest run in `--run` (default `data/extract`, `gs://` works) up to `--anchor` (default: the last payment), binds `--period` and `--param name=value` (YAML values) before building, so a bad parameter fails at once, and prints per facet the rendered title and hint (an undefined name is an error), window, comparison, shape, trading days and the result, with `--sql` the statement and its bound parameters, with `--csv` CSV (SQL to stderr); about 2 s on the run of 2026-11-22; an unknown id suggests close names. `validate` lists every broken component, notes a missing schema line and the parameters only a report binds, checks the JSON Schema and exits non-zero on any problem; reports join with 8.5. `new` copies `--from` or a minimal template, refuses an existing or non-snake_case id or a copy that does not load, and writes the snapshot stub. `schema [--check]`. `--components <folder>` before the command points at another folder. Choice you may want to revisit: the snapshot test came forward from 8.7 in a minimal form: `reporting/snapshots.py` writes `tests/snapshots/<id>.yml` (the parameters, then per facet key, label and the result as CSV; a result shared by facets by metric is written once), `tests/test_snapshots.py` runs every packaged component on the test fixture against it, and `uv run pytest tests/test_snapshots.py --update-snapshots` refreshes them; `new` writes only the parameters, so a new component fails its snapshot test until it is filled in and committed. `tests/test_component_cli.py`: 17 tests on a Parquet copy of the fixture run). LLM: Sonnet 5.5. Size: M.
 - **7.15** Tracer check, the exit of phase 7: the full-history KPIs and `category_contributive_aov` run through the whole core and equal `report_data.Section` for the anchor 2026-11-22 in all three periods. Status: done (2026-11-24: the first packaged components `components/full_history_kpis.yml` (the four cover cards, window `full`, facet by metric, `grid(1x4)`) and `components/category_contributive_aov.yml` (as in `docs/components.md`, default L6W), each with a snapshot. `tests/test_tracer.py` on the run of 2026-11-22 compares them with today's report built by the old pandas pipeline (`load_api_sales` and `prepare_lines`, not the new models) from the same run: the full-history KPIs with the cover's `compute_metrics` and the window from the first sale to the anchor; the categories in L14D, L6W and L3M with `report_data.Section` (order, all 12 columns and the delta in pp, the total row, `compare_ok`, trading days, and the hint, which says "Δ vs prior period" only when the comparison is valid, so not in L3M yet); and `hari-lari-component run ... --csv` prints the same numbers. All equal at a relative tolerance of 1e-12, no gaps found. The full-history KPIs have no period, so "all three periods" applies to the categories). LLM: Opus 5.5. Size: S.
 
+## Phase 7A: Architecture refinements
+
+A comparison of the phase 7 core with Lightdash, dbt's MetricFlow and Rill on 24 Nov 2026 found one semantic gap and a few structural ones. These tasks fix them before phase 8 builds on top. Order: 7A.6 and 7A.7 now; 7A.1 to 7A.5 and 7A.9 before 8.5; 7A.8 before 9.6. 7A.2 is needed before 9.5 and 10.12, and 7A.3 before 10.9.
+
+- **7A.1** Write a failing test for relative metrics under a filter. On the fixture, take one category's `penetration`, `share` and `contributive_aov` from the categories table. Then get the same category three other ways: with `where: { adjusted_category: ... }`, as a facet by `adjusted_category`, and as a weekly series with that filter. All four must give the same values. Today the filtered versions show a penetration and share of 100% and a contributive AOV equal to the category AOV, because the totals are computed over the filtered lines. On the run of 2026-11-22, the top category shows 53.2% penetration in the table for L6W against 100% under the filter. Status: done (2026-11-24: `tests/test_focus.py`, failing before 7A.2. One fixture category is checked by hand (Coffee: 70,000, 2 of 4 orders, share 70/213, contributive AOV 17,500), then restricted, as a facet and as a weekly series; on the real run the focus and facet versions of the top category match the table's 0.532 over L6W. The `where` version became "refused, use `focus`", see 7A.2). LLM: Sonnet 5.5. Size: S.
+- **7A.2** Separate the universe from the member. `where` keeps its meaning: it narrows the universe, and the totals cover what it keeps. A new query field `focus: { <dimension>: value or list }` keeps only those groups after the totals and their priors are computed, grouping by the dimension when the query does not. Facets by dimension, the report repeats and the `with:` overrides of a slot then use `focus` instead of `where`. The loader refuses a `where` on an item or line dimension of a line-grain model when the query has a relative metric, and suggests `focus`: those totals would count only the filtered lines. Update the `category_trend` fixture, the JSON Schema, the snapshots, and the query, facet and deep-dive examples in `docs/components.md`. Done when 7A.1, the tracer check (7.15) and the parity tests pass. Status: done (2026-11-24: 596 tests pass, snapshots unchanged. Your decisions: (1) under a focus the total row is the focus total, but relative metrics always divide by the universe, so penetration and share stay meaningful; (2) the narrow rule: a `where` with a relative metric is refused only when the query groups by nothing but time and has no focus, so grouped "within" shares (item shares inside one category, variants inside one item) stay allowed under a `where`; (3) a facet by dimension uses `focus`, and `within: true` makes each facet its own universe (`where`), refused on a facet without a group. The focus filters the aggregates instead of grouping by a hidden dimension, so a focus on a dimension the query does not group by gives the slice itself (a list of categories, a weekday with its own trading days). Top N ranks within the focus. To revisit: the rule covers every dimension, not only item and line dimensions, which is simpler and so far loses nothing). LLM: Opus 5.5. Size: M.
+- **7A.3** Add the model metadata file `models.yml`. Per model: `description`; `primary_key` (the checks get their `unique` check from it); `time` (the date column the windows filter on, which the compiler today hardcodes as `sale_date`); `calendar` (whether trading days from `dim_calendar` apply); `sample_size` (the count metric behind the default `min_n`: `orders` for the sales models, none for a model without orders); and `exposed` (whether components may query it, as Lightdash exposes only production models; `stg_` and `int_` are not). The compiler, registry, checks and JSON Schema read it, so the hardcoded `sale_date` and `orders` go. Test with a fictional fixture model `fct_expenses`, which must load, compile and run a windowed query without orders. Today such a model fails to load, because the default `min_n` needs `orders`. Status: done (2026-11-24: `reporting/models.yml` with all 16 models, loaded by `model_specs.py`, which refuses a missing or extra entry, `calendar` without `time`, and an exposed `stg_` or `int_` model. The default `min_n` (now `min_n: 30` in `metrics.yml`) counts the model's `sample_size`, resolved per model by the registry; the primary-key `unique` entries left `checks.yml`, and repeating one there is refused. `tests/test_model_specs.py` runs a fictional `fct_expenses` (no orders, no calendar): WTD, groups with shares, a weekly series, no `n_` columns and no trading days. To revisit: no primary key for `int_item_resolution` (it has duplicates), the discounts, modifiers and refunds tables or `stg_items`; `dim_calendar` is exposed with time and calendar but has no metrics, so the JSON Schema does not offer it). LLM: Opus 5.5. Size: M.
+- **7A.4** Add the project config file `project.yml` for the settings that are spread over the code today. It holds the currency and number format (separators, compact suffixes, which the `idr` formats read), the time zone (today only in the `Dockerfile`), the first day of the week, the default `min_n` (moved out of `metrics.yml`), the anchor rule (yesterday), and the reference date the loader checks components on (today hardcoded in `components.py`). The file is public; the demo café (11.3) has its own, and business identifiers stay in `.env` (11.6). Status: todo. LLM: Sonnet 5.5. Size: S.
+- **7A.5** Parse SQL with DuckDB instead of regular expressions. `build_order` should read each model's dependencies with `con.get_table_names()` on its `select`, so a model named only in a comment no longer counts as a dependency (today `fct_orders` depends on `fct_sales_lines` through a comment). Metric expressions are tokenized by DuckDB (for example `duckdb.tokenize`), so casts such as `::double` and type names no longer fail as "unknown metric(s) float". The error messages stay the same. Status: todo. LLM: Sonnet 5.5. Size: S.
+- **7A.6** Merge phase 7 into `main`: push `framework-core` (9 commits not on `origin/main`) and the local `main` (1 commit), open a pull request and merge it. The live job is not affected, because it does not use the reporting package until 9.7. Status: todo. LLM: You (with GPT-5.4 nano). Size: S.
+- **7A.7** Add CI with GitHub Actions on every push and pull request: `uv sync --frozen`, `ruff check`, `pytest`, `hari-lari-component validate` and `hari-lari-component schema --check`. The real-run tests skip there, because the run is not in git. Later steps join it: `hari-lari-report validate` (8.5), the frontend tests (12.6) and `publish_check.py` (11.7). The suite takes about 2 minutes, so this stays inside the free minutes of a private repository. Status: todo. LLM: Sonnet 5.5. Size: S.
+- **7A.8** Automate the release path, replacing the manual rule of 6.1:
+  1. On a merge to `main`, build the image tagged with the commit (Cloud Build, or GitHub Actions with Workload Identity Federation, so no key file).
+  2. Run it as a dry run in a second job, `hari-lari-weekly-dryrun`.
+  3. Only when the dry run succeeds, point the live job at the new tag. Rolling back means pointing it at the previous tag.
+
+  The runbook gets a section on this. Expected cost: inside Cloud Build's free monthly minutes (to check). Status: todo (before 9.6). LLM: Sonnet 5.5. Size: M.
+- **7A.9** Revise the report design in `docs/components.md` before 8.5:
+  - **Filters.** Reports and pages get `filters` that apply to every slot whose model has the dimension, with an opt-out per slot, like Lightdash's dashboard filters. This replaces the `with: { query: { where: ... } }` repeated in each slot.
+  - **Schedule and delivery.** A report states its `schedule` (cron and time zone) and `deliver` (the Telegram target, Drive, and an optional condition such as an insight rule or a failing check, which turns a report into an alert).
+  - **One command.** `hari-lari-report run --report <id> [--dry-run] [--to admin]` replaces the weekly-specific steps at the cut-over (9.7), and `deploy/` creates one Cloud Scheduler job per report from the YAML.
+
+  Implementation happens in 8.5 and 9.7. Status: todo. LLM: Opus 5.5. Size: S.
+
 ## Phase 8: Presentation and outputs
 
 Visuals draw and never compute. Pages are a grid, so placing or moving a component is a YAML change. One report writes a PDF, PNG pages, Telegram text and an Excel file.
 
+- **8.0** Decide the renderer-neutral visual contract before 8.1. A visual's options state what to show (columns, bars, deltas, emphasis, rank), never how matplotlib draws it: no point sizes, and colours as theme tokens. A web renderer (phase 12) can then implement the same visual types from the same YAML. Number formatting lives in one place (`formats`, read from `project.yml` of 7A.4), which also writes the display strings into the JSON bundle (8.9), so no frontend has to reimplement the IDR, compact or percentage-point formats. Record this in `docs/components.md`, "Visuals". Status: todo. LLM: Opus 5.5. Size: S.
 - **8.1** Create the visual registry and theme: move the building blocks out of [src/hari_lari_analytics/report_pdf.py](hari-lari-analytics/src/hari_lari_analytics/report_pdf.py) unchanged (`Palette`, the formats `idr`, `pct`, `compact`, `headline` and `change_text`, and the card, chips, sparkline, table and bar column helpers) into `reporting/visuals/`, so the old report imports them and still renders identically. A visual is `(fig, rect, result, options, theme)`, declares its options schema, its minimum size and the result shapes it accepts, and does no data work. Status: todo. LLM: Sonnet 5.5. Size: M.
-- **8.2** Write the core visuals, each with a rendering test on the fixture: `kpi_card` (value, change, prior, sparkline), `table` (bars, deltas coloured by `up_is_good`, total row, rank), `bar_trend` (prior ticks, growth labels), `hbar`, `dot_plot`, `stacked_share_bar`, `heatmap`, `scatter_quadrant`, `waterfall` (for `decompose`), `text_line` and `notes_card`. Rows below the sample-size rule are greyed out with their `n` shown. Status: todo. LLM: Sonnet 5.5. Size: L (about 11 tasks of S or M).
+- **8.2** Write the core visuals, each with a rendering test on the fixture: `kpi_card` (value, change, prior, sparkline), `table` (bars, deltas coloured by `up_is_good`, total row, rank), `bar_trend` (prior ticks, growth labels), `hbar`, `dot_plot`, `stacked_share_bar`, `heatmap`, `scatter_quadrant`, `waterfall` (for `decompose`), `text_line` and `notes_card`. Rows below the sample-size rule are greyed out with their `n` shown. Time visuals (`bar_trend`, `heatmap`) mark the holidays, closures and promotions of `dim_calendar`, like Rill's annotations. Status: todo. LLM: Sonnet 5.5. Size: L (about 11 tasks of S or M).
 - **8.3** Write the insight engine: rule types in Python, rules in `insights.yml`. Rules read results and return scored sentences: the largest drivers of a change (from `decompose`), the biggest movers in a breakdown, threshold crossings, records since the first sale, and data notes. No sentence about fewer orders than the metric's `min_n`, and none without a valid comparison. A component lists its rules; the report collects, ranks and de-duplicates the sentences, and shows them through an `insights` visual and as plain text. Status: todo. LLM: Opus 5.5. Size: M.
 - **8.4** Write the grid layout engine: a page is a 12-column grid with row heights; a slot names a component with its row, column, span and height; the page chrome (header chips, footer, the note when a comparison starts before the first sale) comes from the report context. The engine checks each visual's minimum size, and a test fails when any text overflows its slot. Status: todo. LLM: Sonnet 5.5. Size: M.
-- **8.5** Write the report builder: report YAML with parameters and repeats over any parameter (a list of periods, the top 5 categories), `when_empty`, and the outputs PDF, PNG of chosen pages, Telegram text (text blocks of components, insights and template lines, checked against Telegram's 1,024-character caption limit; values known only at delivery, such as the Drive link, are filled in by the deliver step) and XLSX (one sheet per listed component, plus the lines export). Command: `hari-lari-report build --report weekly --run <run> [--anchor]`. Status: todo. LLM: Opus 5.5. Size: L.
+- **8.5** Write the report builder: report YAML with parameters and repeats over any parameter (a list of periods, the top 5 categories), `when_empty`, and the outputs PDF, PNG of chosen pages, Telegram text (text blocks of components, insights and template lines, checked against Telegram's 1,024-character caption limit; values known only at delivery, such as the Drive link, are filled in by the deliver step) and XLSX (one sheet per listed component, plus the lines export). It also implements the report filters, `schedule` and `deliver` of 7A.9 and the JSON output of 8.9. Commands: `hari-lari-report build --report weekly --run <run> [--anchor]` and `hari-lari-report validate`. Status: todo. LLM: Opus 5.5. Size: L.
 - **8.6** Add previews: `hari-lari-component run <id> --png` renders one component at its default slot size, and `--watch` re-renders it on every save. Status: todo. LLM: Sonnet 5.5. Size: S.
 - **8.7** Build the gallery and snapshots: a gallery report generated from all components on the test fixture, and a golden result per component in `tests/snapshots/` (refreshed on purpose with an update flag), so a change to the compiler, a transform or a metric shows exactly which components it moves. Status: todo. LLM: Sonnet 5.5. Size: M.
 - **8.8** Write the authoring guide: a README section and a Cursor rule `.cursor/rules/reporting-components.mdc` for `src/hari_lari_analytics/reporting/**`, covering how to add a metric, a component, a transform, a visual and a report, with two worked examples and the CLI loop. Status: todo. LLM: Sonnet 5.5. Size: S.
+- **8.9** Add a fifth output, the JSON results bundle. Every report build writes `bundle.json` next to the PDF in `reports/<anchor>/`. It holds:
+  - the report, its pages, grid and slots;
+  - per facet, the result in the output convention, with raw values and display strings;
+  - the metadata (windows, `compare_ok`, sample-size flags);
+  - the insights, the data notes and a format version.
 
-The exit of phase 8: a page with the two tracer components renders to PDF, PNG and Telegram text without text overflow.
+  It contains no personal data and no line notes. A JSON Schema `bundle.schema.json` checks it in a test. The bundle is the contract for the frontend (phase 12) and for any later tool. Status: todo. LLM: Sonnet 5.5. Size: M.
+- **8.10** Add the semantic manifest. `hari-lari-component manifest` writes `semantic_manifest.json`, the catalogue of the semantic layer, like dbt's manifest. It lists the models of 7A.3; the metrics with label, description, format and kind; the dimensions; the KPI tree; the window forms; and the components and reports. The frontend reads labels and descriptions from it, and the Cursor rule (8.8) points an LLM at it. A test fails when it is out of date, like the JSON Schema. Status: todo. LLM: Sonnet 5.5. Size: S.
+
+The exit of phase 8: a page with the two tracer components renders to PDF, PNG and Telegram text without text overflow, and writes a bundle that passes its schema.
 
 ## Phase 9: Prove the framework, then port and cut over
 
@@ -267,8 +309,8 @@ The live job keeps sending the old report until 9.7. Do not rebuild or redeploy 
 - **9.2** Close the gaps from 9.1 in the framework (a transform, a metric kind, a compiler option, a visual option), then rebuild the affected components in YAML only. If a gap was structural, repeat the trial with one more new component. Status: todo. LLM: Opus 5.5. Size: M.
 - **9.3** Port today's report, one component per piece, each with a parity test of its result against `report_data.Section`. The numbers must match; the drawing may improve, so there is no pixel diff. The pieces: full-history KPI cards and the gross, discounts and refunds line; period summary cards with sparklines (facet by period); the data notes from the run manifest; KPI cards with change, prior value and sparkline; the net sales and orders trend with prior ticks and growth labels (Opus 5.5); key figures; categories and contributive AOV with the total and prior-only rows (from 7.15); the penetration dot plot; top 15 items; orders by hour per trading day; payment types with "Other"; discounts by code; page chips and footer; the empty-period page; the Excel lines export. Status: todo. LLM: Sonnet 5.5. Size: L.
 - **9.4** Write `reports/weekly.yml` with today's pages in today's order, and its Telegram text output with the content of [deliver/caption.py](hari-lari-analytics/src/hari_lari_analytics/deliver/caption.py). Status: todo. LLM: Sonnet 5.5. Size: S.
-- **9.5** Write a second report from existing components only, `reports/category_deep_dive.yml`, repeated over the top 5 categories of the last 6 weeks: penetration and category AOV trend, the category's top items, its hours, and its attach rate with the other group. No new Python; anything that would need Python goes into the gaps file. Status: todo. LLM: Sonnet 5.5. Size: S.
-- **9.6** Run side by side for two Mondays: the job also builds the component report under `dry-run/`, the parity tests run on those real runs, and you read both PDFs on your phone. Status: todo. LLM: You (Sonnet 5.5 for the wiring). Size: S.
+- **9.5** Write a second report from existing components only, `reports/category_deep_dive.yml`, repeated over the top 5 categories of the last 6 weeks: penetration and category AOV trend, the category's top items, its hours, and its attach rate with the other group. No new Python; anything that would need Python goes into the gaps file. Needs `focus` (7A.2): with a `where` on the category, its penetration would always be 100%. Status: todo. LLM: Sonnet 5.5. Size: S.
+- **9.6** Run side by side for two Mondays: the job also builds the component report under `dry-run/`, the parity tests run on those real runs, and you read both PDFs on your phone. The image ships through the release path of 7A.8. Status: todo. LLM: You (Sonnet 5.5 for the wiring). Size: S.
 - **9.7** Cut over `hari-lari-weekly` to the component report and its caption, then delete `report_data.py`, the page methods of `report_pdf.py` and `deliver/caption.py`, and update the README and METRICS.md. Status: todo. LLM: Sonnet 5.5. Size: M.
 
 ## Phase 10: Driving reports
@@ -294,7 +336,7 @@ Out of scope: the customer branch of the KPI tree, because only 38 of 1,501 rece
 
 **Costs and profit**
 
-- **10.9** Costs from the expense tracker (P2, after 10.4 and the go-live of `hari-lari-expense-tracking`, its task t28): read the Expenses tab of its production sheet read-only into `stg_expenses`, map the expense categories to P&L lines in `config/expense_group.csv`, and add a weekly and monthly profit estimate: net sales - recipe COGS - expenses. LLM: Opus 5.5. Size: M.
+- **10.9** Costs from the expense tracker (P2, after 10.4 and the go-live of `hari-lari-expense-tracking`, its task t28): read the Expenses tab of its production sheet read-only into `stg_expenses`, map the expense categories to P&L lines in `config/expense_group.csv`, and add a weekly and monthly profit estimate: net sales - recipe COGS - expenses. Needs the model metadata of 7A.3, because expenses have no orders. Sales and expenses meet in a day-grain model built in SQL (for example `fct_daily_pnl`); the compiler stays one model per query and gets no join engine. LLM: Opus 5.5. Size: M.
 
 **Staffing and operations**
 
@@ -303,7 +345,7 @@ Out of scope: the customer branch of the KPI tree, because only 38 of 1,501 rece
 
 **Menu and mix**
 
-- **10.12** Penetration and category AOV trend per category, faceted by category (P2). Size: S.
+- **10.12** Penetration and category AOV trend per category, faceted by category (P2, needs 7A.2). Size: S.
 - **10.13** Basket size distribution and its trend (P2): orders average 2 items, and 54% have one line. Size: S.
 - **10.14** Item Pareto, as an ABC analysis (P3). Size: S.
 - **10.15** New, rising and fading items, from the item lifecycle in `dim_items` (P3). Size: S.
@@ -314,8 +356,8 @@ Out of scope: the customer branch of the KPI tree, because only 38 of 1,501 rece
 
 **More reports**
 
-- **10.17** Daily flash (P2): `reports/daily.yml`, yesterday against the same weekday a week earlier plus the insights, as Telegram text only to the managers, through a second scheduler at 06:00 WITA. It also shows that a new report is one YAML file and one scheduler. Size: S.
-- **10.18** Mirror the data to BigQuery and Looker Studio (P3): only if the owners want to explore the data themselves; the push reports stay the main channel. Size: M.
+- **10.17** Daily flash (P2): `reports/daily.yml`, yesterday against the same weekday a week earlier plus the insights, as Telegram text only to the managers, through a second scheduler at 06:00 WITA. It also shows that a new report is one YAML file: its `schedule` and `deliver` (7A.9) create the scheduler job. Size: S.
+- **10.18** Mirror the data to BigQuery and Looker Studio (P3): only if the owners want to explore the data themselves; the push reports stay the main channel. After 12.2 this needs no copy job: BigQuery external tables over the marts Parquet are enough. Looker Studio redefines the metrics by hand, though, so compare it with the frontend in 12.0 first. Size: S after 12.2.
 
 ### 10.4 Recipe margins: config/item_margins.csv
 
@@ -373,6 +415,44 @@ Tasks:
 - **11.8** Rewrite the history per 11.0: delete the stale local branches first, then run `git filter-repo` with `--invert-paths` for the files that left git (the config CSVs, the plan files) and `--replace-text` with the denylist for strings in files that stay, across every branch. Force-push; every older clone must be re-cloned. Done when `publish_check.py` reports zero hits on all refs and the test suite passes. Status: todo. LLM: Opus 5.5. Size: M.
 - **11.9** Publish: switch on GitHub secret scanning and push protection, read the README as a stranger would, get the owners' final OK, then make the repository public. Status: todo. LLM: You. Size: S.
 
+## Phase 12 (optional): A reporting frontend at near-zero cost
+
+The goal: if the owners want more than the Monday push (past weeks, switching periods, a category drill-down on the phone), a read-only frontend can show it without a new data pipeline and for close to nothing a month. Five rules:
+
+1. **It renders the JSON bundle (8.9) and never computes a metric**, so its numbers are the PDF's.
+2. **Nothing runs between visits.** Files are static, or a Cloud Run service scales to zero.
+3. **The data is never public.** The bucket stays private and sign-in is checked on the server. After phase 11 the code may be public, the data never.
+4. **The target cost is under 1 USD a month,** inside the existing 5 USD budget alert.
+5. **Telegram stays the main channel.**
+
+Do 12.0 after the owner feedback of 10.0. The contracts it builds on (7A.3, 8.0, 8.9 and 8.10) are cheap and come first anyway.
+
+- **12.0** Decide whether a frontend is wanted and what it must do, then choose hosting and sign-in. The options:
+  - **Telegram Mini App** (recommended): opened from a `t.me/<bot>/<app>` link in the caption (direct links work in groups) and from the bot's menu button. Sign-in is Telegram's signed `initData`, so nobody needs a new account. The server checks group membership, and the app runs on Cloud Run scaled to zero.
+  - **Cloud Run service with Google sign-in** and an allowlist of the Google accounts of 0.3, or with Identity-Aware Proxy directly on Cloud Run if available in the region (to check).
+  - **Static site on Cloudflare Pages behind Cloudflare Access:** free for a few users, Google login, but the data leaves Google Cloud.
+  - **Looker Studio over BigQuery external tables** on the marts (12.2, 10.18): free and self-serve, but the metrics are defined again by hand.
+  - **Evidence or Rill over the marts:** more features, but more to run, and their hosted versions are paid.
+
+  Not considered: a self-hosted Lightdash, which needs a server and Postgres running all the time. Status: decision. LLM: You (with Opus 5.5). Size: S.
+- **12.1** Keep the bundle history. Keep every week's `reports/<anchor>/bundle.json`, plus an index `reports/index.json` that the frontend reads first. Backfill the past anchors by rebuilding them from the stored raw runs. Status: todo. LLM: Sonnet 5.5. Size: S.
+- **12.2** Export the marts. Each run also writes the exposed models (7A.3) as Parquet to `marts/<anchor>/`, without the line note and any personal data, a few MB. This enables 12.5, BigQuery external tables for Looker Studio (10.18), or DuckDB in the browser, without a new pipeline. Status: todo. LLM: Sonnet 5.5. Size: S.
+- **12.3** Build the frontend MVP: a static, mobile-first single-page app in `frontend/`, built with Vite and one chart library (ECharts or Vega-Lite, chosen in 12.0). It renders a bundle: insights first, then the report's pages as stacked cards, drawn with web versions of the visual types of 8.0. It offers a week picker over 12.1 and a period switch over the periods already in the bundle. There is no metric logic in JavaScript: it shows the display strings and uses the raw values only to draw. Status: todo. LLM: Sonnet 5.5. Size: M.
+- **12.4** Set up hosting and sign-in as decided in 12.0. For the Telegram Mini App, one small Cloud Run service (scale to zero, at most one instance) does four things:
+  - it serves the app;
+  - it checks the `initData` signature with the bot token;
+  - it checks the user's membership in the group with `getChatMember`, cached;
+  - it returns bundles from the bucket through the job's service account.
+
+  The caption gets the link. After the first month, check the bill. Status: todo. LLM: Opus 5.5 (the sign-in), Sonnet 5.5. Size: M.
+- **12.5** Add interactive queries, only if 12.3 is not enough. An endpoint on the same service runs a registered component with parameters from an allowlist (period, category, item). It uses the existing compiler on DuckDB over the marts of 12.2, so the definitions and numbers stay the same, and caches each result in the bucket by anchor and parameters. There is no free SQL. A cold start of a few seconds is acceptable. Status: todo. LLM: Opus 5.5. Size: M.
+- **12.6** Add tests and guards, all running in CI (7A.7):
+  - the frontend renders every bundle of the gallery (8.7) without errors (headless Playwright);
+  - the service refuses unsigned requests and non-members;
+  - the publish guard (11.7) also scans `frontend/`, and no bundle or mart ever enters git.
+
+  Status: todo. LLM: Sonnet 5.5. Size: S.
+
 ## Risks
 
 - **Token expiry or a failed refresh:** handled by tasks 1.6, 1.7, 5.6 and the runbook (6.6).
@@ -386,4 +466,8 @@ Tasks:
 - **Recipe margins read as real margins:** they are labelled recipe margins and shown with their coverage (10.4); the profit estimate (10.9) uses the real expenses.
 - **Margins out of date relative to the recipes:** the `valid_from` column, the coverage metric (10.4d) and the export script (10.4f).
 - **Business data leaks once the repository is public:** the config lives outside git (11.2), the publish guard runs on every push (11.7), and the history is rewritten once and checked on all refs (11.8).
+- **Ratios wrong under a category filter:** penetration and share read 100% when a component filtered on one category. Fixed by 7A.2 (24 Nov 2026): `focus` keeps the universe, and a `where` that would give such a ratio is refused.
+- **A release breaks the Monday run:** the release path (7A.8) only points the live job at an image whose cloud dry run succeeded.
+- **The frontend leaks business data:** the bucket stays private, sign-in and membership are checked on the server (12.4), and the publish guard covers `frontend/` (12.6).
+- **The frontend shows other numbers than the PDF:** it renders the bundle's display strings and never computes a metric (8.9, 12.3).
 - **The weekly job breaks when the config leaves the image:** 11.2 ends with a cloud dry run, and a missing config file fails the run with the admin alert instead of producing a report without groups or aliases.

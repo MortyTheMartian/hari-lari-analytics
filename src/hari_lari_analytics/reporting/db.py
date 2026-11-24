@@ -15,7 +15,6 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 from graphlib import TopologicalSorter
-from importlib import resources
 from pathlib import Path
 
 import duckdb
@@ -29,6 +28,7 @@ from hari_lari_analytics.load import (
 )
 from hari_lari_analytics.load_api import ApiRun, load_run
 from hari_lari_analytics.reporting.checks import CheckReport, check
+from hari_lari_analytics.reporting.model_specs import model_sql
 
 LAYER_RANK = {"raw": 0, "seed": 0, "stg": 1, "int": 2, "dim": 3, "fct": 4}
 REFERENCE = re.compile(r"\b((?:raw|seed|stg|int|dim|fct)_\w+)\b")
@@ -198,20 +198,6 @@ def _register(
     # a table, not a view: every model query would otherwise scan the DataFrame again
     con.execute(f"create table {name} as select {', '.join(select)}, _row from _df_{name}")
     con.unregister(f"_df_{name}")
-
-
-def model_sql() -> dict[str, str]:
-    """The SQL of every model, by name."""
-    folder = resources.files("hari_lari_analytics.reporting") / "models"
-    models = {}
-    for entry in folder.iterdir():
-        if entry.name.endswith(".sql"):
-            name = entry.name.removesuffix(".sql")
-            sql = entry.read_text()
-            if f"create or replace view {name} as" not in sql:
-                raise ValueError(f"models/{entry.name} must define the view {name}")
-            models[name] = sql
-    return models
 
 
 def build_order(models: dict[str, str]) -> list[str]:
