@@ -28,9 +28,10 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      # Python 3.13 comes from .python-version; --frozen refuses to change uv.lock.
+      # Python 3.13 comes from .python-version; --frozen refuses to change uv.lock. The gcp extra
+      # is what the Docker image installs, and some tests (Drive, GCS) need it.
       - name: Install
-        run: uv sync --frozen
+        run: uv sync --frozen --extra gcp
 
       - name: Lint
         run: uv run --no-sync ruff check
