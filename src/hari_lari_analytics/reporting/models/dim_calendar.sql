@@ -37,7 +37,7 @@ events_per_day as (
 
 select
     d.date,
-    date_trunc('week', d.date)::date as week_start,
+    week_start(d.date) as week_start,
     isoyear(d.date)::varchar || '-W' || lpad(week(d.date)::varchar, 2, '0') as iso_week,
     date_trunc('month', d.date)::date as month_start,
     year(d.date)::varchar || '-Q' || quarter(d.date)::varchar as quarter,

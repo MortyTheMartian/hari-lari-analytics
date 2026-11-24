@@ -9,14 +9,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from hari_lari_analytics.extract import fetch
 from hari_lari_analytics.extract.checks import run_checks
 from hari_lari_analytics.extract.client import MokaClient
 from hari_lari_analytics.extract.output import is_gcs, upload_dir, write_run
+from hari_lari_analytics.project import project
 
-BALI = ZoneInfo("Asia/Makassar")
 DEFAULT_SINCE = "2026-01-01"
 
 
@@ -30,8 +29,9 @@ class RunResult:
     manifest: dict
 
 
-def bali_now() -> datetime:
-    return datetime.now(BALI)
+def local_now() -> datetime:
+    """Now in the project's time zone (project.yml)."""
+    return project().now()
 
 
 def run_extraction(
@@ -41,15 +41,16 @@ def run_extraction(
     since: str = DEFAULT_SINCE,
     until: str | None = None,
     only: str | None = None,
-    now: Callable[[], datetime] = bali_now,
+    now: Callable[[], datetime] = local_now,
     log: Callable[[str], None] = print,
 ) -> RunResult:
     started = time.time()
     t_now = now()
-    since_ts = datetime.fromisoformat(since).replace(tzinfo=BALI).timestamp()
+    tz = project().tz
+    since_ts = datetime.fromisoformat(since).replace(tzinfo=tz).timestamp()
     until_ts = t_now.timestamp()
     if until:
-        until_ts = datetime.fromisoformat(until).replace(tzinfo=BALI).timestamp()
+        until_ts = datetime.fromisoformat(until).replace(tzinfo=tz).timestamp()
     run_name = t_now.date().isoformat()
     final = f"{out.rstrip('/')}/{run_name}" if is_gcs(out) else str(Path(out) / run_name)
 
@@ -103,9 +104,9 @@ def build_manifest(
         "last_sale": last.isoformat() if last is not None else None,
         "http_calls": len(client.log),
         "duration_seconds": round(time.time() - started, 1),
-        "token_expires_at": datetime.fromtimestamp(client.tokens.expires_at(), BALI).isoformat(
-            timespec="seconds"
-        ),
+        "token_expires_at": datetime.fromtimestamp(
+            client.tokens.expires_at(), project().tz
+        ).isoformat(timespec="seconds"),
         "token_refreshed": client.tokens.refreshed,
         "errors": errors,
         "warnings": warnings,

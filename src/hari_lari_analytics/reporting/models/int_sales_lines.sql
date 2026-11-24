@@ -35,7 +35,7 @@ select
     r.adjusted_category,
     date_trunc('hour', l.sale_ts) as sale_hour,
     l.sale_ts::date as sale_date,
-    date_trunc('week', l.sale_ts)::date as sale_week,
+    week_start(l.sale_ts) as sale_week,
     isoyear(l.sale_ts)::varchar || '-W' || lpad(week(l.sale_ts)::varchar, 2, '0') as sale_iso_week,
     date_trunc('month', l.sale_ts)::date as sale_month,
     year(l.sale_ts)::varchar || '-Q' || quarter(l.sale_ts)::varchar as sale_quarter,

@@ -1,0 +1,43 @@
+# Project settings: what the code used to hardcode in several places. This file is public and
+# holds no business data: the demo café has its own copy, and business identifiers (the Google
+# project, the bucket, the bot) stay in .env. Which file is read: `$PROJECT_FILE` if set, else
+# this one. The loader (project.py) is strict: an unknown key fails and names the file.
+
+# The currency of the amounts, and how many decimals an amount is shown with.
+currency:
+  code: IDR
+  decimals: 0
+
+# How numbers are written. The separators apply to every number a report shows. `compact`
+# lists the short forms of large numbers, largest first: a value whose size reaches `from` is
+# shown as value / unit with `decimals` decimals and the suffix (2,500,000 as 2.50M, 85,000 as
+# 85k). The first entry is also the form of the big KPI numbers (headlines).
+numbers:
+  thousands_separator: ","
+  decimal_separator: "."
+  compact:
+    - { from: 1000000, unit: 1000000, suffix: M, decimals: 2 }
+    - { from: 10000, unit: 1000, suffix: k, decimals: 0 }
+
+# The time zone of the business. Sale times from the API are already local clock time (no
+# conversion), and "yesterday" is the local one. The Dockerfile, deploy/setup.sh and the
+# Cloud Scheduler job must use the same zone; a test checks the first two.
+timezone: Asia/Makassar
+
+# The first day of the week: monday ... sunday. It decides the week buckets of the models
+# (`sale_week`), the complete weeks of L<n>W and WTD, and "last week" in the extraction check.
+# ISO week labels (`sale_iso_week`, "week 47" in a Drive folder name) always stay ISO.
+first_weekday: monday
+
+# The default sample-size rule: a row or period built on fewer than this many of the model's
+# `sample_size` count (orders on the sales models, models.yml) is greyed out and no insight
+# speaks about it. A metric may set its own `min_n` in metrics.yml.
+min_n: 30
+
+# The anchor of a report, its last day, when none is given: `yesterday` (a report that runs
+# on a Monday morning ends on Sunday) or `today`.
+anchor: yesterday
+
+# The date on which the loader checks components that need no data to be valid: every query is
+# compiled against a calendar that ends here.
+reference_date: 2026-11-22

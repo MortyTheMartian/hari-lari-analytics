@@ -7,7 +7,7 @@ select
     o.sale_ts,
     date_trunc('hour', o.sale_ts) as sale_hour,
     o.sale_ts::date as sale_date,
-    date_trunc('week', o.sale_ts)::date as sale_week,
+    week_start(o.sale_ts) as sale_week,
     isoyear(o.sale_ts)::varchar || '-W' || lpad(week(o.sale_ts)::varchar, 2, '0') as sale_iso_week,
     date_trunc('month', o.sale_ts)::date as sale_month,
     year(o.sale_ts)::varchar || '-Q' || quarter(o.sale_ts)::varchar as sale_quarter,

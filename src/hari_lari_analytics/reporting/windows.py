@@ -20,6 +20,7 @@ import duckdb
 
 from hari_lari_analytics import periods
 from hari_lari_analytics.periods import Period, shift_months
+from hari_lari_analytics.project import project
 
 Grain = Literal["day", "week", "month", "block_7d"]
 Compare = Literal["prior", "last_year", "none"]
@@ -190,7 +191,7 @@ def bucket_start(d: date, grain: Grain, window_end: date | None = None) -> date:
         case "day":
             return d
         case "week":
-            return d - timedelta(days=d.weekday())
+            return project().week_start(d)
         case "month":
             return d.replace(day=1)
         case "block_7d":

@@ -27,7 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true",
                    help="send even if this week was already sent")  # fmt: skip
     p.add_argument("--anchor", type=date.fromisoformat, metavar="YYYY-MM-DD",
-                   help="last day of the report (default: yesterday in Bali)")  # fmt: skip
+                   help="last day of the report (default: yesterday, per project.yml)")  # fmt: skip
     p.add_argument("--to", choices=["group", "admin"], default="group",
                    help="admin: a private run to the admin chat, not marked as sent")  # fmt: skip
     p.add_argument("--data-root", default=env("DATA_ROOT", "data/weekly"),

@@ -38,7 +38,7 @@ sale_date:
 
 sale_week:
   label: Week
-  description: Monday of the ISO week
+  description: First day of the week (first_weekday in project.yml)
   grain: day
   models: [fct_sales_lines, fct_orders, dim_calendar]
   column: { dim_calendar: week_start }

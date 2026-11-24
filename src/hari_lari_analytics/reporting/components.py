@@ -44,6 +44,7 @@ from pydantic import (
     field_validator,
 )
 
+from hari_lari_analytics.project import project
 from hari_lari_analytics.reporting import transforms
 from hari_lari_analytics.reporting.compiler import Query, QueryError, compile_query
 from hari_lari_analytics.reporting.facets import FacetError, FacetSpec, check_facet
@@ -59,8 +60,14 @@ TEXT_NAMES = frozenset({"meta", "facet"})  # what a title or hint may use beside
 BODY = ("query", "transforms", "facet", "visual")  # the fields in which $parameters are replaced
 TEXT = ("title", "hint")  # Jinja templates
 SCHEMA_REF = "# yaml-language-server: $schema=../schema/component.schema.json"
-# the checks compile every query without data, on a calendar with a long history
-CHECK_CALENDAR = Calendar(anchor=date(2026, 11, 22), first_sale=date(2000, 1, 1))
+
+
+def check_calendar() -> Calendar:
+    """The calendar on which the loader compiles every query without data: a long history that
+    ends on the `reference_date` of project.yml."""
+    return Calendar(anchor=project().reference_date, first_sale=date(2000, 1, 1))
+
+
 _QUERY_TAGS = ("compiled", "source")
 _JINJA = jinja2.Environment()
 
@@ -312,6 +319,7 @@ def _check(
     """Check a bound component against the registries; return its planned query and shape."""
     query = spec.query
     shape: Shape | None = None
+    calendar = check_calendar()
     if isinstance(query, SourceQuery):
         if query.source not in SOURCES:
             known = ", ".join(sorted(SOURCES))
@@ -326,7 +334,7 @@ def _check(
             raise ComponentError(f"{source}: query.options: {details}") from None
     else:
         try:
-            shape = compile_query(query, registry, CHECK_CALENDAR).shape
+            shape = compile_query(query, registry, calendar).shape
         except (QueryError, RegistryError) as error:
             raise ComponentError(f"{source}: query: {error}") from None
         for i, raw in enumerate(spec.transforms):
@@ -340,7 +348,7 @@ def _check(
             shape = step.produces or shape
         try:
             query = transforms.plan_query(query, spec.transforms, registry)
-            compile_query(query, registry, CHECK_CALENDAR)
+            compile_query(query, registry, calendar)
         except TransformError as error:
             raise ComponentError(f"{source}: transforms: {error}") from None
         except (QueryError, RegistryError) as error:
@@ -349,7 +357,7 @@ def _check(
             ) from None
     if spec.facet is not None:
         try:
-            check_facet(spec.facet, query, parameters, registry, CHECK_CALENDAR)
+            check_facet(spec.facet, query, parameters, registry, calendar)
         except FacetError as error:
             raise ComponentError(f"{source}: facet: {error}") from None
     unused = sorted(set(spec.params) - parameters)

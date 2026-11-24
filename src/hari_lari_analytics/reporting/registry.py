@@ -23,6 +23,7 @@ import pandas as pd
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from hari_lari_analytics.project import Project, project
 from hari_lari_analytics.reporting.model_specs import ModelSpec, default_models
 
 Format = Literal["idr", "idr_compact", "count", "decimal", "pct", "timestamp"]
@@ -76,10 +77,6 @@ class MetricSpec(_Strict):
     filtered: FilteredSpec | None = None
     derived: str | None = None
     relative: str | None = None
-
-
-class MetricDefaults(_Strict):
-    min_n: int = Field(default=30, ge=1)  # of the model's sample_size count (models.yml)
 
 
 class SortSpec(_Strict):
@@ -258,7 +255,7 @@ class Registry:
     identities: dict[str, Identity]
     order: tuple[str, ...]  # every metric after the metrics it depends on
     models: dict[str, ModelSpec]
-    default_min_n: int = 30
+    default_min_n: int  # of the model's sample_size count: `min_n` of project.yml
 
     def model(self, model_id: str) -> ModelSpec:
         try:
@@ -419,17 +416,19 @@ def load_registry(
     dimensions: str | None = None,
     kpi_tree: str | None = None,
     models: Mapping[str, ModelSpec] | None = None,
+    settings: Project | None = None,
 ) -> Registry:
     """Load and validate the registries; the texts default to the packaged YAML files, the
-    models to `models.yml`."""
+    models to `models.yml` and the default sample-size rule to `min_n` of project.yml."""
+    settings = settings or project()
     specs = dict(models if models is not None else default_models())
     names = frozenset(specs)
     dims = _load_dimensions(_read("dimensions.yml", dimensions, {}), names)
-    defaults, metric_specs = _metric_specs(_read("metrics.yml", metrics, {}))
+    metric_specs = _metric_specs(_read("metrics.yml", metrics, {}))
     metric_map, order = _load_metrics(metric_specs, dims, names)
     _check_sample_sizes(specs, metric_map)
     identities = _load_identities(_read("kpi_tree.yml", kpi_tree, []), metric_map, dims)
-    return Registry(metric_map, dims, identities, order, specs, defaults.min_n)
+    return Registry(metric_map, dims, identities, order, specs, settings.min_n)
 
 
 def _check_sample_sizes(models: dict[str, ModelSpec], metrics: dict[str, Metric]) -> None:
@@ -447,6 +446,8 @@ def _check_sample_sizes(models: dict[str, ModelSpec], metrics: dict[str, Metric]
 
 @cache
 def default_registry() -> Registry:
+    """The packaged registry, loaded once with the settings of the process; a test with other
+    settings calls `load_registry(settings=...)` instead."""
     return load_registry()
 
 
@@ -483,21 +484,20 @@ def _load_dimensions(raw: dict, models: frozenset[str]) -> dict[str, Dimension]:
     return dims
 
 
-def _metric_specs(raw: dict) -> tuple[MetricDefaults, dict[str, MetricSpec]]:
+def _metric_specs(raw: dict) -> dict[str, MetricSpec]:
     if not isinstance(raw, dict):
         raise RegistryError("metrics.yml: expected a mapping of metric ids")
-    raw = dict(raw)
-    try:
-        defaults = MetricDefaults.model_validate(raw.pop("defaults", None) or {})
-    except ValidationError as error:
-        raise _fail("metrics.yml: defaults", error) from None
+    if "defaults" in raw:
+        raise RegistryError(
+            "metrics.yml: defaults is gone; the default min_n is a setting of project.yml"
+        )
     specs = {}
     for metric_id, spec in raw.items():
         try:
             specs[metric_id] = MetricSpec.model_validate(spec or {})
         except ValidationError as error:
             raise _fail(f"metrics.yml: {metric_id}", error) from None
-    return defaults, specs
+    return specs
 
 
 def _where_sql(where: dict[str, WhereValue], dims: dict[str, Dimension], model: str) -> str:

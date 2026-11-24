@@ -3,10 +3,11 @@
 The run tables of one extraction run become `raw_<table>` tables and the config CSV files
 `seed_<name>` tables, both with the declared columns cast to fixed types, so an empty table or a
 column that is NULL on every row still has the type the models expect. `run_context` holds the
-anchor. The models are the SQL files in `models/`, one `create or replace view <name> as ...`
-each, named with their layer prefix (`stg_`, `int_`, `dim_`, `fct_`). A model reads only from
-its own or a lower layer; within that rule they are built in the order of the names they use,
-each once as a table.
+anchor and the first day of the week (from project.yml), which the macro `week_start` reads.
+The models are the SQL files in `models/`, one `create or replace view <name> as ...` each,
+named with their layer prefix (`stg_`, `int_`, `dim_`, `fct_`). A model reads only from its own
+or a lower layer; within that rule they are built in the order of the names they use, each once
+as a table.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from hari_lari_analytics.load import (
     load_category_groups,
 )
 from hari_lari_analytics.load_api import ApiRun, load_run
+from hari_lari_analytics.project import Project, project
 from hari_lari_analytics.reporting.checks import CheckReport, check
 from hari_lari_analytics.reporting.model_specs import model_sql
 
@@ -134,22 +136,37 @@ class Seeds:
         )
 
 
+WEEK_START_MACRO = (
+    "create macro week_start(d) as d::date - "
+    "((isodow(d) - (select first_weekday from run_context) + 7) % 7)::int"
+)
+
+
 def connect(
-    tables: dict[str, pd.DataFrame], seeds: Seeds, anchor: date | None = None
+    tables: dict[str, pd.DataFrame],
+    seeds: Seeds,
+    anchor: date | None = None,
+    settings: Project | None = None,
 ) -> duckdb.DuckDBPyConnection:
     """Register the run tables and seeds and build every model.
 
     The models end on `anchor` (default: the day of the last payment); later sales are left out.
+    The weeks start on the `first_weekday` of `settings` (default: project.yml).
     """
+    settings = settings or project()
     con = duckdb.connect()
     con.create_function("title_case", str.title, ["VARCHAR"], "VARCHAR")  # Python's rules
+    con.execute(WEEK_START_MACRO)
     for name, source in RAW_SOURCES.items():
         _register(con, f"raw_{name}", tables.get(name), source)
     for name, source in SEED_SOURCES.items():
         _register(con, f"seed_{name}", getattr(seeds, name), source)
     if anchor is None:
         anchor = con.execute("select max(created_at)::date from raw_transactions").fetchone()[0]
-    con.execute("create table run_context as select ?::date as anchor", [anchor])
+    con.execute(
+        "create table run_context as select ?::date as anchor, ?::int as first_weekday",
+        [anchor, settings.first_isoweekday],
+    )
     build_models(con)
     return con
 

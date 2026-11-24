@@ -5,9 +5,8 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -24,14 +23,9 @@ from hari_lari_analytics.load import (
 from hari_lari_analytics.load_api import load_api_sales
 from hari_lari_analytics.metrics import compute_metrics
 from hari_lari_analytics.periods import report_periods
+from hari_lari_analytics.project import project
 from hari_lari_analytics.report_excel import write_excel
 from hari_lari_analytics.report_pdf import write_pdf
-
-BALI = ZoneInfo("Asia/Makassar")
-
-
-def bali_yesterday() -> date:
-    return (datetime.now(BALI) - timedelta(days=1)).date()
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -60,8 +54,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--anchor",
         type=date.fromisoformat,
         metavar="YYYY-MM-DD",
-        help="last day of the report (default: yesterday in Bali for --source api, "
-        "the date of the last sale for --source csv); later sales are ignored",
+        help="last day of the report (default: yesterday, the anchor rule of project.yml, for "
+        "--source api; the date of the last sale for --source csv); later sales are ignored",
     )
     return parser.parse_args(argv)
 
@@ -90,13 +84,14 @@ def prepare_lines(
 ) -> tuple[pd.DataFrame, date]:
     """Add the dimensions and category groups, then cut the lines off after the anchor day.
 
-    The default anchor is yesterday in Bali for the API and the last sale for the CSV files.
+    The default anchor is the anchor rule of project.yml (yesterday in the project's time zone)
+    for the API and the last sale for the CSV files.
     """
     lines = add_dimensions(result.lines)
     lines, group_notes = add_category_groups(lines, load_category_groups(category_groups))
     result.notes.extend(group_notes)
     if anchor is None:
-        anchor = bali_yesterday() if source == "api" else lines["sale_ts"].max().date()
+        anchor = project().default_anchor() if source == "api" else lines["sale_ts"].max().date()
     lines = lines[lines["sale_ts"] < pd.Timestamp(anchor + timedelta(days=1))]
     if lines.empty:
         raise InputError(f"There are no sales up to {anchor:%d %b %Y}")
@@ -148,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"Read {len(lines):,} sales lines ({lines['sale_ts'].min():%d %b %Y} – "
         f"{lines['sale_ts'].max():%d %b %Y}): {total.orders:,} orders, "
-        f"{total.net_sales:,} IDR net sales."
+        f"{total.net_sales:,} {project().currency.code} net sales."
     )
     for note in result.notes:
         print(f"Note: {note}")

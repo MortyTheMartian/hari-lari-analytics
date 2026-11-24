@@ -11,6 +11,8 @@ from datetime import date, timedelta
 
 import pandas as pd
 
+from hari_lari_analytics.project import project
+
 
 @dataclass(frozen=True)
 class Period:
@@ -82,8 +84,10 @@ def last_n_days(anchor: date, n: int) -> Period:
 
 
 def last_n_weeks(anchor: date, n: int) -> Period:
-    """The last n complete ISO weeks (Monday–Sunday) up to the anchor date."""
-    end = anchor if anchor.weekday() == 6 else anchor - timedelta(days=anchor.weekday() + 1)
+    """The last n complete weeks up to the anchor date (the week starts on `first_weekday` of
+    project.yml: Monday–Sunday by default)."""
+    week = project()
+    end = anchor if anchor == week.week_end(anchor) else week.week_start(anchor) - timedelta(days=1)
     start = end - timedelta(days=7 * n - 1)
     return Period(
         key=f"L{n}W",
@@ -112,8 +116,8 @@ def last_n_months(anchor: date, n: int) -> Period:
 
 
 def week_to_date(anchor: date) -> Period:
-    """The anchor's ISO week up to the anchor, against the same weekdays a week earlier."""
-    start = anchor - timedelta(days=anchor.weekday())
+    """The anchor's week up to the anchor, against the same weekdays a week earlier."""
+    start = project().week_start(anchor)
     return Period(
         key="WTD",
         title="Week to date",

@@ -118,6 +118,10 @@ Everything ships inside the Python package (D1), so the Docker image needs no ch
 are found with `importlib.resources`. The hand-maintained CSVs stay in `config/` (D2).
 
 ```text
+src/hari_lari_analytics/
+  project.yml         # project settings: currency, number format, time zone, week start,
+                      # default min_n, anchor rule, reference date (plan 7A.4)
+  project.py          # load and validate project.yml; project() is the setting of the process
 src/hari_lari_analytics/reporting/
   __init__.py
   db.py               # open DuckDB, load seeds, build the models in layer order
@@ -205,6 +209,31 @@ config/
 Naming: a file name is the object's id (`components/aov_bridge.yml` has `id: aov_bridge`), all
 ids are `snake_case`, and models carry a layer prefix: `seed_`, `stg_`, `int_`, `dim_`, `fct_`.
 
+## Project settings
+
+`project.yml` holds the settings that used to sit in several places in the code. It is public
+and has no business data; the demo café has its own copy, chosen with `PROJECT_FILE`, and
+business identifiers stay in `.env`. `project.py` validates it strictly (an unknown or missing
+key fails with the file name and the key) and `project()` hands the settings to the code.
+
+| Key | What it decides | Read by |
+| --- | --- | --- |
+| `currency` | the code (`IDR`) and the decimals of an amount | the format helpers, the PDF, the caption |
+| `numbers` | thousands and decimal separator; `compact`, the short forms of large numbers (`2.50M`, `85k`) | `idr`, `pct`, `compact`, `headline`, `change_text` |
+| `timezone` | the time zone of the business | the extraction, the anchor, the weekly job; the Dockerfile, `deploy/setup.sh` and the scheduler must use the same, and a test checks the first two |
+| `first_weekday` | the first day of the week (`monday` ... `sunday`) | `sale_week` in the models (`week_start` macro, from `run_context`) and in the pandas lines, the complete weeks of `L<n>W`, `WTD`, the buckets of the windows, "last week" in the extraction check |
+| `min_n` | the default sample-size rule | the registry (`Registry.default_min_n`) |
+| `anchor` | the last day of a report when none is given: `yesterday` or `today` | `hari-lari-report`, `hari-lari-weekly` |
+| `reference_date` | the date on which the loader compiles components without data | `check_calendar()` in `components.py` |
+
+ISO week labels (`sale_iso_week`, "week 47" in a Drive folder name) and the ISO weekday
+(`weekday`, Monday = 1) stay ISO whatever the first weekday is. The Excel lines export keeps
+`IDR` in its column titles, because owners build pivot tables on them; the XLSX output of the
+report builder (8.5) will read the currency.
+
+Tests that need other settings use `use_project(settings)`; the registry is cached, so a test
+with another `min_n` calls `load_registry(settings=...)`.
+
 ## Models
 
 Models are plain SQL files, one `create or replace view <name> as ...` each, with no templating.
@@ -273,7 +302,7 @@ fct_orders:
 - **`time`**: a model without one cannot be queried, since every query has a window.
 - **`calendar`**: needs `time`. Without it, `trading_days` is empty and the per-trading-day
   metrics stay blank.
-- **`sample_size`**: a `count` metric on the model. The default `min_n` of `metrics.yml` counts
+- **`sample_size`**: a `count` metric on the model. The default `min_n` of `project.yml` counts
   it; a model without one (no orders) has no default sample-size rule.
 - **`exposed`**: only `dim_` and `fct_` models can be. The schema of a component offers the
   exposed models that have a time column and at least one metric.
@@ -339,9 +368,6 @@ A metric has exactly one of four kinds:
 Running totals and cumulative shares are transforms, not metrics.
 
 ```yaml
-defaults:
-  min_n: 30                    # fewer orders in a row or period: greyed out, no insight
-
 net_sales:
   label: Net Sales
   description: Gross sales minus discounts and refunds
@@ -438,7 +464,8 @@ contributive_aov:
   and leaves the change uncoloured (`share`, the first and last sale). Every metric states it.
 - **`min_n`**: the sample-size rule. The compiler returns `n_orders` per row (and every count
   named in a `min_n`). Visuals grey out rows below it and show their `n`; insight rules skip
-  them. A metric without its own rule gets the default (30) on the `sample_size` count of the
+  them. A metric without its own rule gets the default (`min_n` of `project.yml`, 30) on the
+  `sample_size` count of the
   model it is queried on (`orders` on both sales models, see `models.yml`), and no rule on a
   model without one. Every count an explicit rule names must be a `count` metric on every model
   of the metric.
@@ -572,7 +599,7 @@ so L14D, L6W and L3M keep their tests.
 | Window | Range | Default grain |
 | --- | --- | --- |
 | `L14D` | the 14 days up to the anchor | day |
-| `L6W` | the last 6 complete ISO weeks | week |
+| `L6W` | the last 6 complete weeks (Monday to Sunday, or as `first_weekday` says) | week |
 | `L3M` | the last 3 complete months | month |
 | `full` | first sale to anchor | month |
 | `WTD`, `MTD` | the anchor's week or month so far | day |

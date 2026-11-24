@@ -14,11 +14,8 @@
 # for neutral (no colour). additivity: full (sums over any dimension), order_grain (sums over
 # order and day dimensions only) or none. min_n: the sample-size rule, the smallest count per
 # row or period that the report makes claims about, such as { drink_orders: 30 }. Without one,
-# a metric gets the default below for the sample_size count of its model (models.yml: orders
-# on the sales models), and no rule on a model without a sample_size.
-
-defaults:
-  min_n: 30
+# a metric gets the default `min_n` of project.yml for the sample_size count of its model
+# (models.yml: orders on the sales models), and no rule on a model without a sample_size.
 
 gross_sales:
   label: Gross Sales
