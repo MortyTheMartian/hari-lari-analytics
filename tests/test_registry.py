@@ -70,11 +70,16 @@ def test_every_metric_runs_on_every_model_it_is_on(con, model):
     assert len(by_payment) == 4  # BCA, Cash, Gopay and the total
 
 
-@pytest.mark.parametrize("model", MODELS)
+@pytest.mark.parametrize("model", [*MODELS, "dim_calendar"])
 def test_every_dimension_exists_on_its_models(con, model):
     for dim in REG.dimensions.values():
-        if model in dim.models:
+        if model in dim.models and dim.id != "bucket":  # the compiler computes the bucket
             con.execute(f"select {dim.column_on(model)} from {model} limit 0")
+
+
+def test_every_calendar_dimension_is_on_dim_calendar():
+    day = [d.id for d in REG.dimensions.values() if d.grain == "day" and d.id != "bucket"]
+    assert day and all("dim_calendar" in REG.dimension(d).models for d in day)
 
 
 def test_the_fixture_totals_by_hand(con):
@@ -342,7 +347,7 @@ def test_invalid_dimensions(dims, message):
 
 
 def test_a_dimension_sorted_by_an_unknown_metric():
-    dims = DIMS + "w: {label: W, grain: day, models: [fct_orders], sort: {by: revenue}}"
+    dims = DIMS + "w: {label: W, grain: order, models: [fct_orders], sort: {by: revenue}}"
     with pytest.raises(RegistryError, match="w: sort by unknown metric revenue"):
         _load(dims=dims)
 

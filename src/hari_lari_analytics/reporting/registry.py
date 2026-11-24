@@ -31,6 +31,8 @@ Value = bool | int | str
 WhereValue = Value | list[Value] | None
 
 WINDOW_VALUES = frozenset({"trading_days"})
+TIME_BUCKET = "bucket"  # the time dimension in the grain of the query, computed by the compiler
+TIME_DIMENSIONS = (TIME_BUCKET, "sale_date", "sale_week", "sale_month")
 SQL_WORDS = frozenset(
     "and or not is null true false case when then else end in between as cast "
     "double bigint integer decimal varchar".split()
@@ -401,6 +403,16 @@ def _load_dimensions(raw: dict, models: frozenset[str]) -> dict[str, Dimension]:
             raise RegistryError(f"{where}: domain all needs the list of values")
         if dim.bins and dim.domain != "none":
             raise RegistryError(f"{where}: a binned dimension has its bins as domain")
+        if dim.domain == "calendar" and dim_id not in TIME_DIMENSIONS:
+            raise RegistryError(
+                f"{where}: domain calendar is only for the time dimensions "
+                f"{', '.join(TIME_DIMENSIONS)}"
+            )
+        if dim.grain == "day" and dim_id != TIME_BUCKET and "dim_calendar" not in dim.models:
+            raise RegistryError(
+                f"{where}: a dimension of grain day must also be on dim_calendar, "
+                "to count the trading days per value"
+            )
         dims[dim_id] = dim
     return dims
 
@@ -480,6 +492,8 @@ def _load_metrics(
                     raise RegistryError(f"{where}: unknown dimension {dim_id} in where")
                 if dims[dim_id].bins:
                     raise RegistryError(f"{where}: cannot filter on the binned {dim_id}")
+                if dim_id == TIME_BUCKET:
+                    raise RegistryError(f"{where}: cannot filter on {TIME_BUCKET}")
         elif kind in ("derived", "relative"):
             try:
                 inputs, totals = _references(getattr(spec, kind))

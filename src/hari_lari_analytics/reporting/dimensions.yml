@@ -13,48 +13,68 @@
 #   labels:    display names of values. null_label: the display name of an empty value.
 #   bins:      ordered buckets of a number: an exact value (1), a range ("2-3") or an open last
 #              bucket ("5+"). A value outside every bin has no bucket.
+#
+# Every dimension of grain day is also on dim_calendar, so the compiler can count the trading
+# days per row (per weekday, per event, ...).
 
-# Time, at day grain (the truncations of the sale time)
+# Time. The time dimensions (domain calendar) group by the buckets of the window: `bucket` in
+# the query's grain (day, week, month or block_7d; default: the window's), the others in their
+# own grain. A series is compared with the prior window bucket by bucket, by position.
+bucket:
+  label: Period
+  description: >-
+    The time bucket in the query's grain, as its first day; computed by the compiler, so it
+    cannot be used in a filter
+  grain: day
+  models: [fct_sales_lines, fct_orders]
+  domain: calendar
+
 sale_date:
   label: Date
   grain: day
-  models: [fct_sales_lines, fct_orders]
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  column: { dim_calendar: date }
   domain: calendar
 
 sale_week:
   label: Week
   description: Monday of the ISO week
   grain: day
-  models: [fct_sales_lines, fct_orders]
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  column: { dim_calendar: week_start }
   domain: calendar
 
 sale_iso_week:
   label: ISO week
   description: ISO week label such as 2026-W44
   grain: day
-  models: [fct_sales_lines, fct_orders]
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  column: { dim_calendar: iso_week }
 
 sale_month:
   label: Month
   grain: day
-  models: [fct_sales_lines, fct_orders]
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  column: { dim_calendar: month_start }
   domain: calendar
 
 sale_quarter:
   label: Quarter
   grain: day
-  models: [fct_sales_lines, fct_orders]
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  column: { dim_calendar: quarter }
 
 sale_year:
   label: Year
   grain: day
-  models: [fct_sales_lines, fct_orders]
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  column: { dim_calendar: year }
 
 weekday:
   label: Weekday
   description: ISO weekday, Monday = 1
   grain: day
-  models: [fct_sales_lines, fct_orders]
+  models: [fct_sales_lines, fct_orders, dim_calendar]
   domain: all
   values: [1, 2, 3, 4, 5, 6, 7]
   labels: { 1: Mon, 2: Tue, 3: Wed, 4: Thu, 5: Fri, 6: Sat, 7: Sun }
@@ -64,25 +84,25 @@ event_kind:
   label: Calendar event
   description: The most telling event of the day (closure, holiday, promotion, other)
   grain: day
-  models: [fct_sales_lines, fct_orders]
+  models: [fct_sales_lines, fct_orders, dim_calendar]
   null_label: No event
 
 event_name:
   label: Event
   grain: day
-  models: [fct_sales_lines, fct_orders]
+  models: [fct_sales_lines, fct_orders, dim_calendar]
   null_label: No event
 
 is_holiday:
   label: Holiday
   grain: day
-  models: [fct_sales_lines, fct_orders]
+  models: [fct_sales_lines, fct_orders, dim_calendar]
   labels: { true: Holiday, false: No holiday }
 
 has_promotion:
   label: Promotion day
   grain: day
-  models: [fct_sales_lines, fct_orders]
+  models: [fct_sales_lines, fct_orders, dim_calendar]
   labels: { true: Promotion, false: No promotion }
 
 # Order attributes: one value per receipt

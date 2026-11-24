@@ -469,7 +469,9 @@ discount_code:
   models: [fct_sales_lines]
 ```
 
-`column` defaults to the id; a mapping names the column per model when it differs. `grain`
+`column` defaults to the id; a mapping names the column per model when it differs. Every
+dimension of grain `day` is also on `dim_calendar`, so the compiler can count trading days per
+value, and `bucket` is the time dimension in the query's grain, computed by the compiler. `grain`
 says what the value describes and drives the additivity check: `day` (the calendar: date,
 week, weekday, events) and `order` (payment type, hour, the order attributes) have one value
 per receipt, so `order_grain` metrics such as orders may be summed over them; `item` (item,
@@ -578,6 +580,8 @@ query:
   keep_prior_only: true             # keep groups that sold only in the comparison window
   top: { n: 15, by: net_sales, other: false }   # optional; other: true adds "Other (k)"
   grain: week                       # for time dimensions; defaults to the window's grain
+  bins: { basket_size: [1, 2, "3+"] }   # optional; replaces the bins of dimensions.yml
+  buckets_before: 1                 # series only: buckets before the window, for growth labels
 ```
 
 The compiler checks the query against the registries (every metric and dimension exists on the
@@ -614,22 +618,62 @@ order by is_total, net_sales desc
 
 The total row's orders are all distinct receipts, so its penetration is 100% and its category
 AOV and contributive AOV equal the AOV, exactly as METRICS.md describes, without special cases.
-`top` with `other: true` ranks the groups in a CTE and groups the tail as `Other (k)` in the same
-statement, so the orders of "Other" are distinct receipts, not a sum.
+The real compiler (`compiler.py`) writes a few more steps than this outline: the rows of each
+window, the top-N mapping, the aggregates, a frame of output rows with the current and prior
+aggregates joined, the trading days, then the derived and relative metrics and the changes.
+`meta.sql` shows the full statement.
 
-**Output convention.** One row per group: the dimension columns, then one column per metric.
-With a comparison, `prior_<metric>`, `<metric>_change` (ratio) and `<metric>_delta`
-(difference; for `pct` metrics in fractions, which the visuals show as pp). Always `n_orders`,
-plus every count named in a `min_n`. A total row has `is_total = true` and NULL dimensions.
+**Top N.** `top` ranks the groups by `by` over the current window (ties by the dimension values)
+and maps every other group, in both windows, to `Other (k)` in the same statement, so the orders
+of "Other" are distinct receipts, not a sum, and the prior of "Other" holds everything outside
+the top N, including groups sold only in the prior window. Without `other: true` that row is
+dropped from the output, but the totals and every relative metric (share, penetration) still
+cover all groups. `by` may be any metric except a relative one. `keep_prior_only` does not
+combine with `top` or with a time dimension.
+
+**Series.** A query with a time dimension returns a series: `bucket` groups by the query's
+`grain` (default: the window's), and `sale_date`, `sale_week` and `sale_month` group by their own
+grain. Every bucket of the window appears, for every group of the window, with zeros where
+nothing sold. The prior is matched bucket by bucket by position (week 1 of the window with week 1
+of the comparison), as the prior ticks of today's trend. `buckets_before: n` adds up to n
+buckets before the window (`in_window = false`, no prior), only those that lie fully within the
+sales history. In a series, a relative metric uses the total of its own bucket (the penetration
+of Coffee in a week is over the orders of that week), and with `totals: true` each bucket has a
+total row (with its bucket set) besides the total of the window. At most one time dimension per
+query; `bucket` cannot be filtered on (use the window).
+
+**Trading days.** Every row with dimensions gets `trading_days`, counted in `dim_calendar`: per
+bucket in a series, per value of the calendar dimensions (weekday, holiday, ...) in the row,
+otherwise those of the window. Orders by weekday and hour per trading day therefore divide by
+the trading days of each weekday. A filter on a calendar dimension restricts the trading days
+too; other filters (payment type, category) do not. A derived metric that uses `trading_days`
+reads the value of its row.
+
+**Output convention.** One row per group: the dimension columns, `is_total`, `is_other` (with
+`top: {other: true}`), `in_window` (with `buckets_before`), then one column per metric. With a
+comparison, `prior_<metric>`, `<metric>_change` (ratio) and `<metric>_delta` (difference; for
+`pct` metrics in fractions, which the visuals show as pp); a timestamp metric gets only its
+prior. When the comparison is not valid these columns exist and are NULL. Always `n_orders`,
+plus every count named in a `min_n` as `n_<count>`, each with `prior_n_<count>`; then
+`trading_days` (and `prior_trading_days`). A total row has `is_total = true` and NULL dimensions
+(except the bucket of a bucket total). Groups sort by the dimension's `sort` (bins in their own
+order, NULL last), "Other" after them, the total last; series by bucket. Sums of an empty group
+are 0, not NULL; ratios over zero are NULL. A query without dimensions returns one row, the
+total.
 
 **`ResultMeta`** carries the window and comparison window, `compare_ok`, `empty` (no sales in the
-window), the metric specs of every column (label, format, `up_is_good`, `min_n`), the trading
-days, the result shape (`single`, `rows`, `series`, `matrix` or `decomposition`), the row count,
-and the rendered SQL for debugging.
+window), the metric specs of every column (label, format, `up_is_good`, `min_n`), the dimension
+specs, the trading days of both windows, the result shape (`single`, `rows`, `series`, `matrix`
+or `decomposition`), for a series its grain and the current and prior buckets, and the rendered
+SQL with its parameters for debugging.
 
 **Escape hatch.** A registered Python function `@query("notes")` returns a `Result` for sources
-that are not SQL aggregates: the data notes from the cleaning steps and the run manifest, and the
-cleaned lines for the Excel export. Components use one with `query: { source: notes }`.
+that are not SQL aggregates. Components use one with `query: { source: notes }`, plus `options`
+when the source declares an options model. A source gets a `QueryContext`: the connection, the
+registry, the calendar, and the run (with its manifest) and the data-check report when there is
+one. Two exist: `notes` (where the data comes from, extraction errors and warnings from the run
+manifest, data-check warnings) and `lines_export` (the cleaned lines with the columns of the
+Excel export, never the line note).
 
 ## Transforms
 
@@ -990,7 +1034,9 @@ No step needed Python beyond what the framework provides. With `facet: { by: per
 - **Windows** (7.8): the existing `test_periods.py` cases pass through the resolver, plus new
   cases for WTD, MTD, `last_n_*`, `last_year` and `block_7d`.
 - **Compiler** (7.9): hand-computed results on a small fixture for totals, prior-only rows, top
-  N with "Other", bins, filters and filtered metrics.
+  N with "Other", bins, filters, filtered metrics, series, trading days and invalid queries;
+  parity with `report_data.Section` on the run of 2026-11-22 for the KPIs, categories, top
+  items, payment types, discounts, orders by hour, the trend and the sparklines.
 - **Transforms and decompose** (7.10, 7.11): one hand-computed test each; decompose effects add
   up to the change exactly, and the worked example above is a test.
 - **Loader** (7.12): one test per validation rule, each with a readable message.
