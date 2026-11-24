@@ -391,16 +391,23 @@ contributive_aov:
   relative: net_sales / nullif(total.orders, 0)
 ```
 
+- **`sql`**: per model, one aggregate `func(expr)` or `func(distinct expr)`, optionally with
+  `filter (where condition)`; `func` is `sum`, `count`, `min`, `max` or `avg`. The registry
+  parses it, so a `filtered` metric adds its condition to the aggregate's own filter. A
+  `filtered` metric is based on a `sql` or another `filtered` metric, and exists on the models
+  that have its base and every dimension of its `where`.
 - **`format`**: `idr`, `idr_compact`, `count`, `decimal`, `pct` or `timestamp`. A change of a
   `pct` metric is shown in percentage points, every other change as a ratio.
 - **`additivity`**: `full` (sums across any dimension), `order_grain` (sums across dimensions of
   grain `order` only) or `none`. The engine never sums a metric on its own. The loader checks
   every transform and visual option that sums rows (a stacked bar, a cumulative share, a total
   drawn outside SQL) and refuses the wrong combination of metric and dimension.
-- **`up_is_good`**: colours the changes (discounts and refunds are `false`).
+- **`up_is_good`**: colours the changes (discounts and refunds are `false`); `null` is neutral
+  and leaves the change uncoloured (`share`, the first and last sale). Every metric states it.
 - **`min_n`**: the sample-size rule. The compiler returns `n_orders` per row (and every count
   named in a `min_n`). Visuals grey out rows below it and show their `n`; insight rules skip
-  them. The default is 30 orders.
+  them. The default is 30 orders. Every count it names must be a `count` metric on every model
+  of the metric.
 
 Every metric of METRICS.md is defined (the four money metrics, orders, AOV, items sold,
 penetration, category AOV, contributive AOV, first and last sale), plus `share`,
@@ -412,13 +419,13 @@ penetration, category AOV, contributive AOV, first and last sale), plus `share`,
 ```yaml
 adjusted_category:
   label: Category
-  grain: line
+  grain: item
   sort: { by: net_sales, desc: true }
   models: [fct_sales_lines]
 
 category_group_level_1:
   label: Category group
-  grain: line
+  grain: item
   models: [fct_sales_lines]
 
 payment_type:
@@ -435,28 +442,44 @@ hour_of_day:
 
 weekday:
   label: Weekday
-  grain: order
+  grain: day
   sort: { by: value }       # Monday first
   domain: all               # all seven days, even without sales
+  values: [1, 2, 3, 4, 5, 6, 7]
+  labels: { 1: Mon, 2: Tue, 3: Wed, 4: Thu, 5: Fri, 6: Sat, 7: Sun }
   models: [fct_sales_lines, fct_orders]
 
 has_food:
   label: Has food
   grain: order
+  labels: { true: With food, false: Without food }
   models: [fct_sales_lines, fct_orders]
 
 basket_size:
   label: Items in the order
-  column: items
+  column: { fct_sales_lines: order_items, fct_orders: items }
   grain: order
   bins: [1, 2, 3, 4, "5+"]
-  models: [fct_orders]
+  models: [fct_sales_lines, fct_orders]
+
+discount_code:
+  label: Discount code
+  grain: line
+  null_label: No discount
+  models: [fct_sales_lines]
 ```
 
-`column` defaults to the id. `grain` (`line`, `order`, `item` or `day`) drives the additivity
-check. `domain` tells the compiler which empty values to fill: `span`, `all`, `calendar` (the
-time truncations, through `dim_calendar`) or `none`. `bins` turns a number into ordered buckets,
-in SQL. The category groups of plan 2.11 and the order attributes are ordinary dimensions.
+`column` defaults to the id; a mapping names the column per model when it differs. `grain`
+says what the value describes and drives the additivity check: `day` (the calendar: date,
+week, weekday, events) and `order` (payment type, hour, the order attributes) have one value
+per receipt, so `order_grain` metrics such as orders may be summed over them; `item` (item,
+category, category groups) and `line` (discount code, modifier, refund line) can have several
+values per receipt. `domain` tells the compiler which empty values to fill: `span`, `all` (the
+listed `values`), `calendar` (the time truncations, through `dim_calendar`) or `none`. `labels`
+and `null_label` are the display names of values and of the empty value. `bins` turns a number
+into ordered buckets, in SQL: an exact value, a range such as `"2-3"`, or an open last bucket
+such as `"5+"`. The category groups of plan 2.11, the order attributes and the calendar events
+are ordinary dimensions.
 
 ### KPI tree (`kpi_tree.yml`)
 
@@ -494,8 +517,15 @@ The KPI tree states how metrics build on each other. It drives the `decompose` t
 
 `aov_by_category` followed by `category_slice` is the reading of METRICS.md made explicit: a
 category's slice of the AOV moves because the category appears in more or fewer orders
-(penetration) or because orders with it spend more or less on it (category AOV). Margins and
-costs add identities later, for example gross margin = net sales - COGS.
+(penetration) or because orders with it spend more or less on it (category AOV). The file also
+has `aov_by_category_group` (the same split over food, drink and consignment) and
+`net_sales_by_category`. The driver of a `sum_over` must be fully additive. Margins and costs
+add identities later, for example gross margin = net sales - COGS.
+
+A test checks every identity on every model it exists on, over the full history and the L14D,
+L6W and L3M windows, on the fixture and on the run of 2026-11-22; for a `sum_over` with `then`
+it also checks the `then` identity on every member. A product is undefined (and not checked)
+where a value is missing, for example the category AOV of a category without orders.
 
 ## Windows
 
@@ -510,16 +540,24 @@ so L14D, L6W and L3M keep their tests.
 | `L3M` | the last 3 complete months | month |
 | `full` | first sale to anchor | month |
 | `WTD`, `MTD` | the anchor's week or month so far | day |
-| `last_n_days(n)`, `last_n_weeks(n)`, `last_n_months(n)` | like L14D, L6W, L3M with any n | day, week, month |
+| `last_n_days(n)`, `last_n_weeks(n)`, `last_n_months(n)` | like L14D, L6W, L3M with any n; also written `L<n>D`, `L<n>W`, `L<n>M` | day, week, month |
 
 Time grains are `day`, `week`, `month` and `block_7d`: 7-day blocks counted back from the window
-end, so the latest block is a full week, as the sparklines do today.
+end, so the latest block is a full week, as the sparklines do today. Weeks and months are
+calendar buckets, so the first and last bucket may reach outside the window. `bucket_before`
+gives the bucket before the first one, for the growth label of the first bucket; it is used
+only when it lies fully within the sales history.
 
-`compare` is `prior` (the same length directly before), `last_year` (shifted by 364 days for day
-and week windows, so weekdays line up, and by 12 months for month windows) or `none`. A
-comparison whose start lies before the first sale is not run: its columns are NULL and
-`meta.compare_ok` is false, which the visuals show as `n/a`, as today. With the first sale on 23
-Jul 2026, `last_year` shows `n/a` until late July 2027.
+`compare` is `prior`, `last_year` or `none`. `prior` is the same length directly before, except
+where that would compare different weekdays or days of the month (agreed 24 Nov 2026): a day
+window shorter than a week is compared with the same weekdays a week earlier (`L1D` on a
+Saturday with the Saturday before), `WTD` with the same weekdays of the week before, and `MTD`
+with the same days of the month before (cut to that month's last day). `last_year` shifts by
+364 days for day and week windows, so weekdays line up, and by 12 months for month windows,
+`MTD` and `full`. A comparison whose start lies before the first sale is not run: its columns
+are NULL and `meta.compare_ok` is false, which the visuals show as `n/a`, as today. With the
+first sale on 23 Jul 2026, `last_year` shows `n/a` until late July 2027, and `full` never has a
+valid comparison.
 
 `$period` in a component is a placeholder that a report repeat, a period facet or the
 component's default `params` binds to a window name.
