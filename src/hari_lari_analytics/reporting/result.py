@@ -33,6 +33,28 @@ class BucketInfo:
 
 
 @dataclass(frozen=True)
+class MatrixSpec:
+    """A pivoted result (shape `matrix`): `df` has the row dimension as its first column and one
+    column per value of the column dimension, in `column_values` order."""
+
+    rows: str  # dimension id of the rows
+    columns: str  # dimension id of the columns
+    value: str  # the df column shown in the cells, such as `orders` or `net_sales_change`
+    column_values: tuple  # the values of the column dimension, as the df column labels
+
+
+@dataclass(frozen=True)
+class Classification:
+    """What `classify` wrote into one column: the classes in their order, and the split values
+    it used (the medians of a quadrant classification, the bounds of the bands)."""
+
+    column: str
+    mode: str
+    classes: tuple[str, ...]
+    splits: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ResultMeta:
     shape: Shape
     window: ResolvedWindow | None  # None for a @query source without a window
@@ -46,6 +68,18 @@ class ResultMeta:
     prior_buckets: tuple[BucketInfo, ...] = ()  # aligned by ordinal
     sql: str | None = None
     params: dict = field(default_factory=dict)
+    matrix: MatrixSpec | None = None  # set by `pivot`
+    classifications: dict[str, Classification] = field(default_factory=dict)  # by column
+
+    @property
+    def n_columns(self) -> dict[str, Metric]:
+        """The sample-size columns (`n_orders`, ...) with the count metric each one holds."""
+        return {c: m for c, m in self.metrics.items() if m.id != c}
+
+    @property
+    def value_metrics(self) -> dict[str, Metric]:
+        """The metrics of the query, without the sample-size columns."""
+        return {c: m for c, m in self.metrics.items() if m.id == c}
 
     @property
     def compare_ok(self) -> bool:
@@ -79,6 +113,13 @@ class Result:
         if dims:  # a bucket total of a series keeps its bucket
             totals = totals[totals[dims].isna().all(axis=1)]
         return totals.iloc[0] if len(totals) else None
+
+    def matrix_frame(self) -> pd.DataFrame:
+        """A pivoted result as a plain matrix: the row values as the index, the column values as
+        the columns."""
+        if self.meta.matrix is None:
+            raise ValueError("the result is not a matrix (use the pivot transform)")
+        return self.df.set_index(self.meta.matrix.rows)
 
     def replace(self, df: pd.DataFrame | None = None, **meta) -> Result:
         """A new result with another DataFrame and/or changed metadata (for transforms)."""

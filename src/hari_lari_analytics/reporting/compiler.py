@@ -248,6 +248,8 @@ class _Compiler:
                 self.bins[dim_id] = parse_bins(items)
             except ValueError as error:
                 raise QueryError(f"bins: {dim_id}: {error}") from None
+            # the result's dimension carries the bins the query used, for the transforms
+            self.dims[dim_id] = self.dims[dim_id].model_copy(update={"bins": list(items)})
 
         self._plan_metrics()
         self._plan_filters()

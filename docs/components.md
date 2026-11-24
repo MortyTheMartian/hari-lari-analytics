@@ -678,26 +678,50 @@ Excel export, never the line note).
 ## Transforms
 
 A transform is a registered function `(result, options, ctx) -> Result` with a pydantic options
-model. Transforms run in the order listed and never query the database. A transform can declare
-what it needs from the query; the loader adds it when it can and fails otherwise. For example,
-`growth_vs_previous` asks for one extra bucket before the window, and `decompose` asks for the
-drivers of its identity.
+model (unknown options fail, as everywhere in the YAML). It is a list entry of a component, a bare
+name (`- per_trading_day`) or a name with options (`- pivot: {rows: weekday, columns: hour_of_day}`),
+and the steps run in the order listed. Transforms never query the database and never change their
+input; `ctx` holds the registry and the run's calendar, which is in memory. A transform declares:
+
+- the **result shapes** it accepts (`sort_limit` works on rows, `growth_vs_previous` on a series);
+  `apply` refuses any other shape with a message, and `pivot` produces the shape `matrix`;
+- its **requirements** on the query. The loader calls `plan_query(query, steps)`, which *adds* what
+  can be added (extra buckets before the window, metrics the options name) and *fails* on what
+  cannot (a dimension the query does not group by, a comparison the query does not ask for).
+  `growth_vs_previous` asks for one bucket before the window, `cumulative_share` and the lifecycle
+  mode of `classify` for their metric, `classify` also for a comparison, `pivot` for its two
+  dimensions, and `decompose` will ask for the drivers of its identity.
 
 | Transform | What it does |
 | --- | --- |
-| `sort_limit` | sort by a column, keep the first n rows |
-| `rank` | add a rank column |
-| `fill_domain` | add the missing values of a dimension's domain, with zeros |
-| `per_trading_day` | divide the additive metrics by the window's trading days, or, when grouped by a calendar dimension such as weekday, by the trading days of each group |
-| `growth_vs_previous` | growth of each time bucket over the one before; the first bucket looks one bucket back if that bucket lies fully within the history |
-| `cumulative_share` | running share of a fully additive metric, for Pareto and ABC classes |
-| `pivot` | turn two dimensions into a matrix (shape `matrix`) |
-| `classify` | add a class column from thresholds, quadrants (two metrics against their medians or given values) or the item lifecycle (new, rising, steady, fading) |
-| `suppress_small_n` | blank the metrics of rows below the sample-size rule, instead of greying them out |
+| `sort_limit` | sort by a column (`by`, `desc`), keep the first `n` rows; ties keep the query's order, NULL last; `Other (k)` and total rows stay at the end |
+| `rank` | add a rank column (`into`, `method` min, dense or first), over the regular rows, optionally inside each group of `within` columns such as the time bucket |
+| `fill_domain` | add the missing values of a dimension's domain as rows with zeros: the bins, all seven weekdays, the hours between the first and last, or the `values` given. A filled row has zero sums and counts, no value for ratios and no comparison (the query dropped what the comparison window held for it); its trading days come from the rows with the same weekday, else from the calendar |
+| `per_trading_day` | divide the metrics that sum (orders, net sales, ...) by the `trading_days` of each row, which the query counted per bucket, per weekday or for the window, and the prior values by the prior trading days; changes are recomputed; ratios, relative metrics and the sample-size columns stay; a count becomes a decimal; a row without trading days has no value |
+| `growth_vs_previous` | add `<metric>_growth`: each bucket over the one before, per group, as a ratio; the first bucket uses the bucket before the window (`buckets_before`, only when fully inside the history), which is dropped afterwards; no growth for a previous value of 0, for the window total, and by default for the daily grain (`grains`) |
+| `cumulative_share` | add the running share of a fully additive metric, largest first, over the total row when there is one (a top 15 reads against all sales); an `order_grain` metric (orders) only when no dimension has several values per receipt |
+| `pivot` | turn two dimensions into a matrix: the row dimension first, one column per value of the column dimension (shape `matrix`, `meta.matrix` names the value; `Result.matrix_frame()` gives the plain matrix); several rows in one cell are an error |
+| `classify` | add a class column (`into`): `mode: thresholds` (bands with an inclusive `upto`, else `otherwise`; ABC classes from `cumulative_share`), `quadrants` (two columns against their median, mean or a given number; a value on the split is high; the four classes are named by `labels`) or `lifecycle` (see below). Only the regular rows get a class; the classes and the splits used are kept in `meta.classifications` for the visuals |
+| `suppress_small_n` | blank the metrics of rows below the sample-size rule, instead of greying them out: a value by its own counts, its prior by the prior counts, a change or delta when either side is small; the `n_` columns stay |
 | `decompose` | split the change of a KPI over the drivers of one KPI-tree identity (shape `decomposition`) |
 
+**Lifecycle.** The class is decided from a metric (`by`, such as items sold) in this period and in
+the comparison period, so the query needs `compare`. *New*: nothing sold in the comparison period,
+however little is sold now (a fact, not a statistic). Otherwise the change decides: *rising* at
+`rising_at` or more (default +25%), *fading* at `fading_at` or less (default -25%, which includes
+an item that sold nothing now), *steady* in between. Rising, steady and fading are statements
+about a change, so they stay empty when the item has fewer than `min_n` orders in both periods
+(default 15; `null` switches the rule off). The count is the orders that contain the item in that
+period, as in the `n_orders` column of its row, not its sales over its whole life. The metric's own
+rule of 30 orders would classify only 18 of 99 items over L6W on the run of 2026-11-22, a `min_n` of
+15 classifies 32. Nothing sold in either period, or no comparison: no class. "New" is relative to
+the comparison period: an item that sold two periods ago and not in the last one counts as new
+again; the first sale of the item (`dim_items`) would settle that and can be added to the query
+when 10.15 needs it.
+
 Writing a new transform is one function, one options model and one hand-computed test,
-registered with `@transform("name")`. Every later component can then use it in YAML.
+registered with `@transform("name", options=Model, shapes=..., requires=...)`; its docstring is its
+description in the gallery. Every later component can then use it in YAML.
 
 ### Decompose
 
