@@ -1,0 +1,45 @@
+name: CI
+
+# Every push and every pull request: lint, tests, and the two checks of the component
+# framework. The real-data tests skip themselves (data/ is not in git), so what runs here is
+# the made-up sample in tests/fixtures/. See docs/runbook.md, "Release path".
+
+on:
+  push:
+  pull_request:
+
+# A push to a branch with an open pull request starts two runs for the same commit; keep one.
+concurrency:
+  group: ci-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      # Python 3.13 comes from .python-version; --frozen refuses to change uv.lock.
+      - name: Install
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run --no-sync ruff check
+
+      - name: Tests
+        run: uv run --no-sync pytest -q
+
+      - name: Validate components
+        run: uv run --no-sync hari-lari-component validate
+
+      - name: Check the exported JSON schema
+        run: uv run --no-sync hari-lari-component schema --check
