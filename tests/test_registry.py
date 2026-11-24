@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import date, datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ from hari_lari_analytics.reporting.registry import (
     default_registry,
     load_registry,
     parse_bins,
+    render_expression,
 )
 
 from .api_fixture import api_tables
@@ -326,6 +328,86 @@ def _load(metrics: str = "", dims: str = DIMS, kpi: str = "[]"):
 def test_invalid_metrics(metrics, message):
     with pytest.raises(RegistryError, match="^metrics.yml: " + re.escape(message)):
         _load(metrics)
+
+
+# --- expressions are read by DuckDB's tokenizer, not by a regular expression ---------------
+
+
+def _derived(expression: str) -> str:
+    """A derived metric `x` (the expression as a JSON string, which YAML reads as it is)."""
+    return (
+        "x: {label: X, description: d, format: decimal, up_is_good: true, additivity: none,"
+        f" derived: {json.dumps(expression)}}}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("expression", "inputs"),
+    [
+        ("net_sales::double / nullif(orders, 0)", {"net_sales", "orders"}),
+        ("net_sales::float / nullif(orders::float, 0)", {"net_sales", "orders"}),
+        ("cast(net_sales as hugeint) / nullif(orders, 0)", {"net_sales", "orders"}),
+        ("net_sales::decimal(18, 2) / nullif(orders::bigint, 0)", {"net_sales", "orders"}),
+        ("net_sales::DOUBLE / NULLIF(orders, 0)", {"net_sales", "orders"}),
+        ("case when orders > 0 then net_sales::double / orders else null end",
+         {"net_sales", "orders"}),
+        ("coalesce(net_sales, 0)::integer", {"net_sales"}),
+        ("net_sales / nullif(orders, 0) * 1.5e3", {"net_sales", "orders"}),
+        ("net_sales between 1 and 2 and not orders is null", {"net_sales", "orders"}),
+    ],
+)  # fmt: skip
+def test_casts_and_type_names_are_not_metrics(expression, inputs):
+    assert _load(_derived(expression)).metric("x").inputs == inputs
+
+
+def test_every_word_that_is_not_syntax_must_be_a_metric():
+    # `float` is a type and `nullif` a function, but `revenue` is neither
+    with pytest.raises(RegistryError, match=r"x: unknown metric\(s\) revenue$"):
+        _load(_derived("revenue::float / nullif(orders, 0)"))
+    # a type name used as a value is a name like any other
+    with pytest.raises(RegistryError, match=r"x: unknown metric\(s\) hugeint$"):
+        _load(_derived("hugeint + orders"))
+
+
+def test_a_metric_may_be_named_like_an_unreserved_keyword():
+    # `share` and `value` are keywords for DuckDB, but it allows them as names
+    text = (
+        "share: {label: S, description: d, format: pct, up_is_good: true, additivity: none,"
+        ' relative: "net_sales / nullif(total.net_sales, 0)"}\n'
+        "value: {label: V, description: d, format: decimal, up_is_good: true, additivity: none,"
+        " derived: share::double * 2}"
+    )
+    registry = _load(text)
+    assert registry.metric("share").totals == {"net_sales"}
+    assert registry.metric("value").inputs == {"share"}
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "net_sales / 'a'",
+        "net_sales; orders",
+        "net_sales -- orders",
+        "net_sales /* orders */",
+        '"net_sales" / orders',
+        "net_sales / 'oops",
+    ],
+)
+def test_quotes_semicolons_and_comments_are_refused(expression):
+    with pytest.raises(RegistryError, match=r"^metrics.yml: x: quotes, semicolons and comments"):
+        _load(_derived(expression))
+
+
+def test_expressions_render_with_the_references_replaced():
+    rendered = render_expression(
+        "net_sales::double / nullif(total.net_sales, 0) * trading_days + cast(a as float)",
+        ref=lambda m: f"s.{m}",
+        total=lambda m: f"t.{m}",
+        trading_days="7",
+    )
+    assert rendered == "s.net_sales::double / nullif(t.net_sales, 0) * 7 + cast(s.a as float)"
+    # the text between the references is kept as written
+    assert render_expression("a  +\n b", lambda m: m.upper(), lambda m: m) == "A  +\n B"
 
 
 @pytest.mark.parametrize(

@@ -12,7 +12,7 @@ as a table.
 
 from __future__ import annotations
 
-import re
+import json
 from dataclasses import dataclass, field
 from datetime import date
 from graphlib import TopologicalSorter
@@ -33,7 +33,6 @@ from hari_lari_analytics.reporting.checks import CheckReport, check
 from hari_lari_analytics.reporting.model_specs import model_sql
 
 LAYER_RANK = {"raw": 0, "seed": 0, "stg": 1, "int": 2, "dim": 3, "fct": 4}
-REFERENCE = re.compile(r"\b((?:raw|seed|stg|int|dim|fct)_\w+)\b")
 
 
 @dataclass(frozen=True)
@@ -217,18 +216,64 @@ def _register(
     con.unregister(f"_df_{name}")
 
 
+def model_select(name: str, sql: str) -> str:
+    """The select of a model: what follows its `create or replace view <name> as`."""
+    marker = f"create or replace view {name} as"
+    if marker not in sql:
+        raise ValueError(f"model {name} must define the view {name}")
+    return sql.split(marker, 1)[1]
+
+
+def _tables_read(node: object, tables: set[str], ctes: set[str]) -> None:
+    """Collect the base tables and the CTE names in the JSON syntax tree of a select."""
+    if isinstance(node, dict):
+        if node.get("type") == "BASE_TABLE":
+            tables.add(node["table_name"].lower())
+        for entry in node.get("cte_map", {}).get("map", []):
+            ctes.add(entry["key"].lower())
+        for child in node.values():
+            _tables_read(child, tables, ctes)
+    elif isinstance(node, list):
+        for child in node:
+            _tables_read(child, tables, ctes)
+
+
+def model_references(models: dict[str, str]) -> dict[str, set[str]]:
+    """The tables and models each model reads, from the syntax tree DuckDB parses.
+
+    DuckDB only parses (`json_serialize_sql`), so nothing has to exist yet and no function has
+    to be known; a name in a comment or a string is not a reference, and a CTE is not a table
+    (a CTE hides a model of the same name).
+    """
+    con = duckdb.connect()
+    references: dict[str, set[str]] = {}
+    for name, sql in models.items():
+        select = model_select(name, sql)
+        (text,) = con.execute("select json_serialize_sql(?)", [select]).fetchone()
+        tree = json.loads(text)
+        if tree.get("error"):
+            raise ValueError(
+                f"model {name}: DuckDB cannot read its SQL: {tree.get('error_message')}"
+            )
+        tables: set[str] = set()
+        ctes: set[str] = set()
+        _tables_read(tree, tables, ctes)
+        references[name] = tables - ctes - {name}
+    return references
+
+
 def build_order(models: dict[str, str]) -> list[str]:
     """Models in an order that builds every reference first; a reference upwards is an error."""
     graph: dict[str, set[str]] = {}
-    for name, sql in sorted(models.items()):
+    references = model_references(models)
+    for name in sorted(models):
         layer = LAYER_RANK[name.split("_", 1)[0]]
-        refs = {r for r in REFERENCE.findall(sql) if r != name}
-        for ref in sorted(refs):
-            if LAYER_RANK[ref.split("_", 1)[0]] > layer:
+        for ref in sorted(references[name]):
+            ref_layer = LAYER_RANK.get(ref.split("_", 1)[0])
+            if ref_layer is not None and ref_layer > layer:
                 raise ValueError(f"model {name} reads {ref} from a higher layer")
-        graph[name] = {r for r in refs if r in models}
-    sorter = TopologicalSorter(graph)
-    return list(sorter.static_order())
+        graph[name] = {r for r in references[name] if r in models}
+    return list(TopologicalSorter(graph).static_order())
 
 
 def build_models(con: duckdb.DuckDBPyConnection) -> None:

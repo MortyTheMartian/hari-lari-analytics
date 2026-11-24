@@ -13,7 +13,14 @@ from hari_lari_analytics.load import (
     load_category_groups,
 )
 from hari_lari_analytics.load_api import api_sales_lines, load_api_sales
-from hari_lari_analytics.reporting.db import Seeds, build_order, connect, open_run
+from hari_lari_analytics.reporting.db import (
+    Seeds,
+    build_order,
+    connect,
+    model_references,
+    open_run,
+)
+from hari_lari_analytics.reporting.model_specs import model_sql
 
 from .api_fixture import api_tables
 from .conftest import FIXTURES
@@ -234,6 +241,70 @@ def test_build_order_puts_references_first_and_refuses_upward_references():
     assert order.index("stg_d") < order.index("int_b") < order.index("dim_c") < order.index("fct_a")
     with pytest.raises(ValueError, match="higher layer"):
         build_order({"int_x": "create or replace view int_x as select * from fct_a", **models})
+
+
+def test_build_order_reads_the_sql_with_duckdb_not_the_comments_and_strings():
+    models = {
+        # names in a comment, in a string and in a block comment are not references
+        "int_b": (
+            "create or replace view int_b as\n-- reads fct_a, but only in this comment\n"
+            "select 'dim_c' as note, * from stg_d /* fct_a */"
+        ),
+        "fct_a": "create or replace view fct_a as select * from int_b",
+        "stg_d": "create or replace view stg_d as select * from raw_transactions",
+    }
+    assert model_references(models) == {
+        "int_b": {"stg_d"},
+        "fct_a": {"int_b"},
+        "stg_d": {"raw_transactions"},
+    }
+    order = build_order(models)  # a reference upwards (int_b reads fct_a) would raise
+    assert order.index("stg_d") < order.index("int_b") < order.index("fct_a")
+
+
+def test_build_order_reads_joins_subqueries_ctes_and_unions():
+    models = {
+        "fct_a": (
+            "create or replace view fct_a as with c as (select * from int_b)\n"
+            "select title_case(x), week_start(d), (select max(y) from dim_c) as m "
+            "from c join Stg_D as d using (k) where k in (select k from raw_transactions) "
+            "union all select 1, 2, 3 from main.seed_e, generate_series(1, 3)"
+        ),
+        "int_b": "create or replace view int_b as select 1 as x",
+        "dim_c": "create or replace view dim_c as select 1 as y",
+        "stg_d": "create or replace view stg_d as select 1 as k",
+    }
+    # `c` is a CTE, not a table; names are case-folded; functions need not exist; USING needs
+    # no tables to exist, since DuckDB only parses
+    assert model_references(models)["fct_a"] == {
+        "int_b", "dim_c", "stg_d", "raw_transactions", "seed_e",
+    }  # fmt: skip
+    assert build_order(models).index("fct_a") == 3
+
+
+def test_build_order_says_which_model_cannot_be_read():
+    with pytest.raises(ValueError, match=r"model int_x: DuckDB cannot read its SQL.*syntax error"):
+        build_order({"int_x": "create or replace view int_x as select from from"})
+    with pytest.raises(ValueError, match="model int_x must define the view int_x"):
+        build_order({"int_x": "select 1"})
+    with pytest.raises(ValueError, match=r"model int_x: DuckDB cannot read its SQL.*SELECT"):
+        build_order({"int_x": "create or replace view int_x as insert into t values (1)"})
+
+
+def test_the_real_models_depend_on_what_they_read_not_on_their_comments():
+    models = model_sql()
+    # fct_orders names fct_sales_lines in a comment only
+    assert "fct_sales_lines" in models["fct_orders"]
+    references = model_references(models)
+    assert references["fct_orders"] == {"dim_calendar", "int_order_attributes"}
+    assert references["fct_sales_lines"] == {
+        "dim_calendar", "int_order_attributes", "int_sales_lines",
+    }  # fmt: skip
+    assert references["stg_transactions"] == {"raw_transactions"}
+    order = build_order(models)  # also proves that no model reads a higher layer
+    assert sorted(order) == sorted(models)
+    for name, refs in references.items():
+        assert all(order.index(r) < order.index(name) for r in refs if r in models)
 
 
 REAL_RUN = Path("data/extract/2026-11-22")

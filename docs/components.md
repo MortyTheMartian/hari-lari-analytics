@@ -238,9 +238,14 @@ with another `min_n` calls `load_registry(settings=...)`.
 
 Models are plain SQL files, one `create or replace view <name> as ...` each, with no templating.
 A model may read from its own or a lower layer (seeds, then `stg_`, `int_`, `dim_`, `fct_`);
-`db.py` finds the model names each file uses, refuses a reference to a higher layer, and builds
-them in dependency order. One Python function is registered: `title_case`, Python's
-`str.title`, so variants are capitalised exactly as in the pandas pipeline.
+`db.py` reads each model's select with DuckDB's own parser (`json_serialize_sql`, which only
+parses: nothing has to exist yet), so the references are the tables the syntax tree reads, not
+the names that appear in the text: a name in a comment or a string is not a dependency, and a CTE
+is not a table. It refuses a reference to a higher layer and builds the models in dependency
+order. A model that DuckDB cannot parse fails with its name and DuckDB's message. Two helpers
+are registered on the connection: the Python function `title_case`, Python's `str.title`, so
+variants are capitalised exactly as in the pandas pipeline, and the macro `week_start(date)`,
+the first day of the week of `project.yml`.
 
 - **`seed_*`**: `config/item_aliases.csv`, `config/category_group.csv`,
   `config/calendar_events.csv`, and later the margin, target and fee files. The existing Python
@@ -360,7 +365,11 @@ A metric has exactly one of four kinds:
   `filter (where ...)`. The filter uses the same syntax as a component's `where`. Label, format,
   direction and additivity are inherited from the base unless overridden.
 - **`derived`**: an expression over other metrics, evaluated after aggregation. It may use the
-  window value `trading_days`.
+  window value `trading_days`. DuckDB's tokenizer reads it: a word is a metric unless it is SQL
+  syntax (`case`, `is`), a function (`nullif(`) or a type name after `::` or `cast(... as`, so
+  `net_sales::double` and `cast(x as hugeint)` work. A metric may be named like an unreserved
+  DuckDB keyword (`share`). Quotes, semicolons and comments are refused. Only the first word of
+  a type is skipped, so write `::double`, not `::double precision`.
 - **`relative`**: an expression that also uses `total.<metric>`, the same metric over the whole
   filter rather than the group. The compiler computes totals with `GROUPING SETS`, so a total is
   always recomputed from the rows, never summed.

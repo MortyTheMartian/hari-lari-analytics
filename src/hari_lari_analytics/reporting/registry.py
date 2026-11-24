@@ -19,6 +19,7 @@ from graphlib import CycleError, TopologicalSorter
 from importlib import resources
 from typing import Literal
 
+import duckdb
 import pandas as pd
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -37,16 +38,11 @@ WhereValue = Value | list[Value] | None
 WINDOW_VALUES = frozenset({"trading_days"})
 TIME_BUCKET = "bucket"  # the time dimension in the grain of the query, computed by the compiler
 TIME_DIMENSIONS = (TIME_BUCKET, "sale_date", "sale_week", "sale_month")
-SQL_WORDS = frozenset(
-    "and or not is null true false case when then else end in between as cast "
-    "double bigint integer decimal varchar".split()
-)
 _AGGREGATE = re.compile(
     r"^\s*(sum|count|min|max|avg)\(\s*(distinct\s+)?(.+?)\s*\)"
     r"(?:\s*filter\s*\(\s*where\s+(.+)\))?\s*$",
     re.IGNORECASE | re.DOTALL,
 )
-_REFERENCE = re.compile(r"\b(total\.)?([A-Za-z_]\w*)\b(?!\s*\()")
 _BIN = re.compile(r"^(\d+)(?:-(\d+)|(\+))?$")
 
 
@@ -364,31 +360,109 @@ def render_expression(
     total: Callable[[str], str],
     trading_days: str = "trading_days",
 ) -> str:
-    def replace(m: re.Match) -> str:
-        name = m[2]
-        if m[1]:
-            return total(name)
-        if name in WINDOW_VALUES:
-            return trading_days
-        if name.lower() in SQL_WORDS:
-            return m[0]
-        return ref(name)
+    out: list[str] = []
+    position = 0
+    for r in scan_expression(expression):
+        out.append(expression[position : r.start])
+        if r.total:
+            out.append(total(r.name))
+        elif r.name in WINDOW_VALUES:
+            out.append(trading_days)
+        else:
+            out.append(ref(r.name))
+        position = r.end
+    out.append(expression[position:])
+    return "".join(out)
 
-    return _REFERENCE.sub(replace, expression)
+
+@dataclass(frozen=True)
+class Reference:
+    """A metric named in an expression: its place in the text, its name, and whether it is
+    written `total.<name>`."""
+
+    start: int
+    end: int
+    name: str
+    total: bool
+
+
+@cache
+def _keywords() -> dict[str, str]:
+    """DuckDB's keywords with their category (reserved, unreserved, column_name, ...)."""
+    rows = duckdb.connect().execute("select keyword_name, keyword_category from duckdb_keywords()")
+    return dict(rows.fetchall())
+
+
+def _tokens(expression: str) -> list[tuple[str, duckdb.token_type, int]]:
+    """(text, kind, start) of each token, as DuckDB's tokenizer reads the expression."""
+    raw = duckdb.tokenize(expression)
+    tokens = []
+    for i, (start, kind) in enumerate(raw):
+        stop = raw[i + 1][0] if i + 1 < len(raw) else len(expression)
+        tokens.append((expression[start:stop].rstrip(), kind, start))
+    return tokens
+
+
+def scan_expression(expression: str) -> list[Reference]:
+    """The metrics an expression names, found with DuckDB's tokenizer.
+
+    A name is an identifier, or a keyword DuckDB allows as one (`share` is `unreserved`), that is
+    not called as a function (`nullif(`), not the type after `::` or `cast(x as`, and not
+    SQL syntax such as `case` or `is`. `total.<name>` is one reference. Only the first word of
+    a type is skipped, so write `::double`, not `::double precision`.
+    """
+    tokens = _tokens(expression)
+    keywords = _keywords()
+
+    def is_word(i: int) -> bool:
+        text, kind, _ = tokens[i]
+        if kind == duckdb.token_type.identifier:
+            return True
+        return kind == duckdb.token_type.keyword and keywords.get(text.lower()) == "unreserved"
+
+    found: list[Reference] = []
+    after_cast = False  # the next word is a type name
+    i = 0
+    while i < len(tokens):
+        text, kind, start = tokens[i]
+        is_cast = text == "::" or (kind == duckdb.token_type.keyword and text.lower() == "as")
+        if is_cast:
+            after_cast = True
+        elif after_cast:
+            after_cast = False
+            if kind in (duckdb.token_type.identifier, duckdb.token_type.keyword):
+                i += 1
+                continue
+        elif is_word(i):
+            following = tokens[i + 1][0] if i + 1 < len(tokens) else ""
+            if text == "total" and following == "." and i + 2 < len(tokens) and is_word(i + 2):
+                name, _, name_start = tokens[i + 2]
+                found.append(Reference(start, name_start + len(name), name, True))
+                i += 3
+                continue
+            if following != "(":
+                found.append(Reference(start, start + len(text), text, False))
+        i += 1
+    return found
 
 
 def _references(expression: str) -> tuple[set[str], set[str]]:
     """The metric names an expression uses, and those it uses as total.<metric>."""
-    if any(c in expression for c in "'\";") or "--" in expression:
-        raise ValueError("quotes, semicolons and comments are not allowed in an expression")
+    for text, kind, _ in _tokens(expression):
+        if (
+            kind in (duckdb.token_type.string_const, duckdb.token_type.comment)
+            or text == ";"
+            or text.startswith('"')
+            or "'" in text
+        ):
+            raise ValueError("quotes, semicolons and comments are not allowed in an expression")
     inputs: set[str] = set()
     totals: set[str] = set()
-    for m in _REFERENCE.finditer(expression):
-        name = m[2]
-        if m[1]:
-            totals.add(name)
-        elif name not in WINDOW_VALUES and name.lower() not in SQL_WORDS:
-            inputs.add(name)
+    for r in scan_expression(expression):
+        if r.total:
+            totals.add(r.name)
+        elif r.name not in WINDOW_VALUES:
+            inputs.add(r.name)
     return inputs, totals
 
 
