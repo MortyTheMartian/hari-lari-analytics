@@ -27,5 +27,10 @@ select
     o.has_discount,
     o.has_modifier,
     o.has_refund,
-    o.counts_as_order
+    o.counts_as_order,
+    c.event_kind,
+    c.event_name,
+    c.is_holiday,
+    c.has_promotion
 from int_order_attributes as o
+left join dim_calendar as c on o.sale_ts::date = c.date

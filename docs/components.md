@@ -240,9 +240,12 @@ them in dependency order. One Python function is registered: `title_case`, Pytho
   meaning: `7436715` was "Minuman Kulkas" before it became "Non Coffee" (D10). The `category_id`
   column of `config/category_group.csv` is informational.
 - **`dim_calendar`**: one row per day from the first sale (23 Jul 2026) to the anchor: date, ISO
-  week, month, weekday, `is_trading_day` (at least one order), `event_kind` and `event_name`
-  from `config/calendar_events.csv`. The compiler uses it to fill empty time buckets and to count
-  trading days.
+  week, month, weekday, `is_trading_day` (at least one order), and from
+  `config/calendar_events.csv` (`date_from,date_to,kind,name`, kinds `holiday`, `closure`,
+  `promotion`, `other`): `event_kind` (the most telling kind of the day: closure, holiday,
+  promotion, other), `event_name` (several names joined by ' + '), `is_holiday`, `is_closure`
+  and `has_promotion`. `fct_orders` and `fct_sales_lines` carry the event of their day. The
+  compiler uses the calendar to fill empty time buckets and to count trading days.
 
 The parity rule of plan 7.3: on the saved fixture and on a real run, `fct_sales_lines` equals the
 pandas lines row for row.

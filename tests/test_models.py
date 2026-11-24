@@ -6,7 +6,12 @@ import pandas as pd
 import pytest
 
 from hari_lari_analytics.cli import prepare_lines
-from hari_lari_analytics.load import InputError, load_aliases, load_category_groups
+from hari_lari_analytics.load import (
+    InputError,
+    load_aliases,
+    load_calendar_events,
+    load_category_groups,
+)
 from hari_lari_analytics.load_api import api_sales_lines, load_api_sales
 from hari_lari_analytics.reporting.db import Seeds, build_order, connect, open_run
 
@@ -16,6 +21,7 @@ from .conftest import FIXTURES
 SEEDS = Seeds(
     item_aliases=load_aliases(FIXTURES / "item_aliases.csv"),
     category_groups=load_category_groups(FIXTURES / "category_group.csv"),
+    calendar_events=load_calendar_events(FIXTURES / "calendar_events.csv"),
 )
 LAST_SALE = date(2026, 10, 13)
 
@@ -129,6 +135,41 @@ def test_calendar_has_every_day_and_the_trading_days():
     ]  # fmt: skip
 
 
+def test_calendar_events_join_onto_days_orders_and_lines():
+    con = connect(api_tables(), SEEDS)
+    days = _query(
+        con,
+        "select date, event_kind, event_name, is_holiday, is_closure, has_promotion "
+        "from dim_calendar where date >= '2026-10-05' order by date",
+    )
+    assert days[0] == (date(2026, 10, 5), None, None, False, False, False)
+    assert days[1] == (date(2026, 10, 6), "holiday", "Demo Day", True, False, False)
+    assert days[2][1:3] == ("closure", "Closed")
+    # two events on one day: both names, and the holiday outranks the promotion
+    assert days[-1] == (LAST_SALE, "holiday", "Two for one + Harvest Day", True, False, True)
+
+    orders = _query(
+        con, "select receipt_nr, event_kind, has_promotion from fct_orders order by receipt_nr"
+    )
+    assert orders == [
+        ("R001", None, False),
+        ("R002", None, False),
+        ("R003", "holiday", False),
+        ("R004", "promotion", True),
+        ("R005", "holiday", True),
+    ]
+    lines = _query(con, "select distinct event_name from fct_sales_lines where receipt_nr = 'R004'")
+    assert lines == [("Two for one",)]
+
+
+def test_without_calendar_events_the_columns_are_empty():
+    seeds = Seeds(SEEDS.item_aliases, SEEDS.category_groups)
+    con = connect(api_tables(), seeds)
+    assert _query(con, "select count(event_kind), bool_or(is_holiday) from dim_calendar") == [
+        (0, False)
+    ]
+
+
 def test_items_and_categories_dimensions():
     con = connect(api_tables(), SEEDS)
     items = dict(
@@ -206,3 +247,15 @@ def test_parity_with_the_pandas_lines_on_the_real_run():
     _, con = open_run(REAL_RUN, Path("config"), anchor)
     assert len(expected) == 2707
     _assert_same_lines(con, expected)
+
+
+@pytest.mark.skipif(not REAL_RUN.is_dir(), reason="needs the real extraction run (kept out of git)")
+def test_every_day_without_sales_is_a_closure_in_the_real_calendar():
+    _, con = open_run(REAL_RUN, Path("config"), date(2026, 11, 22))
+    rows = _query(
+        con,
+        "select count(*) filter (where not is_trading_day), "
+        "count(*) filter (where not is_trading_day and not is_closure), "
+        "count(*) filter (where is_trading_day and is_closure) from dim_calendar",
+    )
+    assert rows == [(32, 0, 0)]

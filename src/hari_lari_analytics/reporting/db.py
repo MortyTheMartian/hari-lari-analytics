@@ -20,7 +20,12 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
-from hari_lari_analytics.load import InputError, load_aliases, load_category_groups
+from hari_lari_analytics.load import (
+    InputError,
+    load_aliases,
+    load_calendar_events,
+    load_category_groups,
+)
 from hari_lari_analytics.load_api import ApiRun, load_run
 
 LAYER_RANK = {"raw": 0, "seed": 0, "stg": 1, "int": 2, "dim": 3, "fct": 4}
@@ -103,6 +108,10 @@ SEED_SOURCES = {
         optional={"category_id": "varchar"},
         required=False,
     ),
+    "calendar_events": Source(
+        {"date_from": "date", "date_to": "date", "kind": "varchar", "name": "varchar"},
+        required=False,
+    ),
 }
 
 
@@ -112,12 +121,14 @@ class Seeds:
 
     item_aliases: pd.DataFrame
     category_groups: pd.DataFrame
+    calendar_events: pd.DataFrame | None = None
 
     @classmethod
     def from_dir(cls, config_dir: Path) -> Seeds:
         return cls(
             item_aliases=load_aliases(config_dir / "item_aliases.csv"),
             category_groups=load_category_groups(config_dir / "category_group.csv"),
+            calendar_events=load_calendar_events(config_dir / "calendar_events.csv"),
         )
 
 

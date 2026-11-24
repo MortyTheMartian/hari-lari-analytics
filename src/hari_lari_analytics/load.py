@@ -39,6 +39,9 @@ ALIAS_COLUMNS = ["sales_item", "adjusted_item", "adjusted_category"]
 CATEGORY_GROUP_COLUMNS = ["category", "category_group_level_1", "category_group_level_2"]
 CATEGORY_GROUPS_LEVEL_1 = ["food", "drink", "consignment"]
 
+CALENDAR_EVENT_COLUMNS = ["date_from", "date_to", "kind", "name"]
+CALENDAR_EVENT_KINDS = ["holiday", "closure", "promotion", "other"]
+
 
 class InputError(Exception):
     """The input files are missing, ambiguous or do not have the expected structure."""
@@ -153,4 +156,37 @@ def load_category_groups(path: Path) -> pd.DataFrame:
             f"{path.name}: category_group_level_1 must be one of "
             f"{CATEGORY_GROUPS_LEVEL_1}, got {sorted(set(invalid))}"
         )
+    return df
+
+
+def load_calendar_events(path: Path) -> pd.DataFrame:
+    """Read the calendar events (holidays, closures, promotions), one row per date range.
+
+    `date_to` may be empty for a single day. Ranges may overlap (a holiday on which the cafe
+    is closed is two rows).
+    """
+    if not path.exists():
+        return pd.DataFrame(columns=CALENDAR_EVENT_COLUMNS)
+    df = _read_csv(path, CALENDAR_EVENT_COLUMNS)
+    for column in CALENDAR_EVENT_COLUMNS:
+        df[column] = df[column].str.strip()
+    df["kind"] = df["kind"].str.lower()
+    df["date_to"] = df["date_to"].where(df["date_to"] != "", df["date_from"])
+    for column in ["date_from", "date_to"]:
+        parsed = pd.to_datetime(df[column], format="%Y-%m-%d", errors="coerce")
+        if parsed.isna().any():
+            bad = df.loc[parsed.isna(), column].tolist()[:5]
+            raise InputError(f"{path.name}: '{column}' must be a date (YYYY-MM-DD), got {bad}")
+        df[column] = parsed.dt.date
+    backwards = df.loc[df["date_to"] < df["date_from"], "name"].tolist()
+    if backwards:
+        raise InputError(f"{path.name}: date_to is before date_from for {backwards}")
+    invalid = sorted(set(df.loc[~df["kind"].isin(CALENDAR_EVENT_KINDS), "kind"]))
+    if invalid:
+        raise InputError(f"{path.name}: kind must be one of {CALENDAR_EVENT_KINDS}, got {invalid}")
+    if (df["name"] == "").any():
+        raise InputError(f"{path.name}: a row has an empty name")
+    duplicated = df.loc[df.duplicated(["date_from", "kind", "name"]), "name"].tolist()
+    if duplicated:
+        raise InputError(f"{path.name}: event listed more than once: {duplicated}")
     return df
