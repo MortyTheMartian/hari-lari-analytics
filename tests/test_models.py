@@ -1,0 +1,208 @@
+from datetime import date, datetime
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from hari_lari_analytics.cli import prepare_lines
+from hari_lari_analytics.load import InputError, load_aliases, load_category_groups
+from hari_lari_analytics.load_api import api_sales_lines, load_api_sales
+from hari_lari_analytics.reporting.db import Seeds, build_order, connect, open_run
+
+from .api_fixture import api_tables
+from .conftest import FIXTURES
+
+SEEDS = Seeds(
+    item_aliases=load_aliases(FIXTURES / "item_aliases.csv"),
+    category_groups=load_category_groups(FIXTURES / "category_group.csv"),
+)
+LAST_SALE = date(2026, 10, 13)
+
+
+def _value(v):
+    if v is None or (not isinstance(v, str) and pd.isna(v)):
+        return None
+    if isinstance(v, (datetime, date, np.datetime64)):
+        return pd.Timestamp(v)
+    if isinstance(v, np.generic):
+        return v.item()
+    return v
+
+
+def _comparable(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    out = pd.DataFrame({c: [_value(v) for v in df[c]] for c in columns})
+    return out.sort_values(columns, key=lambda s: s.astype(str)).reset_index(drop=True)
+
+
+def _pandas_lines(tables, aliases_path, groups_path, anchor) -> pd.DataFrame:
+    result = api_sales_lines(tables, load_aliases(aliases_path))
+    lines, _ = prepare_lines(result, groups_path, anchor, source="api")
+    return lines
+
+
+def _assert_same_lines(con, expected: pd.DataFrame) -> None:
+    actual = con.execute("select * from fct_sales_lines").df()
+    missing = set(expected.columns) - set(actual.columns)
+    assert not missing, f"fct_sales_lines lacks {sorted(missing)}"
+    columns = list(expected.columns)
+    pd.testing.assert_frame_equal(
+        _comparable(actual, columns), _comparable(expected, columns), check_dtype=False
+    )
+
+
+@pytest.mark.parametrize("anchor", [LAST_SALE, date(2026, 10, 6)])
+def test_sales_lines_equal_the_pandas_lines(anchor):
+    expected = _pandas_lines(
+        api_tables(), FIXTURES / "item_aliases.csv", FIXTURES / "category_group.csv", anchor
+    )
+    _assert_same_lines(connect(api_tables(), SEEDS, anchor), expected)
+
+
+def test_default_anchor_is_the_day_of_the_last_payment():
+    con = connect(api_tables(), SEEDS)
+    assert con.execute("select anchor from run_context").fetchone()[0] == LAST_SALE
+
+
+def _query(con, sql: str) -> list[tuple]:
+    return con.execute(sql).fetchall()
+
+
+def test_line_note_is_carried():
+    con = connect(api_tables(), SEEDS)
+    notes = _query(con, "select receipt_nr, note from fct_sales_lines where note is not null")
+    assert notes == [("R002", "oat milk please")]
+
+
+def test_orders_have_their_attributes():
+    con = connect(api_tables(), SEEDS)
+    rows = _query(
+        con,
+        """
+        select receipt_nr, payment_type, net_sales, items, lines, has_food, has_drink,
+               has_discount, has_modifier, has_refund, counts_as_order
+        from fct_orders order by receipt_nr
+        """,
+    )
+    assert rows == [
+        ("R001", "BCA", 68000, 2, 2, False, True, False, True, False, True),
+        ("R002", "Cash", 30000, 1, 1, False, True, True, False, False, True),
+        # fully refunded: the refund subtracts, the payment's time and type are kept
+        ("R003", "Gopay", 0, 0, 1, False, True, False, False, True, False),
+        ("R004", "BCA", 100000, 3, 3, True, False, False, False, False, True),
+        ("R005", "BCA", 15000, 1, 1, False, False, False, False, False, True),
+    ]
+    r003 = _query(con, "select sale_ts from fct_orders where receipt_nr = 'R003'")
+    assert r003 == [(datetime(2026, 10, 6, 9, 0),)]
+
+
+def test_lines_carry_the_order_attributes():
+    con = connect(api_tables(), SEEDS)
+    rows = _query(
+        con,
+        "select item, has_drink, has_food, order_items from fct_sales_lines "
+        "where receipt_nr = 'R004' order by item",
+    )
+    assert rows == [
+        ("Mystery Cake", False, True, 3),
+        ("Nasi Campur", False, True, 3),
+        ("Nasi Campur", False, True, 3),
+    ]
+
+
+def test_order_and_line_totals_agree():
+    con = connect(api_tables(), SEEDS)
+    lines = _query(con, "select sum(net_sales), sum(quantity) from fct_sales_lines")
+    orders = _query(con, "select sum(net_sales), sum(items) from fct_orders")
+    assert lines == orders == [(213000, 7)]
+
+
+def test_calendar_has_every_day_and_the_trading_days():
+    con = connect(api_tables(), SEEDS)
+    days = _query(con, "select date, weekday, is_trading_day from dim_calendar order by date")
+    assert days[0] == (date(2026, 10, 5), 1, True)
+    assert days[-1][0] == LAST_SALE
+    assert len(days) == 9
+    # 6 Oct only has the fully refunded receipt
+    assert [d for d, _, trading in days if trading] == [
+        date(2026, 10, 5), date(2026, 10, 12), date(2026, 10, 13)
+    ]  # fmt: skip
+
+
+def test_items_and_categories_dimensions():
+    con = connect(api_tables(), SEEDS)
+    items = dict(
+        (row[0], row[1:])
+        for row in _query(
+            con,
+            "select adjusted_item, adjusted_category, category_group_level_1, is_live, "
+            "first_sale_date from dim_items",
+        )
+    )
+    assert items["Focaccia Tomato"] == ("Snacks (Focaccia)", "unmapped", True, date(2026, 10, 5))
+    assert items["Mystery Cake"] == ("Cakes", "unmapped", False, date(2026, 10, 12))
+    assert items["Nasi Campur"][:3] == ("Mains", "food", True)
+
+    categories = dict(
+        (row[0], row[1:])
+        for row in _query(
+            con, "select adjusted_category, category_group_level_1, is_live from dim_categories"
+        )
+    )
+    assert categories["Coffee"] == ("drink", True)
+    assert categories["Cakes"] == ("unmapped", False)
+
+
+def test_item_resolution_flags_unmatched_items():
+    con = connect(api_tables(), SEEDS)
+    rows = _query(
+        con, "select item, resolved_by from int_item_resolution where is_unmatched order by 1"
+    )
+    assert rows == [("Mystery Cake", "sales fallback")]
+
+
+def test_optional_tables_may_be_missing_or_empty():
+    tables = api_tables()
+    del tables["transaction_line_modifiers"]
+    tables["transaction_refunds"] = pd.DataFrame()  # an empty Parquet file has no columns
+    con = connect(tables, SEEDS)
+    assert _query(con, "select count(*), count(modifier_id) from fct_sales_lines") == [(9, 0)]
+    reason = _query(con, "select refund_reason from fct_sales_lines where is_refund")
+    assert reason == [(None,)]
+
+
+def test_required_table_and_columns():
+    tables = api_tables()
+    del tables["items"]
+    with pytest.raises(InputError, match="no table items"):
+        connect(tables, SEEDS)
+    tables = api_tables()
+    tables["transactions"] = tables["transactions"].drop(columns="payment_type_label")
+    with pytest.raises(InputError, match="payment_type_label"):
+        connect(tables, SEEDS)
+
+
+def test_build_order_puts_references_first_and_refuses_upward_references():
+    models = {
+        "fct_a": "create or replace view fct_a as select * from int_b join dim_c using (x)",
+        "int_b": "create or replace view int_b as select * from stg_d",
+        "dim_c": "create or replace view dim_c as select * from int_b",
+        "stg_d": "create or replace view stg_d as select * from raw_transactions",
+    }
+    order = build_order(models)
+    assert order.index("stg_d") < order.index("int_b") < order.index("dim_c") < order.index("fct_a")
+    with pytest.raises(ValueError, match="higher layer"):
+        build_order({"int_x": "create or replace view int_x as select * from fct_a", **models})
+
+
+REAL_RUN = Path("data/extract/2026-11-22")
+
+
+@pytest.mark.skipif(not REAL_RUN.is_dir(), reason="needs the real extraction run (kept out of git)")
+def test_parity_with_the_pandas_lines_on_the_real_run():
+    anchor = date(2026, 11, 22)
+    run, result = load_api_sales(REAL_RUN, load_aliases(Path("config/item_aliases.csv")))
+    expected, _ = prepare_lines(result, Path("config/category_group.csv"), anchor, source="api")
+    _, con = open_run(REAL_RUN, Path("config"), anchor)
+    assert len(expected) == 2707
+    _assert_same_lines(con, expected)

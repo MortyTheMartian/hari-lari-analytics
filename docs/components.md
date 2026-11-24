@@ -4,8 +4,8 @@ Status: revised 24 Nov 2026 (plan task 7.1). The first version, agreed the same 
 Jinja SQL pattern per kind of chart. This revision puts one query compiler with composable
 transforms at the centre and adds driver decomposition, insights, grid layouts and four
 outputs, because the main goal is a framework in which new components and reports are quick to
-build. Decisions D1 and D2 stand as agreed; D3 and D4 change and D5 to D10 are new, all proposed
-and waiting for review (task 7.1b). Nothing is built yet: phase 7 builds the core, phase 8 the
+build. Decisions D1 and D2 stand as agreed; D3 and D4 changed and D5 to D10 are new, all agreed
+on 24 Nov 2026 (task 7.1b). Phase 7 builds the core, phase 8 the
 presentation, phase 9 proves the framework and ports today's report, phase 10 builds the driving
 reports.
 
@@ -100,9 +100,14 @@ flowchart LR
   Builder --> Out["PDF, PNG, Telegram text, XLSX"]
 ```
 
-One run opens one in-memory DuckDB connection, builds all models as views over the run's Parquet
-files (a few MB, so nothing is materialised), runs the checks, and executes every component
-against it.
+One run opens one in-memory DuckDB connection, builds all models as views over the run's tables
+(a few MB, so nothing is materialised), runs the checks, and executes every component against
+it. The tables are read with the existing `load_run` (local folder or `gs://`) and registered as
+`raw_<table>` views with the columns the models need, cast to fixed types: an empty table comes
+back from Parquet without any columns, and a column that is NULL on every row has no type. A
+missing optional table (discounts, modifiers, refunds) becomes an empty view; a missing required
+table or column fails the build. `run_context` holds the anchor (default: the day of the last
+payment); the models end on it.
 
 ## Folder layout
 
@@ -156,8 +161,9 @@ src/hari_lari_analytics/reporting/
     stg_transaction_refunds.sql
     stg_items.sql
     stg_categories.sql
-    int_refund_lines.sql          # refund payments turned into negative lines (plan 2.3)
+    int_signed_lines.sql          # refund payments turned into negative lines (plan 2.3)
     int_item_resolution.sql       # adjusted item and category per sold item (plan 2.4)
+    int_sales_lines.sql           # cleaned lines with dimensions and groups, up to the anchor
     int_order_attributes.sql      # items, lines, has_food, has_drink, ... per receipt
     int_item_lifecycle.sql        # first and last sale per adjusted item-variant
     dim_items.sql
@@ -195,10 +201,11 @@ ids are `snake_case`, and models carry a layer prefix: `seed_`, `stg_`, `int_`, 
 
 ## Models
 
-Models are plain SQL files, one `create view <name> as ...` each, with no templating except the
-run location. `db.py` builds them by layer (seeds, then `stg_`, `int_`, `dim_`, `fct_`), and
-alphabetically within a layer. A model may only read from lower layers, so no dependency graph
-is needed.
+Models are plain SQL files, one `create or replace view <name> as ...` each, with no templating.
+A model may read from its own or a lower layer (seeds, then `stg_`, `int_`, `dim_`, `fct_`);
+`db.py` finds the model names each file uses, refuses a reference to a higher layer, and builds
+them in dependency order. One Python function is registered: `title_case`, Python's
+`str.title`, so variants are capitalised exactly as in the pandas pipeline.
 
 - **`seed_*`**: `config/item_aliases.csv`, `config/category_group.csv`,
   `config/calendar_events.csv`, and later the margin, target and fee files. The existing Python
@@ -221,8 +228,11 @@ is needed.
   later the cost columns (plan 10.4).
 - **`fct_orders`**: receipt grain: `receipt_nr`, `sale_ts` and its truncations, `weekday`,
   `hour_of_day`, `payment_type`, the four money columns, `items` (sum of quantity), `lines`,
-  `has_food`, `has_drink`, `has_consignment`, `has_discount`, `has_modifier`,
-  `counts_as_order`, and the calendar event of the day.
+  `has_food`, `has_drink`, `has_consignment`, `has_discount`, `has_modifier`, `has_refund`,
+  `counts_as_order`, and the calendar event of the day. A receipt is dated at its payment, so a
+  refund on a later day counts on the day of the sale here but on the day of the refund in
+  `fct_sales_lines`, as in today's report. Both refunds up to 22 Nov 2026 were on the day of the
+  sale. On lines, the order attributes are named `order_items` and `order_lines`.
 - **`dim_items`**: today's catalog plus the deleted items that still appear in sales, with
   `first_sale_date`, `last_sale_date` and `is_live`.
 - **`dim_categories`**: the categories with `category_group_level_1` and `_level_2`. The groups
@@ -953,18 +963,18 @@ must match, the drawing may improve.
 
 ## Decisions
 
-D1 and D2 were agreed on 24 Nov 2026 with the first version. D3 and D4 were agreed then too and
-are reopened by this revision; D5 to D10 are new.
+D1 and D2 were agreed on 24 Nov 2026 with the first version. D3 to D10 were agreed on the same
+day after the revision (plan task 7.1b), each as proposed.
 
 | # | Question | Decision |
 | --- | --- | --- |
 | D1 | Where the definitions live | agreed: inside the package (`src/hari_lari_analytics/reporting/`) |
 | D2 | Data source of the component report | agreed: sales from API runs only; the hand-maintained `config/*.csv` files (aliases, category groups, later margins) stay and are loaded as `seed_*` tables |
-| D3 | Layout definitions | proposed: a 12-column grid in the report YAML, with a minimum size per visual and an overflow test (replaces the agreed rectangles in `layouts.yml`) |
-| D4 | Where Python lives | proposed: one query compiler; Python only for transforms, visuals, insight rule types and `@query` sources; none in components or reports (replaces the agreed Jinja SQL pattern per chart with an optional `post` step) |
-| D5 | Explaining changes | proposed: a KPI tree in `kpi_tree.yml` and a `decompose` transform with log-mean (LMDI) attribution |
-| D6 | Outputs | proposed: PDF, PNG, Telegram text and XLSX from one report; the Telegram caption becomes a report output and replaces `deliver/caption.py` at the cut-over |
-| D7 | Sample size | proposed: a default rule of 30 orders per row or period; rows below it are greyed out with their `n`, and insights skip them |
-| D8 | Build or adopt | proposed: own framework, with dbt's model layers and MetricFlow's metric kinds; models stay plain SQL |
-| D9 | Acceptance of the port | proposed: parity of each ported component's numbers with `report_data.Section`; no pixel diff, so the drawing may improve |
-| D10 | Joining category groups | proposed: by adjusted category name; `category_id` in `config/category_group.csv` is informational, because Moka reuses category ids |
+| D3 | Layout definitions | agreed: a 12-column grid in the report YAML, with a minimum size per visual and an overflow test (replaces the rectangles in `layouts.yml`) |
+| D4 | Where Python lives | agreed: one query compiler; Python only for transforms, visuals, insight rule types and `@query` sources; none in components or reports (replaces the Jinja SQL pattern per chart with an optional `post` step) |
+| D5 | Explaining changes | agreed: a KPI tree in `kpi_tree.yml` and a `decompose` transform with log-mean (LMDI) attribution |
+| D6 | Outputs | agreed: PDF, PNG, Telegram text and XLSX from one report; the Telegram caption becomes a report output and replaces `deliver/caption.py` at the cut-over |
+| D7 | Sample size | agreed: a default rule of 30 orders per row or period, overridable per metric; rows below it are greyed out with their `n`, and insights skip them |
+| D8 | Build or adopt | agreed: own framework, with dbt's model layers and MetricFlow's metric kinds as concepts only; no dbt installation; models stay plain SQL run by DuckDB in-process |
+| D9 | Acceptance of the port | agreed: parity of each ported component's numbers with `report_data.Section`; no pixel diff, so the drawing may improve |
+| D10 | Joining category groups | agreed: by adjusted category name; `category_id` in `config/category_group.csv` is informational, because Moka reuses category ids |
