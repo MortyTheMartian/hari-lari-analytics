@@ -84,7 +84,7 @@ def test_every_fixture_file_points_at_the_schema():
 
 
 def test_the_packaged_components_load():
-    assert isinstance(load_components(), dict)  # the folder fills up from plan 7.15
+    assert {"category_contributive_aov", "full_history_kpis"} <= set(load_components())
 
 
 def test_binding_plans_the_query_and_follows_the_shape():

@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: full_history_kpis
+title: Full history
+description: >-
+  The four headline cards of the cover: net sales, orders, average order value and items sold
+  from the first sale to the anchor.
+hint: "{{ meta.window.current.label }}"
+query:
+  model: fct_sales_lines
+  metrics: [net_sales, orders, aov, items_sold]
+  window: full
+  compare: none
+facet: { by: metric, layout: grid(1x4) }
+visual: { type: kpi_card }

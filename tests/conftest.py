@@ -9,6 +9,14 @@ from hari_lari_analytics.load import find_inputs, load_aliases, load_library, lo
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--update-snapshots",
+        action="store_true",
+        help="rewrite tests/snapshots/ from the current results of the components",
+    )
+
+
 @pytest.fixture
 def cleaned():
     library_path, sales_path = find_inputs(FIXTURES)

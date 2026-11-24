@@ -139,6 +139,7 @@ src/hari_lari_analytics/reporting/
     lines_export.py   # the cleaned lines for the Excel export
   components.py       # pydantic schemas, loader, parameters, overrides
   facets.py           # facet engine
+  snapshots.py        # the golden result of a component, tests/snapshots/<id>.yml
   insights.py         # insight engine and rule types
   layouts.py          # grid layout engine
   builder.py          # report builder
@@ -849,9 +850,8 @@ autocompletes and shows errors while typing:
 `# yaml-language-server: $schema=../schema/component.schema.json`. The schema is written from the
 pydantic models and lists the models, metrics, dimensions, window forms, sources and every
 transform with its options; any field of the query, facet and transform options may also hold a
-`$parameter`. A test fails when the committed file is out of date; `uv run python -m
-hari_lari_analytics.reporting.components` rewrites it (the `schema` command of plan 7.14 will
-too).
+`$parameter`. A test fails when the committed file is out of date; `uv run hari-lari-component schema`
+rewrites it.
 
 A report slot may override fields of a component without copying it, as a deep merge (mappings
 merge key by key, lists and other values are replaced; the id cannot change):
@@ -1045,15 +1045,41 @@ writes the requested outputs.
 
 ## Developer workflow
 
-Adding a component:
+Adding a component, with the developer CLI `hari-lari-component` (`reporting/cli.py`):
 
-1. `hari-lari-component new orders_heatmap --from orders_by_hour` copies a similar component and
-   creates its snapshot test.
+1. `hari-lari-component new orders_heatmap --from orders_by_hour` copies a similar component
+   with the new id (without `--from`: a minimal component with the schema line) and writes the
+   stub of its snapshot, `tests/snapshots/orders_heatmap.yml`, with the parameters it is run
+   with. A parameter without a default needs a value for the snapshot:
+   `--param category=Coffee`. The id must be new and snake_case, and the copy must load.
 2. Edit the YAML; the editor autocompletes it from the JSON Schema.
-3. `hari-lari-component run orders_heatmap --period L6W --sql --png --watch` shows the result,
-   the SQL and the rendered component on every save.
-4. `hari-lari-component validate` checks all components and reports; accept the new snapshot.
-5. Place the component in a report slot.
+3. `hari-lari-component run orders_heatmap --period L6W --sql` builds the models of the latest
+   run in `--run` (default `data/extract`; a run folder or `gs://` works too) up to `--anchor`
+   (default: the run's last payment), runs the component with its transforms and facets, and
+   prints per facet the rendered title and hint, the window, comparison, shape and trading
+   days, the result table and with `--sql` the statement and its bound parameters. `--csv`
+   prints CSV instead (one `facet` column for facets by dimension or period; the SQL then goes
+   to stderr). `--param name=value` binds any parameter, the value read as YAML (`n=5`,
+   `codes=[Cash, BCA]`); a parameter the component does not use is reported and ignored. The
+   parameters are checked before the models are built, and an undefined name in the title or
+   hint is an error. Facets by metric share one result, printed once. Later (plan 8.6):
+   `--png --watch`.
+4. `hari-lari-component validate` loads every component as strictly as a report would and
+   lists every broken one, notes a missing schema line and the parameters only a report binds,
+   and checks that the JSON Schema is current; it exits non-zero on any problem. Reports join
+   the check with plan 8.5.
+5. `uv run pytest tests/test_snapshots.py --update-snapshots -k orders_heatmap` fills in the
+   snapshot from the test fixture; read it and commit it. Without it the snapshot test fails.
+6. Place the component in a report slot.
+
+`hari-lari-component schema` rewrites the JSON Schema (`--check` only compares). `--components
+<folder>`, before the command, points every command at another folder of components.
+
+**Snapshots.** `tests/test_snapshots.py` runs every packaged component on the test fixture with
+the parameters of its snapshot and compares the result, per facet, as CSV (floats to 10
+significant digits) with `tests/snapshots/<id>.yml`, so a change to the compiler, a transform
+or a metric shows in the diff exactly which components it moves; a snapshot without a component
+fails too. Plan 8.7 builds the gallery on the same files.
 
 The gallery (plan 8.7) renders every component on the test fixture, so it is both the catalogue
 and a visual check. The Cursor rule `.cursor/rules/reporting-components.mdc` (plan 8.8) explains
@@ -1133,6 +1159,13 @@ No step needed Python beyond what the framework provides. With `facet: { by: per
   message; the fixture components of `tests/fixtures/components/` load, fit the JSON Schema
   (checked with `jsonschema`, a development dependency) and run; facets of every kind on the
   fixture and the top 5 categories of the run of 2026-11-22.
+- **CLI and snapshots** (7.14): every command on a Parquet copy of the fixture run and the
+  fixture components; a golden result per packaged component.
+- **Tracer check** (7.15, the exit of phase 7): the packaged `full_history_kpis` and
+  `category_contributive_aov` run through the loader, compiler and facet engine on the run of
+  2026-11-22 and equal today's report built by the old pandas pipeline from the same run: the
+  cover's full-history KPIs, and the categories table with its total and hint in L14D, L6W and
+  L3M; the CLI prints the same numbers.
 - **Visuals and layouts** (8.2, 8.4): every visual renders on the fixture; no text overflows.
 - **Snapshots** (8.7): a golden result per component.
 - **Ported components** (9.3): parity of the numbers with `report_data.Section`.

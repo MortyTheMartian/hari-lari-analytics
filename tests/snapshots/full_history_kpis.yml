@@ -1,0 +1,24 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: full_history_kpis
+params: {}
+facets:
+- key: net_sales
+  label: Net Sales
+  metric: net_sales
+  shape: single
+  csv: |
+    is_total,net_sales,orders,aov,items_sold,n_orders
+    True,213000,4,53250,7,4
+- key: orders
+  label: Orders
+  metric: orders
+  same_result_as: net_sales
+- key: aov
+  label: Avg Order Value
+  metric: aov
+  same_result_as: net_sales
+- key: items_sold
+  label: Items Sold
+  metric: items_sold
+  same_result_as: net_sales

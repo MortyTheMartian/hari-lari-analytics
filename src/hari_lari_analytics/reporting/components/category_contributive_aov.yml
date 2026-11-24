@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: category_contributive_aov
+title: Adjusted categories & contributive AOV
+description: >-
+  One row per adjusted category with its share of net sales, penetration, category AOV and
+  contributive AOV, the categories sold only in the prior period, and the total, whose
+  contributive AOV is the AOV.
+hint: >-
+  Sorted by net sales · AOV = Σ contributive AOV = Σ penetration × category AOV ·
+  a category's share of AOV equals its % of net{% if meta.compare_ok %} · Δ vs prior period{% endif %}
+params: { period: L6W }
+query:
+  model: fct_sales_lines
+  dimensions: [adjusted_category]
+  metrics: [net_sales, share, items_sold, orders, penetration, category_aov, contributive_aov]
+  window: $period
+  compare: prior
+  totals: true
+  keep_prior_only: true
+visual:
+  type: table
+  bars: [share]
+  deltas: { penetration: delta, category_aov: change, contributive_aov: delta }
+  bold: [net_sales, contributive_aov]
+insights: [movers]
