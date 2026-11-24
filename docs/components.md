@@ -100,10 +100,13 @@ flowchart LR
   Builder --> Out["PDF, PNG, Telegram text, XLSX"]
 ```
 
-One run opens one in-memory DuckDB connection, builds all models as views over the run's tables
-(a few MB, so nothing is materialised), runs the checks, and executes every component against
-it. The tables are read with the existing `load_run` (local folder or `gs://`) and registered as
-`raw_<table>` views with the columns the models need, cast to fixed types: an empty table comes
+One run opens one in-memory DuckDB connection, builds all models over the run's tables, runs
+the checks, and executes every component against it. The model files are views, but the builder
+creates each one once as a table, in dependency order: the checks and the components query the
+models many times, and a stack of views would recompute every layer on every query (39 checks
+took 40 seconds as views and 0.07 seconds as tables, with the build itself at 0.3 seconds). The
+tables are read with the existing `load_run` (local folder or `gs://`) and copied into
+`raw_<table>` tables with the columns the models need, cast to fixed types: an empty table comes
 back from Parquet without any columns, and a column that is NULL on every row has no type. A
 missing optional table (discounts, modifiers, refunds) becomes an empty view; a missing required
 table or column fails the build. `run_context` holds the anchor (default: the day of the last
@@ -252,24 +255,38 @@ pandas lines row for row.
 
 ## Checks
 
-`checks.yml` holds data tests in the style of dbt. They run on every build, including the Monday
-job, and a broken check fails the run with the admin alert, like the sanity checks of plan 1.11.
+`checks.yml` holds data tests in the style of dbt, for any model (staging included). They run on
+every build (`open_run` raises `DataCheckError` on a failing error-level check and returns the
+warnings), and a broken check will fail the Monday job with the admin alert, like the sanity
+checks of plan 1.11, once the job builds the component report (plan 9.6); until then the live
+job does not run them. A check is an error unless it says `severity: warn`; warnings become data
+notes. Each failure names the check (or its `message`) and shows up to five sample rows, using
+the model's `sample_columns`.
 
 ```yaml
-fct_orders:
-  unique: [receipt_nr]
-  not_null: [receipt_nr, sale_ts, net_sales]
-fct_sales_lines:
-  not_null: [receipt_nr, sale_ts, adjusted_item, adjusted_category]
-  accepted_values:
-    category_group_level_1: [food, drink, consignment, unmapped]
-  relationships:
-    receipt_nr: fct_orders.receipt_nr
-  expressions:
-    - gross_sales - discounts - refunds = net_sales
-totals:
+models:
+  fct_sales_lines:
+    sample_columns: [receipt_nr, item]
+    unique: [[payment_id, line_uuid]]          # a column or a list of columns
+    not_null: [receipt_nr, sale_ts, adjusted_item, adjusted_category]
+    accepted_values:
+      category_group_level_1: [food, drink, consignment, unmapped]
+    relationships:
+      receipt_nr: fct_orders.receipt_nr
+    expressions:
+      - gross_sales - discounts - refunds = net_sales
+  dim_calendar:
+    expressions:
+      - expr: is_trading_day or is_closure
+        severity: warn
+        message: days without sales and without a closure in config/calendar_events.csv
+totals:                                         # sum, min, max or count of model.column
   - sum(fct_sales_lines.net_sales) = sum(fct_orders.net_sales)
 ```
+
+Besides these, the checks cover fractional Rupiah amounts and lines without a payment (both
+were errors in `load_api.py`), unique payments, items, categories and days, the relationships
+of the lines to every dimension, and the totals of all four money columns and the quantity.
 
 ## Semantic layer
 
@@ -959,7 +976,7 @@ must match, the drawing may improve.
 - Arbitrary SQL or Python inside a component or report. A new need becomes a compiler option, a
   transform, a visual or, for a source that is not an SQL aggregate, a registered `@query`.
 - Interactive dashboards (plan 10.18 covers BigQuery and Looker Studio separately).
-- Materialised tables or incremental models; at a few MB, views are enough.
+- Persistent or incremental models; at a few MB, every run builds all models in memory.
 - The customer branch of the KPI tree: only 38 of 1,501 receipts (2.5%) in the run of
   2026-11-22 have a customer attached.
 - Forecasting: the history starts on 23 Jul 2026.

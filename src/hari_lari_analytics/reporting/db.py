@@ -1,11 +1,12 @@
 """One in-memory DuckDB connection per run: the run tables, the seeds and the models.
 
-The run tables of one extraction run become `raw_<table>` views and the config CSV files become
-`seed_<name>` views, both with the declared columns cast to fixed types, so an empty table or a
+The run tables of one extraction run become `raw_<table>` tables and the config CSV files
+`seed_<name>` tables, both with the declared columns cast to fixed types, so an empty table or a
 column that is NULL on every row still has the type the models expect. `run_context` holds the
 anchor. The models are the SQL files in `models/`, one `create or replace view <name> as ...`
 each, named with their layer prefix (`stg_`, `int_`, `dim_`, `fct_`). A model reads only from
-its own or a lower layer; within that rule they are built in the order of the names they use.
+its own or a lower layer; within that rule they are built in the order of the names they use,
+each once as a table.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from hari_lari_analytics.load import (
     load_category_groups,
 )
 from hari_lari_analytics.load_api import ApiRun, load_run
+from hari_lari_analytics.reporting.checks import CheckReport, check
 
 LAYER_RANK = {"raw": 0, "seed": 0, "stg": 1, "int": 2, "dim": 3, "fct": 4}
 REFERENCE = re.compile(r"\b((?:raw|seed|stg|int|dim|fct)_\w+)\b")
@@ -152,12 +154,25 @@ def connect(
     return con
 
 
+@dataclass
+class RunDb:
+    """The models of one run, and the warnings of its data checks."""
+
+    run: ApiRun
+    con: duckdb.DuckDBPyConnection
+    checks: CheckReport
+
+
 def open_run(
     location: str | Path, config_dir: Path = Path("config"), anchor: date | None = None
-) -> tuple[ApiRun, duckdb.DuckDBPyConnection]:
-    """Load the latest run in `location` (local or gs://) and build the models over it."""
+) -> RunDb:
+    """Load the latest run in `location` (local or gs://), build the models and check them.
+
+    A failing data check of severity error raises `DataCheckError`.
+    """
     run = load_run(location)
-    return run, connect(run.tables, Seeds.from_dir(config_dir), anchor)
+    con = connect(run.tables, Seeds.from_dir(config_dir), anchor)
+    return RunDb(run, con, check(con))
 
 
 def _register(
@@ -170,7 +185,7 @@ def _register(
             raise InputError(f"The run has no table {name.removeprefix('raw_')}")
         nulls = [f'null::{t} as "{c}"' for c, t in {**source.columns, **source.optional}.items()]
         select = ", ".join([*nulls, "0::bigint as _row"])
-        con.execute(f"create view {name} as select {select} where false")
+        con.execute(f"create table {name} as select {select} where false")
         return
     missing = [c for c in source.columns if c not in df.columns]
     if missing:
@@ -180,7 +195,9 @@ def _register(
         f'cast("{c}" as {t}) as "{c}"' if c in df.columns else f'null::{t} as "{c}"'
         for c, t in {**source.columns, **source.optional}.items()
     ]
-    con.execute(f"create view {name} as select {', '.join(select)}, _row from _df_{name}")
+    # a table, not a view: every model query would otherwise scan the DataFrame again
+    con.execute(f"create table {name} as select {', '.join(select)}, _row from _df_{name}")
+    con.unregister(f"_df_{name}")
 
 
 def model_sql() -> dict[str, str]:
@@ -212,6 +229,8 @@ def build_order(models: dict[str, str]) -> list[str]:
 
 
 def build_models(con: duckdb.DuckDBPyConnection) -> None:
+    """Build every model once, as a table: the checks and components query them many times."""
     models = model_sql()
     for name in build_order(models):
-        con.execute(models[name])
+        view = f"create or replace view {name} as"
+        con.execute(models[name].replace(view, f"create or replace table {name} as", 1))

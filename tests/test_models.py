@@ -244,16 +244,16 @@ def test_parity_with_the_pandas_lines_on_the_real_run():
     anchor = date(2026, 11, 22)
     run, result = load_api_sales(REAL_RUN, load_aliases(Path("config/item_aliases.csv")))
     expected, _ = prepare_lines(result, Path("config/category_group.csv"), anchor, source="api")
-    _, con = open_run(REAL_RUN, Path("config"), anchor)
+    db = open_run(REAL_RUN, Path("config"), anchor)
     assert len(expected) == 2707
-    _assert_same_lines(con, expected)
+    _assert_same_lines(db.con, expected)
 
 
 @pytest.mark.skipif(not REAL_RUN.is_dir(), reason="needs the real extraction run (kept out of git)")
 def test_every_day_without_sales_is_a_closure_in_the_real_calendar():
-    _, con = open_run(REAL_RUN, Path("config"), date(2026, 11, 22))
+    db = open_run(REAL_RUN, Path("config"), date(2026, 11, 22))
     rows = _query(
-        con,
+        db.con,
         "select count(*) filter (where not is_trading_day), "
         "count(*) filter (where not is_trading_day and not is_closure), "
         "count(*) filter (where is_trading_day and is_closure) from dim_calendar",

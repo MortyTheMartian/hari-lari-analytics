@@ -1,0 +1,79 @@
+# Data checks, run on every build (docs/components.md, "Checks"). An error stops the build;
+# `severity: warn` only reports. A list item is the short form (a column, or an expression)
+# or a mapping with `severity` and `message`.
+
+models:
+  stg_transactions:
+    unique: [payment_id]
+    not_null: [payment_id, receipt_nr, sale_ts]
+
+  stg_transaction_lines:
+    sample_columns: [payment_no, item]
+    expressions:
+      - expr: >-
+          gross_sales = round(gross_sales) and discount_amount = round(discount_amount)
+          and net_sales = round(net_sales)
+        message: the API data contains fractional Rupiah amounts
+
+  stg_items:
+    unique:
+      - columns: item_id
+        severity: warn
+        message: an item id is listed more than once in the catalog (the first row is used)
+
+  int_signed_lines:
+    sample_columns: [payment_id, item]
+    not_null:
+      - column: sale_ts
+        message: a line has no matching payment
+    expressions:
+      - gross_sales - discounts - refunds = net_sales
+
+  fct_sales_lines:
+    sample_columns: [receipt_nr, item]
+    unique: [[payment_id, line_uuid]]
+    not_null: [receipt_nr, sale_ts, item, adjusted_item, adjusted_category, net_sales]
+    accepted_values:
+      event_type: [Payment, Refund]
+      category_group_level_1: [food, drink, consignment, unmapped]
+    relationships:
+      receipt_nr: fct_orders.receipt_nr
+      adjusted_item: dim_items.adjusted_item
+      adjusted_category: dim_categories.adjusted_category
+      sale_date: dim_calendar.date
+    expressions:
+      - gross_sales - discounts - refunds = net_sales
+      - (quantity < 0) = is_refund
+
+  fct_orders:
+    sample_columns: [receipt_nr]
+    unique: [receipt_nr]
+    not_null: [receipt_nr, sale_ts, net_sales, counts_as_order]
+    expressions:
+      - gross_sales - discounts - refunds = net_sales
+
+  dim_items:
+    unique: [adjusted_item]
+
+  dim_categories:
+    sample_columns: [adjusted_category]
+    unique: [adjusted_category]
+    expressions:
+      - expr: category_group_level_1 <> 'unmapped' or first_sale_date is null
+        severity: warn
+        message: sold categories without a group in config/category_group.csv
+
+  dim_calendar:
+    sample_columns: [date]
+    unique: [date]
+    expressions:
+      - expr: is_trading_day or is_closure
+        severity: warn
+        message: days without sales and without a closure in config/calendar_events.csv
+
+totals:
+  - sum(fct_sales_lines.net_sales) = sum(fct_orders.net_sales)
+  - sum(fct_sales_lines.gross_sales) = sum(fct_orders.gross_sales)
+  - sum(fct_sales_lines.discounts) = sum(fct_orders.discounts)
+  - sum(fct_sales_lines.refunds) = sum(fct_orders.refunds)
+  - sum(fct_sales_lines.quantity) = sum(fct_orders.items)
