@@ -113,10 +113,15 @@ models many times, and a stack of views would recompute every layer on every que
 took 40 seconds as views and 0.07 seconds as tables, with the build itself at 0.3 seconds). The
 tables are read with the existing `load_run` (local folder or `gs://`) and copied into
 `raw_<table>` tables with the columns the models need, cast to fixed types: an empty table comes
-back from Parquet without any columns, and a column that is NULL on every row has no type. A
-missing optional table (discounts, modifiers, refunds) becomes an empty view; a missing required
-table or column fails the build. `run_context` holds the anchor (default: the day of the last
-payment); the models end on it.
+back from Parquet without any columns, and a column that is NULL on every row has no type. The
+run tables and their columns are declared in `reporting/sources.yml` (plan 9.2), so a new Moka
+table (`item_variants` for the stock) is one entry there and a `stg_` model, without Python; a
+model that reads a `raw_` table not in `sources.yml` (or a `seed_` that is not a seed, or a model
+that does not exist) fails the build with its name. A missing optional table (`required: false`:
+discounts, modifiers, refunds, item variants) becomes an empty view; a missing required table or
+column fails the build. `run_context` holds the anchor (default: the day of the last payment),
+which the models end on, and `extracted_at`, the run's extraction time from its manifest (local
+clock time), which a snapshot model such as `fct_stock` carries as its as-of time.
 
 ## Folder layout
 
@@ -326,13 +331,16 @@ fct_orders:
   exposed: true                # components may query it
 ```
 
-- **`time`**: a model without one cannot be queried, since every query has a window.
+- **`time`**: a model with one is queried over a window, which the query must name. A model
+  without one is a **snapshot** (plan 9.2: `fct_stock`, the stock levels at extraction): its
+  queries name no window and no comparison, there are no trading days, and the as-of time is a
+  column of the model (`counted_at`), shown through a metric such as `stock_counted_at`.
 - **`calendar`**: needs `time`. Without it, `trading_days` is empty and the per-trading-day
   metrics stay blank.
 - **`sample_size`**: a `count` metric on the model. The default `min_n` of `project.yml` counts
   it; a model without one (no orders) has no default sample-size rule.
 - **`exposed`**: only `dim_` and `fct_` models can be. The schema of a component offers the
-  exposed models that have a time column and at least one metric.
+  exposed models that have at least one metric.
 
 Today `fct_sales_lines` and `fct_orders` have all six fields, `dim_calendar` has a time column and
 the calendar, and no primary key is declared where duplicates are legitimate
@@ -570,7 +578,9 @@ per receipt, so `order_grain` metrics such as orders may be summed over them; `i
 category, category groups) and `line` (discount code, modifier, refund line) can have several
 values per receipt. `domain` tells the compiler which empty values to fill: `span`, `all` (the
 listed `values`), `calendar` (the time truncations, through `dim_calendar`) or `none`. `labels`
-and `null_label` are the display names of values and of the empty value. `bins` turns a number
+and `null_label` are the display names of values and of the empty value. A dimension with
+`values` sorts in their order (`stock_status`: negative, out, low, ok), and a `sort` metric that
+is not on the queried model (net sales on `fct_stock`) falls back to sorting by the value. `bins` turns a number
 into ordered buckets, in SQL: an exact value, a range such as `"2-3"`, or an open last bucket
 such as `"5+"`. The category groups of plan 2.11, the order attributes and the calendar events
 are ordinary dimensions.
@@ -821,7 +831,7 @@ input; `ctx` holds the registry and the run's calendar, which is in memory. A tr
 | `rank` | add a rank column (`into`, `method` min, dense or first), over the regular rows, optionally inside each group of `within` columns such as the time bucket |
 | `fill_domain` | add the missing values of a dimension's domain as rows with zeros: the bins, all seven weekdays, the hours between the first and last, or the `values` given. A filled row has zero sums and counts, no value for ratios and no comparison (the query dropped what the comparison window held for it); its trading days come from the rows with the same weekday, else from the calendar |
 | `per_trading_day` | divide the metrics that sum (orders, net sales, ...) by the `trading_days` of each row, which the query counted per bucket, per weekday or for the window, and the prior values by the prior trading days; changes are recomputed; ratios, relative metrics and the sample-size columns stay; a count becomes a decimal; a row without trading days has no value |
-| `growth_vs_previous` | add `<metric>_growth`: each bucket over the one before, per group, as a ratio; the first bucket uses the bucket before the window (`buckets_before`, only when fully inside the history), which is dropped afterwards; no growth for a previous value of 0, for the window total, and by default for the daily grain (`grains`) |
+| `growth_vs_previous` | add `<metric>_growth`: each bucket over the one before, per group, as a ratio (for a share or rate, format `pct`, the difference, shown in percentage points: an attach rate from 40% to 45% is +5.0 pp, not +12.5%); the first bucket uses the bucket before the window (`buckets_before`, only when fully inside the history), which is dropped afterwards; no growth for a previous value of 0, for the window total, and by default for the daily grain (`grains`) |
 | `cumulative_share` | add the running share of a fully additive metric, largest first, over the total row when there is one (a top 15 reads against all sales); an `order_grain` metric (orders) only when no dimension has several values per receipt |
 | `pivot` | turn two dimensions into a matrix: the row dimension first, one column per value of the column dimension (shape `matrix`, `meta.matrix` names the value; `Result.matrix_frame()` gives the plain matrix); several rows in one cell are an error |
 | `classify` | add a class column (`into`): `mode: thresholds` (bands with an inclusive `upto`, else `otherwise`; ABC classes from `cumulative_share`), `quadrants` (two columns against their median, mean or a given number; a value on the split is high; the four classes are named by `labels`) or `lifecycle` (see below). Only the regular rows get a class; the classes and the splits used are kept in `meta.classifications` for the visuals |
@@ -1103,8 +1113,9 @@ def table(area: Area, result: Result, options: TableOptions, ctx: DrawContext) -
   (`stacked_share_bar`) takes a share (a `pct` metric such as `share`), so it never adds up
   amounts itself. An error names the file and the option, like every loader error.
 - `text(result, options, ctx)`, where a visual has one, gives its plain-text form for the
-  Telegram text blocks (plan 8.5): `kpi_card`, `text_line`, `notes_card` and `insights` have
-  one.
+  Telegram text blocks (plan 8.5): `kpi_card`, `text_line`, `notes_card`, `insights` and
+  `table` (plan 9.2: one line per row, `Negative · Focaccia Tomato: In stock -7 · Alert at 0`;
+  without dimensions one line per metric with its change) have one.
 
 The JSON Schema of a component lists every visual with its options, so the editor
 autocompletes `visual:` too.

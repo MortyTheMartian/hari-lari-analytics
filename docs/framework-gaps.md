@@ -72,4 +72,28 @@ gaps: the framework is complete for new views of the sales, not yet for a new ki
 
 ## Status (9.2)
 
-To be filled in by plan 9.2.
+| Gap | Status | How |
+| --- | --- | --- |
+| G1 | closed | The run tables are declared in `reporting/sources.yml` (columns, types, `required`); `load_run` reads the tables listed there, so a new Moka table is one YAML entry and a `stg_` model. A model that reads an undeclared `raw_` table, an unknown `seed_` or a missing model fails the build naming the model and the table, instead of DuckDB's traceback. |
+| G2 | closed | A model without `time` is a snapshot: its query names no window and no comparison (both refused with a sentence that says why), and a timed model's query must name its window. `fct_stock` lost its fake date. |
+| G3 | closed | A dimension whose sort metric is not on the queried model sorts by its value; the duplicate dimension is gone. |
+| G4 | closed | `table` has a text form (one line per row; without dimensions, one per metric with its change); the stock text block uses the component as it is. |
+| G5 | closed | `run_context.extracted_at` is the run's extraction time (manifest `run_at`, local clock); `fct_stock.counted_at` carries it and the metric `stock_counted_at` shows it, so the report and its text say "Moka stock counted at 22 Nov 14:49" through an ordinary `text_line` component (`stock_counted_at`). |
+| G6 | closed | A dimension with `values` sorts in their order (negative, out, low, ok). |
+| G7 | open | Shading a dimension value by tone is a new table option; the order and the status label carry the meaning for now. Left for when a second component needs it. |
+| G8 | closed | `growth_vs_previous` gives the difference for a `pct` metric and the text shows it in pp (+4.9 pp). |
+| G9 | closed | The value and growth labels of `bar_trend` sit above the bar or its prior tick, whichever is higher. |
+| G10 | open | Design, not a gap: the theme draws every prior value in the secondary colour (also the prior ticks of today's report); changing it is a theme decision for the owner. |
+
+All stock components and the report are YAML only now: `stock_alert` (the table),
+`stock_counted_at` (the as-of line) and the report `reports/stock_alert.yml` with its Telegram
+text. The test fixture has an `item_variants` table (one variant per status, an untracked and a
+deleted one), so the snapshots and tests cover the stock.
+
+### Trial 2 (9.2, 25 Nov 2026)
+
+G2 was structural, so one more new component on the snapshot model, YAML only:
+
+| Component | Time | YAML only | Notes |
+| --- | --- | --- | --- |
+| `stock_by_status`: stock-tracked item-variants per status (a new `count(*)` metric `stock_variants` on `fct_stock`, `hbar`) | 1 min | yes | First run right and in status order; `fill_domain` added the "Out of stock 0" bar. Placed next to the table on the stock page. |

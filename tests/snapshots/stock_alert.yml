@@ -8,4 +8,7 @@ facets:
   metric: null
   shape: rows
   csv: |
-    stock_item_variant,stock_status,is_total,stock_level,alert_at,trading_days
+    stock_status,adjusted_item_variant,is_total,stock_level,alert_at,trading_days
+    negative,Focaccia Tomato,False,-7,0,
+    out,Latte-Hot,False,0,5,
+    low,Latte-Cold,False,3,5,

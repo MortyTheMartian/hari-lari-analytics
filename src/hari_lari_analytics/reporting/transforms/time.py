@@ -107,7 +107,8 @@ def _growth_requires(options: GrowthOptions, registry: Registry) -> Requirements
 
 @transform("growth_vs_previous", GrowthOptions, shapes=("series",), requires=_growth_requires)
 def growth_vs_previous(result: Result, options: GrowthOptions, ctx: TransformContext) -> Result:
-    """Add `<metric>_growth`: each bucket over the one before it, per group, as a ratio.
+    """Add `<metric>_growth`: each bucket over the one before it, per group, as a ratio; for a
+    share or rate (format pct) the difference instead, shown in percentage points.
 
     The first bucket compares with the bucket before the window, which the query adds with
     `buckets_before` (only when that bucket lies fully within the sales history); without it the
@@ -146,7 +147,11 @@ def growth_vs_previous(result: Result, options: GrowthOptions, ctx: TransformCon
             previous = frame.groupby(list(group.columns), dropna=False, sort=False)["_value"].shift(
                 1
             )
-            df[f"{m}_growth"] = df[m] / previous.where(lambda s: s != 0).reindex(df.index) - 1
+            previous = previous.reindex(df.index)
+            if available[m].format == "pct":
+                df[f"{m}_growth"] = df[m] - previous
+            else:
+                df[f"{m}_growth"] = df[m] / previous.where(lambda s: s != 0) - 1
     else:
         for m in chosen:
             df[f"{m}_growth"] = np.nan

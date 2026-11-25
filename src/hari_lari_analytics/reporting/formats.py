@@ -147,8 +147,9 @@ def default_change(metric: Metric) -> ChangeKind:
 
 
 def comparison_text(value, metric: Metric, kind: ChangeKind, style: Style = "full") -> str:
-    """The display string of a change, delta or growth of a metric."""
-    if kind == "delta":
+    """The display string of a change, delta or growth of a metric; the growth of a share or
+    rate is a difference, in percentage points."""
+    if kind == "delta" or (kind == "growth" and metric.format == "pct"):
         return delta_text(value, metric.format, style)
     return ratio_text(value)
 

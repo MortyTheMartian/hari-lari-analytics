@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: stock_by_status
+title: Stock status
+description: >-
+  How many stock-tracked item-variants are negative, out of stock, low or ok, as Moka counted
+  them at the extraction.
+hint: "Stock-tracked item-variants per status · Moka's count at extraction"
+query:
+  model: fct_stock
+  dimensions: [stock_status]
+  metrics: [stock_variants]
+transforms: [fill_domain]
+visual: { type: hbar, metric: stock_variants }

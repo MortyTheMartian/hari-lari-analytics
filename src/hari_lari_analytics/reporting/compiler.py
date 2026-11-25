@@ -41,6 +41,7 @@ from hari_lari_analytics.reporting.registry import (
     Metric,
     Registry,
     RegistryError,
+    SortSpec,
     parse_bins,
     render_expression,
     sql_literal,
@@ -86,7 +87,7 @@ class Query(_Strict):
     model: str
     metrics: list[str] = Field(min_length=1)
     dimensions: list[str] = []
-    window: str
+    window: str | None = None  # required on a model with a time column, refused on a snapshot
     compare: Compare = "none"
     where: dict[str, WhereValue] = {}
     focus: dict[str, WhereValue] = {}
@@ -105,7 +106,7 @@ class CompiledQuery:
     sql: str
     params: dict
     query: Query
-    window: ResolvedWindow
+    window: ResolvedWindow | None  # None on a model without a time column (a snapshot)
     metrics: dict[str, Metric]  # every metric and n_ column of the result, by column
     dimensions: dict[str, Dimension]
     shape: Shape
@@ -206,14 +207,21 @@ class _Compiler:
 
     def _check(self) -> None:
         q, reg = self.q, self.reg
-        if q.window.startswith("$"):
+        if q.window is not None and q.window.startswith("$"):
             raise QueryError(f"window: the parameter {q.window} is not bound")
         model = reg.model(q.model)
         if not model.exposed:
             raise QueryError(f"model: {q.model} is not exposed to components (models.yml)")
-        if model.time is None:
+        if model.time is None and q.window is not None:
             raise QueryError(
-                f"model: {q.model} has no time column in models.yml, so no window applies to it"
+                f"window: {q.model} has no time column in models.yml (a snapshot), so no window "
+                "applies to it; leave out window"
+            )
+        if model.time is None and q.compare != "none":
+            raise QueryError(f"compare: {q.model} is a snapshot without a history to compare")
+        if model.time is not None and q.window is None:
+            raise QueryError(
+                f"window: {q.model} has the time column {model.time}, so the query needs a window"
             )
         self.model = model
         for field, items in (("metrics", q.metrics), ("dimensions", q.dimensions)):
@@ -229,11 +237,14 @@ class _Compiler:
         self.n_dims = [d for d in q.dimensions if d != self.time]
         self.dims = dims
 
-        try:
-            self.window = resolve(q.window, self.cal, q.compare)
-        except ValueError as error:
-            raise QueryError(f"window: {error}") from None
-        self.compare_run = self.window.comparison is not None and self.window.compare_ok
+        self.window: ResolvedWindow | None = None
+        if q.window is not None:
+            try:
+                self.window = resolve(q.window, self.cal, q.compare)
+            except ValueError as error:
+                raise QueryError(f"window: {error}") from None
+        window = self.window
+        self.compare_run = bool(window and window.comparison is not None and window.compare_ok)
 
         fixed = TIME_GRAIN.get(self.time) if self.time else None
         if self.time is None and q.grain:
@@ -279,10 +290,15 @@ class _Compiler:
         for metric_id in q.metrics:
             counts += [c for c in reg.min_n(metric_id, q.model) if c not in counts]
         self.counts = counts
+        on_model = set(reg.metrics_on(q.model))
+        self.sorts = {
+            d: self.dims[d].sort if self.dims[d].sort.by in (on_model | {"value"}) else SortSpec()
+            for d in self.n_dims
+        }
         if q.top:
             sort = [q.top.by]
         else:
-            sort = [self.dims[d].sort.by for d in self.n_dims if self.dims[d].sort.by != "value"]
+            sort = [s.by for s in self.sorts.values() if s.by != "value"]
         self.plan = reg.plan([*q.metrics, *counts, *sort], q.model)
         if q.top and reg.metric(q.top.by).totals:
             raise QueryError(f"top: cannot rank by the relative metric {q.top.by}")
@@ -417,7 +433,7 @@ class _Compiler:
             metric.expression,
             ref=self._ranking_expr,
             total=lambda m: "null",
-            trading_days=str(self.window.current.trading_days),
+            trading_days=str(self.window.current.trading_days) if self.window else "null",
         )
         return f"({expression})"
 
@@ -445,8 +461,9 @@ class _Compiler:
 
     def compile(self) -> CompiledQuery:
         q = self.q
-        cur, prior = self.window.current, self.window.comparison
-        self.params |= {"cur_lo": cur.start, "cur_hi": cur.end}
+        if self.window is not None:
+            cur, prior = self.window.current, self.window.comparison
+            self.params |= {"cur_lo": cur.start, "cur_hi": cur.end}
         if self.compare_run:
             self.params |= {"prior_lo": prior.start, "prior_hi": prior.end}
         if self.extra:
@@ -545,7 +562,7 @@ class _Compiler:
     def _rows(self, side: str) -> str:
         select = ["m.*"]
         join = ""
-        day = f"m.{self.model.time}"
+        day = f"m.{self.model.time}" if self.model.time else None
         if self.time:
             select += ["b._ord", "b._t"]
             if side == "prior":
@@ -559,11 +576,10 @@ class _Compiler:
         if self.focus:
             focus = " and ".join(self._filters("m", filters=self.focus))
             select.append(f"coalesce({focus}, false) as _f")
-        where = [f"{day} between ${side}_lo and ${side}_hi", *self._filters("m")]
-        return (
-            f"select {', '.join(select)}\nfrom {self.q.model} as m{join}\n"
-            f"where {' and '.join(where)}"
-        )
+        where = [f"{day} between ${side}_lo and ${side}_hi"] if day else []
+        where += self._filters("m")
+        sql = f"select {', '.join(select)}\nfrom {self.q.model} as m{join}"
+        return sql + (f"\nwhere {' and '.join(where)}" if where else "")
 
     def _n_keys(self, left: str, right: str) -> list[str]:
         return [f"{left}._n{i} is not distinct from {right}._n{i}" for i in range(len(self.n_dims))]
@@ -649,7 +665,7 @@ class _Compiler:
         else:
             prior_lo, prior_hi = "null::date", "null::date"
         frame = (
-            "select 2 as _lvl, null::integer as _ord, $cur_lo as _lo, $cur_hi as _hi, "
+            f"select 2 as _lvl, null::integer as _ord, {self._cur_bounds()}, "
             f"{prior_lo} as _plo, {prior_hi} as _phi"
         )
         if self.time:
@@ -677,6 +693,12 @@ class _Compiler:
             )
         )
         return ctes
+
+    def _cur_bounds(self) -> str:
+        """The current window's first and last day as `_lo, _hi` (NULL for a snapshot)."""
+        if self.window is None:
+            return "null::date as _lo, null::date as _hi"
+        return "$cur_lo as _lo, $cur_hi as _hi"
 
     def _joined_values(self, frame: str) -> list[str]:
         """The aggregates of the current (c) and prior (p) side on a row of the frame."""
@@ -707,7 +729,7 @@ class _Compiler:
             if self.q.keep_prior_only and self.compare_run:
                 keys += f"\nunion\nselect _lvl, {n_list}false from prior_a"
             frame = (
-                f"select k.*, $cur_lo as _lo, $cur_hi as _hi, {prior_lo} as _plo, "
+                f"select k.*, {self._cur_bounds()}, {prior_lo} as _plo, "
                 f"{prior_hi} as _phi\nfrom keys as k"
             )
             on_cur = ["c._lvl = f._lvl", *self._n_keys("c", "f")]
@@ -858,13 +880,19 @@ class _Compiler:
             order.append(f"{self.q.top.by} desc nulls last")
         else:
             for i, d in enumerate(self.n_dims):
-                sort = self.dims[d].sort
+                sort = self.sorts[d]
                 direction = "desc" if sort.desc else "asc"
+                values = self.dims[d].values
                 if sort.by != "value":
                     order.append(f"{sort.by} {direction} nulls last")
                 elif d in self.bins:
                     whens = " ".join(
                         f"when {sql_literal(b.label)} then {k}" for k, b in enumerate(self.bins[d])
+                    )
+                    order.append(f"case _n{i} {whens} end {direction} nulls last")
+                elif values:
+                    whens = " ".join(
+                        f"when {sql_literal(v)} then {k}" for k, v in enumerate(values)
                     )
                     order.append(f"case _n{i} {whens} end {direction} nulls last")
                 else:

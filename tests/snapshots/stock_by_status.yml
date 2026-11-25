@@ -1,0 +1,15 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: stock_by_status
+params: {}
+facets:
+- key: null
+  label: null
+  metric: null
+  shape: rows
+  csv: |
+    stock_status,is_total,stock_variants,trading_days
+    negative,False,1,
+    out,False,1,
+    low,False,1,
+    ok,False,1,

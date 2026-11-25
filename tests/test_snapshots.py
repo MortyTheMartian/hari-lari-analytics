@@ -18,7 +18,7 @@ from hari_lari_analytics.reporting.facets import run_facets
 from hari_lari_analytics.reporting.queries import QueryContext
 from hari_lari_analytics.reporting.snapshots import read_snapshot, snapshot_text
 
-from .api_fixture import api_tables
+from .api_fixture import EXTRACTED_AT, api_tables
 from .components_fixture import all_components
 from .test_models import LAST_SALE, SEEDS
 
@@ -28,7 +28,7 @@ COMPONENTS = sorted(all_components())
 
 @pytest.fixture(scope="module")
 def ctx():
-    return QueryContext.create(connect(api_tables(), SEEDS, LAST_SALE))
+    return QueryContext.create(connect(api_tables(), SEEDS, LAST_SALE, extracted_at=EXTRACTED_AT))
 
 
 @pytest.fixture(scope="module")

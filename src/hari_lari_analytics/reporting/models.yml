@@ -80,7 +80,6 @@ fct_sales_lines:
 fct_stock:
   description: One stock-tracked item-variant with its stock level at extraction time
   primary_key: variant_id
-  time: stock_date
   exposed: true
 
 fct_orders:

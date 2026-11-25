@@ -46,7 +46,6 @@
                     "sale_quarter",
                     "sale_week",
                     "sale_year",
-                    "stock_item_variant",
                     "stock_status",
                     "variant",
                     "weekday"
@@ -200,7 +199,9 @@
                       "penetration",
                       "refunds",
                       "share",
-                      "stock_level"
+                      "stock_counted_at",
+                      "stock_level",
+                      "stock_variants"
                     ],
                     "description": "a metric of metrics.yml"
                   },
@@ -266,7 +267,6 @@
                       "sale_quarter",
                       "sale_week",
                       "sale_year",
-                      "stock_item_variant",
                       "stock_status",
                       "variant",
                       "weekday"
@@ -413,7 +413,6 @@
                   "sale_quarter",
                   "sale_week",
                   "sale_year",
-                  "stock_item_variant",
                   "stock_status",
                   "variant",
                   "weekday"
@@ -518,7 +517,6 @@
                   "sale_quarter",
                   "sale_week",
                   "sale_year",
-                  "stock_item_variant",
                   "stock_status",
                   "variant",
                   "weekday"
@@ -665,7 +663,6 @@
                   "sale_quarter",
                   "sale_week",
                   "sale_year",
-                  "stock_item_variant",
                   "stock_status",
                   "variant",
                   "weekday"
@@ -698,8 +695,7 @@
       },
       "required": [
         "model",
-        "metrics",
-        "window"
+        "metrics"
       ],
       "title": "Query",
       "type": "object"
@@ -791,7 +787,9 @@
                 "penetration",
                 "refunds",
                 "share",
-                "stock_level"
+                "stock_counted_at",
+                "stock_level",
+                "stock_variants"
               ],
               "description": "a metric of metrics.yml"
             },
@@ -869,7 +867,9 @@
                 "penetration",
                 "refunds",
                 "share",
-                "stock_level"
+                "stock_counted_at",
+                "stock_level",
+                "stock_variants"
               ],
               "description": "a metric of metrics.yml"
             },
@@ -1336,7 +1336,7 @@
           },
           {
             "type": "object",
-            "description": "Add `<metric>_growth`: each bucket over the one before it, per group, as a ratio.",
+            "description": "Add `<metric>_growth`: each bucket over the one before it, per group, as a ratio; for a",
             "properties": {
               "growth_vs_previous": {
                 "anyOf": [

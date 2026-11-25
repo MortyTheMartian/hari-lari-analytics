@@ -226,3 +226,21 @@ alert_at:
   additivity: full
   sql:
     fct_stock: sum(alert_at)
+
+stock_counted_at:
+  label: Stock counted at
+  description: When the stock levels were read from Moka (the extraction of the run)
+  format: timestamp
+  up_is_good: null
+  additivity: none
+  sql:
+    fct_stock: max(counted_at)
+
+stock_variants:
+  label: Variants
+  description: Stock-tracked item-variants
+  format: count
+  up_is_good: null
+  additivity: full
+  sql:
+    fct_stock: count(*)

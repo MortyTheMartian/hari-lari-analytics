@@ -109,8 +109,57 @@ def _style_total(table, idx: int, bar_columns: dict[int, str], area: Area) -> No
         sub.text(0, 0.5, text, va="center", fontsize=7.5, fontweight="bold")
 
 
+def _metric_text(row: Row, metric: str, pres: Presentation, options: TableOptions) -> str:
+    col = pres.columns[metric]
+    text = f"{col.label} {row[metric].text}{' ' + col.unit if col.unit else ''}"
+    if metric in options.deltas:
+        change = row.cells.get(f"{metric}_{options.deltas[metric]}")
+        if change is not None and change.text:
+            text += f" ({change.text})"
+    return text
+
+
+def _table_text(result: Result, options: TableOptions, ctx: DrawContext) -> list[str]:
+    """One line per row: its label, then each column as `label value`; a result without
+    dimensions gives one line per metric with its change."""
+    pres = present(result)
+    metrics = options.columns or pres.metrics
+    orientation = options.orientation
+    if orientation == "auto":
+        orientation = "metrics" if result.meta.shape == "single" else "groups"
+    if orientation == "metrics":
+        row = pres.total or pres.rows[0]
+        compare = result.meta.compare_ok
+        lines = []
+        for m in metrics:
+            spec = result.meta.metrics[m]
+            line = _metric_text(row, m, pres, options.model_copy(update={"deltas": {}}))
+            kind = options.deltas.get(m) or formats.default_change(spec)
+            change = row.cells.get(f"{m}_{kind}")
+            if compare and change is not None:
+                line += f" ({change.text} vs {result.meta.window.compare_label})"
+            lines.append(line)
+        return lines
+    rows = _rows(result, pres, options)
+    if not rows:
+        return ["No rows"]
+    lines = []
+    for row in rows:
+        label = "Total" if row.kind == "total" else row.label
+        if row.small:
+            label += f" ({n_label(row.n)})"
+        values = " · ".join(_metric_text(row, m, pres, options) for m in metrics)
+        lines.append(f"{label}: {values}")
+    return lines
+
+
 @visual(
-    "table", TableOptions, accepts=("rows", "single", "series"), min_size=(0.25, 0.15), check=_check
+    "table",
+    TableOptions,
+    accepts=("rows", "single", "series"),
+    min_size=(0.25, 0.15),
+    check=_check,
+    text=_table_text,
 )
 def table(area: Area, result: Result, options: TableOptions, ctx: DrawContext) -> None:
     """A table: one row per group with bars, deltas, rank and the total row, or one row per

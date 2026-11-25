@@ -275,6 +275,26 @@ def test_text_forms(ctx):
         visuals.plain_text("heatmap", {}, result)
 
 
+def test_the_text_form_of_a_table_has_one_line_per_row(ctx):
+    stock = component("""
+query: {model: fct_stock, dimensions: [stock_status, adjusted_item_variant],
+        metrics: [stock_level, alert_at], where: {stock_status: [negative, out, low]}}
+visual: {type: table}
+""")
+    result = run_facets(stock, ctx)[0].result
+    assert visuals.plain_text("table", {}, result) == [
+        "Negative · Focaccia Tomato: In stock -7 · Alert at 0",
+        "Out of stock · Latte-Hot: In stock 0 · Alert at 5",
+        "Low · Latte-Cold: In stock 3 · Alert at 5",
+    ]
+    nothing = component("""
+query: {model: fct_stock, dimensions: [adjusted_item_variant], metrics: [stock_level],
+        where: {stock_status: [ok], adjusted_item: [Latte]}}
+visual: {type: table}
+""")
+    assert visuals.plain_text("table", {}, run_facets(nothing, ctx)[0].result) == ["No rows"]
+
+
 # --- the registry and the loader's check ----------------------------------------------------
 
 

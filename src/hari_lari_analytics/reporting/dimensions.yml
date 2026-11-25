@@ -271,13 +271,6 @@ modifier_option_name:
   null_label: No modifier
 
 # Stock attributes (fct_stock)
-stock_item_variant:
-  label: Item-variant
-  grain: item
-  models: [fct_stock]
-  column: adjusted_item_variant
-  sort: { by: value }
-
 stock_status:
   label: Stock status
   description: >-

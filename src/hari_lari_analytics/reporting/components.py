@@ -490,7 +490,7 @@ def component_json_schema(registry: Registry | None = None) -> dict:
     models = sorted(
         m
         for m, spec in registry.models.items()
-        if spec.exposed and spec.time and registry.metrics_on(m)
+        if spec.exposed and registry.metrics_on(m)
     )
 
     def metrics() -> dict:

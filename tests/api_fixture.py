@@ -6,9 +6,12 @@ cleaned lines; `tests/test_load_api.py` checks that.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import pandas as pd
 
 CAFE = 1160056
+EXTRACTED_AT = datetime(2026, 10, 14, 9, 30)  # when the run was extracted, the stock's time
 
 
 def _items() -> pd.DataFrame:
@@ -21,6 +24,21 @@ def _items() -> pd.DataFrame:
         (6, "Custom Amount", "Uncategorized", False),
     ]
     return pd.DataFrame(rows, columns=["id", "name", "category.name", "is_deleted"])
+
+
+def _item_variants() -> pd.DataFrame:
+    rows = [
+        # id, item id, name, in stock, alert at, track stock, alert, deleted
+        (30, 3, "", -7, None, True, False, False),  # sold more than counted in: negative
+        (10, 1, "hot", 0, 5, True, True, False),  # out of stock
+        (11, 1, "cold", 3, 5, True, True, False),  # low
+        (20, 2, "Hot", 40, 5, True, True, False),  # ok
+        (40, 4, "", 2, None, False, False, False),  # stock not tracked
+        (12, 1, "iced", 1, 5, True, True, True),  # deleted variant
+    ]
+    columns = ["id", "item_id", "name", "in_stock", "stock_alert", "track_stock", "alert",
+               "is_deleted"]  # fmt: skip
+    return pd.DataFrame(rows, columns=columns)
 
 
 # payment: (id, receipt, created_at, parent id, payment type, refund amount)
@@ -96,4 +114,5 @@ def api_tables() -> dict[str, pd.DataFrame]:
         "transaction_line_modifiers": modifiers,
         "transaction_refunds": refunds,
         "items": _items(),
+        "item_variants": _item_variants(),
     }

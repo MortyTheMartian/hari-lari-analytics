@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -27,7 +28,6 @@ OPTIONAL_TABLES = [
     "transaction_line_discounts",
     "transaction_line_modifiers",
     "transaction_refunds",
-    "item_variants",
 ]
 
 
@@ -94,15 +94,17 @@ def _find_gcs_run(location: str, client=None) -> str:
     return f"gs://{bucket}/{base}{sorted(runs)[-1]}"
 
 
-def load_run(location: str | Path) -> ApiRun:
-    """Read the Parquet tables (and manifest) of the run in `location`."""
+def load_run(location: str | Path, tables: Iterable[str] | None = None) -> ApiRun:
+    """Read the Parquet tables (and manifest) of the run in `location`: `tables` (default: the
+    tables of today's report), each if the run has it, and always the required ones."""
+    names = list(dict.fromkeys([*REQUIRED_TABLES, *(tables or OPTIONAL_TABLES)]))
     run = find_run(location)
     if _is_gcs(run):
         with tempfile.TemporaryDirectory() as tmp:
             local = _download_gcs(run, Path(tmp))
-            loaded = _read_local(local)
+            loaded = _read_local(local, names)
     else:
-        loaded = _read_local(Path(run))
+        loaded = _read_local(Path(run), names)
     return ApiRun(run, loaded[0], loaded[1])
 
 
@@ -118,9 +120,9 @@ def _download_gcs(location: str, target: Path, client=None) -> Path:
     return target
 
 
-def _read_local(run_dir: Path) -> tuple[dict[str, pd.DataFrame], dict]:
+def _read_local(run_dir: Path, names: list[str]) -> tuple[dict[str, pd.DataFrame], dict]:
     tables: dict[str, pd.DataFrame] = {}
-    for name in REQUIRED_TABLES + OPTIONAL_TABLES:
+    for name in names:
         path = run_dir / "tables" / f"{name}.parquet"
         if path.exists():
             tables[name] = pd.read_parquet(path)

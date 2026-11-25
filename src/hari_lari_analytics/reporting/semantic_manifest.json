@@ -290,20 +290,21 @@
       "primary_key": [
         "variant_id"
       ],
-      "time": "stock_date",
+      "time": null,
       "calendar": false,
       "sample_size": null,
       "exposed": true,
       "metrics": [
         "stock_level",
-        "alert_at"
+        "alert_at",
+        "stock_counted_at",
+        "stock_variants"
       ],
       "dimensions": [
         "adjusted_category",
         "category_group_level_1",
         "adjusted_item",
         "adjusted_item_variant",
-        "stock_item_variant",
         "stock_status"
       ]
     },
@@ -850,6 +851,42 @@
       "depends_on": [],
       "aggregates": {
         "fct_stock": "sum(alert_at)"
+      }
+    },
+    {
+      "id": "stock_counted_at",
+      "kind": "sql",
+      "label": "Stock counted at",
+      "description": "When the stock levels were read from Moka (the extraction of the run)",
+      "format": "timestamp",
+      "unit": "",
+      "up_is_good": null,
+      "additivity": "none",
+      "min_n": null,
+      "models": [
+        "fct_stock"
+      ],
+      "depends_on": [],
+      "aggregates": {
+        "fct_stock": "max(counted_at)"
+      }
+    },
+    {
+      "id": "stock_variants",
+      "kind": "sql",
+      "label": "Variants",
+      "description": "Stock-tracked item-variants",
+      "format": "count",
+      "unit": "",
+      "up_is_good": null,
+      "additivity": "full",
+      "min_n": null,
+      "models": [
+        "fct_stock"
+      ],
+      "depends_on": [],
+      "aggregates": {
+        "fct_stock": "count(*)"
       }
     }
   ],
@@ -1489,20 +1526,6 @@
       "null_label": "No modifier"
     },
     {
-      "id": "stock_item_variant",
-      "label": "Item-variant",
-      "description": null,
-      "grain": "item",
-      "models": [
-        "fct_stock"
-      ],
-      "domain": "none",
-      "sort": {
-        "by": "value",
-        "desc": false
-      }
-    },
-    {
       "id": "stock_status",
       "label": "Stock status",
       "description": "negative (more sold than counted in: the count needs fixing), out (0), low (1 up to the alert-at quantity) or ok",
@@ -1705,7 +1728,7 @@
     },
     {
       "name": "growth_vs_previous",
-      "description": "Add `<metric>_growth`: each bucket over the one before it, per group, as a ratio.",
+      "description": "Add `<metric>_growth`: each bucket over the one before it, per group, as a ratio; for a share or rate (format pct) the difference instead, shown in percentage points.",
       "options": [
         "grains",
         "keep_before",
@@ -2241,21 +2264,20 @@
     {
       "id": "stock_alert",
       "title": "Stock alert",
-      "description": "The stock-tracked item-variants at or below their alert-at quantity, with their stock level and status, as Moka counted them at extraction time.",
+      "description": "The stock-tracked item-variants at or below their alert-at quantity, with their stock level and status, as Moka counted them at extraction time: negative first (more sold than counted in), then out of stock, then low.",
       "hint": "Stock at or below the alert-at quantity · Moka's count at extraction",
       "params": {},
       "unbound": [],
       "query": {
         "model": "fct_stock",
         "dimensions": [
-          "stock_item_variant",
-          "stock_status"
+          "stock_status",
+          "adjusted_item_variant"
         ],
         "metrics": [
           "stock_level",
           "alert_at"
         ],
-        "window": "full",
         "where": {
           "stock_status": [
             "negative",
@@ -2267,6 +2289,47 @@
       "transforms": [],
       "facet": null,
       "visual": "table",
+      "insights": []
+    },
+    {
+      "id": "stock_by_status",
+      "title": "Stock status",
+      "description": "How many stock-tracked item-variants are negative, out of stock, low or ok, as Moka counted them at the extraction.",
+      "hint": "Stock-tracked item-variants per status · Moka's count at extraction",
+      "params": {},
+      "unbound": [],
+      "query": {
+        "model": "fct_stock",
+        "dimensions": [
+          "stock_status"
+        ],
+        "metrics": [
+          "stock_variants"
+        ]
+      },
+      "transforms": [
+        "fill_domain"
+      ],
+      "facet": null,
+      "visual": "hbar",
+      "insights": []
+    },
+    {
+      "id": "stock_counted_at",
+      "title": "Stock counted at",
+      "description": "When the stock levels were read from Moka: the time of the extraction, which a stock report shows because the stock is a snapshot and the anchor says nothing about its age.",
+      "hint": null,
+      "params": {},
+      "unbound": [],
+      "query": {
+        "model": "fct_stock",
+        "metrics": [
+          "stock_counted_at"
+        ]
+      },
+      "transforms": [],
+      "facet": null,
+      "visual": "text_line",
       "insights": []
     }
   ],
@@ -2292,7 +2355,9 @@
           "id": "stock",
           "title": "Stock alert",
           "components": [
-            "stock_alert"
+            "stock_alert",
+            "stock_by_status",
+            "stock_counted_at"
           ]
         }
       ]
