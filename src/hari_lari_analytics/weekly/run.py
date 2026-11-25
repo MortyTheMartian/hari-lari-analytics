@@ -21,16 +21,17 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 
 from hari_lari_analytics.cli import prepare_lines, write_reports
 from hari_lari_analytics.deliver.caption import build_caption
 from hari_lari_analytics.deliver.drive import DriveUploader
 from hari_lari_analytics.deliver.telegram import TelegramClient, scrub, send_alert, send_notice
-from hari_lari_analytics.extract.run import BALI, RunResult
+from hari_lari_analytics.extract.run import RunResult
 from hari_lari_analytics.load import load_aliases
 from hari_lari_analytics.load_api import load_api_sales
+from hari_lari_analytics.project import project
 from hari_lari_analytics.weekly.log import JsonLog
 from hari_lari_analytics.weekly.store import Store
 
@@ -42,7 +43,7 @@ class Settings:
     store: Store
     aliases: Path
     category_groups: Path
-    anchor: date | None = None  # default: yesterday in Bali
+    anchor: date | None = None  # default: the anchor rule of project.yml (yesterday)
     dry_run: bool = False
     force: bool = False
     to: str = "group"  # "group" or "admin" (a private run)
@@ -58,7 +59,7 @@ class Services:
     telegram: Callable[[], TelegramClient]
     chat_id: Callable[[str], str]  # "group" | "admin" -> chat id
     drive: Callable[[str], DriveUploader] | None = None  # folder id -> uploader
-    now: Callable[[], datetime] = lambda: datetime.now(BALI)
+    now: Callable[[], datetime] = lambda: project().now()
 
 
 class StepFailed(Exception):
@@ -74,7 +75,7 @@ def token_expiry_notice(manifest: dict, now: datetime, warn_days: int = TOKEN_WA
         return None
     expires = datetime.fromisoformat(raw)
     if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=BALI)
+        expires = expires.replace(tzinfo=project().tz)
     days = (expires - now).total_seconds() / 86400
     if days >= warn_days:
         return None
@@ -147,7 +148,7 @@ class Runner:
 def run_weekly(settings: Settings, services: Services, log: JsonLog | None = None) -> int:
     """Run the whole job. Returns the exit code: 0 for success (or already sent), 1 for failure."""
     log = log or JsonLog()
-    anchor = settings.anchor or (services.now() - timedelta(days=1)).date()
+    anchor = settings.anchor or project().default_anchor(services.now())
     dry = settings.dry_run
     store = settings.store.child("dry-run") if dry else settings.store
     marker_key = f"sent/{anchor:%Y-%m-%d}.json"

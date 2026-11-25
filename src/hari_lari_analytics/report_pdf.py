@@ -24,6 +24,7 @@ from plottable.plots import bar
 
 from hari_lari_analytics.metrics import compute_metrics
 from hari_lari_analytics.periods import Period
+from hari_lari_analytics.project import project
 from hari_lari_analytics.report_data import GRAIN_NAME, GROWTH_NAME, Section, build_section
 
 FONTS = Path(__file__).parent / "fonts"
@@ -64,28 +65,21 @@ DAYLIGHT = Palette(
 
 
 def idr(value: float) -> str:
-    return "–" if pd.isna(value) else f"{value:,.0f}"
+    return project().numbers.number(value, project().currency.decimals)
 
 
 def pct(value: float, digits: int = 1) -> str:
-    return "–" if pd.isna(value) else f"{value:.{digits}%}"
+    return project().numbers.percent(value, digits)
 
 
 def compact(value: float) -> str:
-    if pd.isna(value):
-        return "–"
-    if abs(value) >= 1_000_000:
-        return f"{value / 1_000_000:.2f}M"
-    if abs(value) >= 10_000:
-        return f"{value / 1_000:.0f}k"
-    return f"{value:,.0f}"
+    return project().numbers.compact_number(value)
 
 
 def headline(value: float, is_idr: bool) -> str:
     """Big KPI number: millions for large amounts, otherwise the full figure."""
-    if pd.isna(value):
-        return "–"
-    return f"{value / 1e6:.2f}M" if is_idr and value >= 1e6 else f"{value:,.0f}"
+    decimals = project().currency.decimals if is_idr else 0
+    return project().numbers.headline(value, decimals, short=is_idr)
 
 
 def stamp(value) -> str:
@@ -95,7 +89,7 @@ def stamp(value) -> str:
 def change_text(value: float, digits: int = 1) -> str:
     if pd.isna(value):
         return "n/a"
-    text = ">+999%" if value > 9.99 else f"{value:+.{digits}%}"
+    text = ">+999%" if value > 9.99 else project().numbers.percent(value, digits, signed=True)
     return ("▲ " if value >= 0 else "▼ ") + text
 
 
@@ -317,12 +311,13 @@ class PdfReport:
             f"Last sale {last_sale:%d %b %Y %H:%M}",
         )
         t = compute_metrics(self.lines).iloc[0]
+        code = project().currency.code
         x0, w, gap, y, h = 0.035, 0.2225, 0.0133, 0.70, 0.13
         for i, (label, value, unit) in enumerate(
             [
-                ("Net sales · full history", headline(t.net_sales, True), "IDR"),
+                ("Net sales · full history", headline(t.net_sales, True), code),
                 ("Orders", headline(t.orders, False), ""),
-                ("Avg order value", headline(t.aov, True), "IDR"),
+                ("Avg order value", headline(t.aov, True), code),
                 ("Items sold", headline(t.items_sold, False), ""),
             ]
         ):
@@ -342,7 +337,7 @@ class PdfReport:
             0.035,
             0.665,
             f"Gross {idr(t.gross_sales)} · discounts {idr(t.discounts)} · "
-            f"refunds {idr(t.refunds)} IDR",
+            f"refunds {idr(t.refunds)} {code}",
             fontsize=8,
             color=self.p.muted,
         )
@@ -470,7 +465,7 @@ class PdfReport:
     def _trend(self, fig: Figure, s: Section, rect) -> None:
         x, y, w, h = rect
         growth = s.period.grain in GROWTH_NAME
-        hint = "IDR · " + (
+        hint = f"{project().currency.code} · " + (
             "ticks = prior period, same position" if s.prior_ok else "no prior period available"
         )
         if growth:
@@ -542,7 +537,8 @@ class PdfReport:
 
     def _key_figures(self, fig: Figure, s: Section, rect) -> None:
         x, y, w, h = rect
-        self._card(fig, x, y, w, h, "Key figures", "Amounts in IDR · current vs prior period")
+        hint = f"Amounts in {project().currency.code} · current vs prior period"
+        self._card(fig, x, y, w, h, "Key figures", hint)
         df = pd.DataFrame(
             {
                 "Metric": s.kpis["label"],
@@ -651,7 +647,7 @@ class PdfReport:
                 self._delta_column("pen_delta", "ORDER PENETRATION", lambda v: f"{v:+.1f} pp"),
                 ColumnDefinition(
                     "Category AOV",
-                    title="IDR",
+                    title=project().currency.code,
                     group="CATEGORY AOV",
                     width=0.75,
                     textprops={"ha": "right"},
@@ -661,7 +657,7 @@ class PdfReport:
                 ),
                 ColumnDefinition(
                     "Contributive AOV",
-                    title="IDR",
+                    title=project().currency.code,
                     group="CONTRIBUTIVE AOV",
                     width=0.75,
                     textprops={"ha": "right", "weight": "bold"},
@@ -852,7 +848,7 @@ class PdfReport:
             fig.text(
                 lx + 0.014,
                 ly - 0.021,
-                f"{r.orders:,} orders · {compact(r.net_sales)} IDR",
+                f"{r.orders:,} orders · {compact(r.net_sales)} {project().currency.code}",
                 fontsize=7.5,
                 color=self.p.muted,
             )

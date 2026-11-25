@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=../../../src/hari_lari_analytics/reporting/schema/component.schema.json
+id: top_category_items
+title: Items of the top categories
+params: { period: full, n: 2 }
+query:
+  model: fct_sales_lines
+  dimensions: [adjusted_item]
+  metrics: [net_sales, orders]
+  window: $period
+  totals: true
+facet:
+  by: adjusted_category
+  values: { top: $n, by: net_sales }
+  layout: grid(1x2)
+transforms:
+  - sort_limit: { by: net_sales, n: 3 }
+visual: { type: table, bars: [net_sales] }

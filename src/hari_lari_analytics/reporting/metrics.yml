@@ -1,0 +1,207 @@
+# Metrics of the semantic layer (docs/components.md, "Metrics"). A metric has exactly one kind:
+#
+#   sql:      an aggregate per model, `func(expr)` or `func(distinct expr)`, optionally with
+#             `filter (where condition)`; func is sum, count, min, max or avg.
+#   filtered: { base, where }: a sql or filtered metric restricted by dimension values, with the
+#             syntax of a component's `where`. Label, description, format, up_is_good,
+#             additivity and min_n are taken from the base unless given here.
+#   derived:  an expression over other metrics, evaluated after aggregation. It may use
+#             `trading_days`, the trading days of the window.
+#   relative: like derived, but it may also use `total.<metric>`: the metric over the whole
+#             filter instead of the group (penetration, share, contributive AOV).
+#
+# format: idr, idr_compact, count, decimal, pct or timestamp. up_is_good: true, false, or null
+# for neutral (no colour). additivity: full (sums over any dimension), order_grain (sums over
+# order and day dimensions only) or none. min_n: the sample-size rule, the smallest count per
+# row or period that the report makes claims about, such as { drink_orders: 30 }. Without one,
+# a metric gets the default `min_n` of project.yml for the sample_size count of its model
+# (models.yml: orders on the sales models), and no rule on a model without a sample_size.
+
+gross_sales:
+  label: Gross Sales
+  description: Sales before discounts and refunds
+  format: idr
+  up_is_good: true
+  additivity: full
+  sql:
+    fct_sales_lines: sum(gross_sales)
+    fct_orders: sum(gross_sales)
+
+discounts:
+  label: Discounts
+  description: Discounts given, as a positive amount
+  format: idr
+  up_is_good: false
+  additivity: full
+  sql:
+    fct_sales_lines: sum(discounts)
+    fct_orders: sum(discounts)
+
+refunds:
+  label: Refunds
+  description: Refunded amounts, as a positive amount
+  format: idr
+  up_is_good: false
+  additivity: full
+  sql:
+    fct_sales_lines: sum(refunds)
+    fct_orders: sum(refunds)
+
+net_sales:
+  label: Net Sales
+  description: Gross sales minus discounts and refunds
+  format: idr
+  up_is_good: true
+  additivity: full
+  sql:
+    fct_sales_lines: sum(net_sales)
+    fct_orders: sum(net_sales)
+
+orders:
+  label: Orders
+  description: Distinct receipts, without fully refunded ones
+  format: count
+  up_is_good: true
+  additivity: order_grain  # one receipt has one payment type and hour, but many categories
+  sql:
+    fct_sales_lines: count(distinct receipt_nr) filter (where counts_as_order)
+    fct_orders: count(*) filter (where counts_as_order)
+
+items_sold:
+  label: Items Sold
+  description: Quantity sold; refunds subtract
+  format: count
+  up_is_good: true
+  additivity: full
+  sql:
+    fct_sales_lines: sum(quantity)
+    fct_orders: sum(items)
+
+first_sale_ts:
+  label: First sale
+  description: Earliest payment, without fully refunded receipts
+  format: timestamp
+  up_is_good: null
+  additivity: none
+  sql:
+    fct_sales_lines: min(sale_ts) filter (where counts_as_order and not is_refund)
+    fct_orders: min(sale_ts) filter (where counts_as_order)
+
+last_sale_ts:
+  label: Last sale
+  description: Latest payment, without fully refunded receipts
+  format: timestamp
+  up_is_good: null
+  additivity: none
+  sql:
+    fct_sales_lines: max(sale_ts) filter (where counts_as_order and not is_refund)
+    fct_orders: max(sale_ts) filter (where counts_as_order)
+
+aov:
+  label: Avg Order Value
+  description: Net sales per order
+  format: idr
+  up_is_good: true
+  additivity: none
+  derived: net_sales / nullif(orders, 0)
+
+category_aov:
+  label: Category AOV
+  description: >-
+    Net sales of the group per order containing it; the AOV of the orders with the category,
+    counting only what they spent on it
+  format: idr
+  up_is_good: true
+  additivity: none
+  derived: net_sales / nullif(orders, 0)
+
+items_per_order:
+  label: Items per order
+  description: Items sold per order
+  format: decimal
+  up_is_good: true
+  additivity: none
+  derived: items_sold / nullif(orders, 0)
+
+avg_item_price:
+  label: Avg net price per item
+  description: Net sales per item sold
+  format: idr
+  up_is_good: true
+  additivity: none
+  derived: net_sales / nullif(items_sold, 0)
+
+discount_rate:
+  label: Discount rate
+  description: Discounts as a share of gross sales
+  format: pct
+  up_is_good: false
+  additivity: none
+  derived: discounts / nullif(gross_sales, 0)
+
+net_sales_per_trading_day:
+  label: Net sales per trading day
+  description: Net sales divided by the days with at least one order in the window
+  format: idr
+  up_is_good: true
+  additivity: none
+  derived: net_sales / nullif(trading_days, 0)
+
+share:
+  label: "% of net"
+  description: Share of the net sales of the whole filter
+  format: pct
+  up_is_good: null
+  additivity: full  # the shares of the groups add up to 100%
+  relative: net_sales / nullif(total.net_sales, 0)
+
+penetration:
+  label: Order penetration
+  description: Share of all orders of the filter that contain the group
+  format: pct
+  up_is_good: true
+  additivity: none
+  relative: orders / nullif(total.orders, 0)
+
+contributive_aov:
+  label: Contributive AOV
+  description: >-
+    Net sales of the group per order of the whole filter; penetration × category AOV. The
+    slices add up to the AOV.
+  format: idr
+  up_is_good: true
+  additivity: full
+  relative: net_sales / nullif(total.orders, 0)
+
+food_orders:
+  label: Orders with food
+  description: Orders with at least one line in the category group food
+  filtered: { base: orders, where: { has_food: true } }
+
+drink_orders:
+  label: Orders with a drink
+  description: Orders with at least one line in the category group drink
+  filtered: { base: orders, where: { has_drink: true } }
+
+food_and_drink_orders:
+  label: Orders with food and a drink
+  description: Orders with at least one food line and at least one drink line
+  filtered: { base: orders, where: { has_food: true, has_drink: true } }
+
+food_attach_rate:
+  label: Food attach rate
+  description: Share of the orders with a drink that also have food
+  format: pct
+  up_is_good: true
+  additivity: none
+  derived: food_and_drink_orders / nullif(drink_orders, 0)
+  min_n: { drink_orders: 30 }
+
+drink_attach_rate:
+  label: Drink attach rate
+  description: Share of the orders with food that also have a drink
+  format: pct
+  up_is_good: true
+  additivity: none
+  derived: food_and_drink_orders / nullif(food_orders, 0)
+  min_n: { food_orders: 30 }

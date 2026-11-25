@@ -7,6 +7,7 @@ from datetime import date, timedelta
 import pandas as pd
 
 from hari_lari_analytics.metrics import compute_metrics
+from hari_lari_analytics.project import project
 from hari_lari_analytics.report_data import ratio_change
 
 UP, DOWN = "▲", "▼"
@@ -21,7 +22,8 @@ def date_range(start: date, end: date) -> str:
 
 
 def _idr(value: float) -> str:
-    return f"IDR {value:,.0f}"
+    settings = project()
+    return f"{settings.currency.code} {settings.numbers.number(value, settings.currency.decimals)}"
 
 
 def _change(current: float, prior: float) -> str:
@@ -62,7 +64,7 @@ def build_caption(lines: pd.DataFrame, anchor: date, drive_url: str | None = Non
 
         body = [
             row("Net sales", "net_sales", _idr(c.net_sales)),
-            row("Orders", "orders", f"{c.orders:,}"),
+            row("Orders", "orders", project().numbers.number(c.orders)),
             row("Avg order value", "aov", _idr(c.aov)),
             f"Change vs previous week ({date_range(prior_start, start - timedelta(days=1))})",
         ]

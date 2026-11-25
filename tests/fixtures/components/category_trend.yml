@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=../../../src/hari_lari_analytics/reporting/schema/component.schema.json
+# $category has no default: a report binds it
+id: category_trend
+title: "{{ category }}: penetration and category AOV"
+params: { period: L6W }
+query:
+  model: fct_sales_lines
+  dimensions: [bucket]
+  metrics: [net_sales, penetration, category_aov]
+  window: $period
+  focus: { adjusted_category: $category }
+  compare: prior
+transforms:
+  - growth_vs_previous
+visual: { type: bar_trend }

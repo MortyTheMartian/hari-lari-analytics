@@ -70,6 +70,7 @@ def api_tables() -> dict[str, pd.DataFrame]:
     )
     for column in ["gross_sales", "discount_amount", "net_sales"]:
         lines[column] = lines[column].astype(float)
+    lines["note"] = lines["uuid"].map({"u7": "oat milk please"})
 
     discounts = pd.DataFrame(
         [("p2", "R002", "u7", "FOUNDER25", 10000.0)],

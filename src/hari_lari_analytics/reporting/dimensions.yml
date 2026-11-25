@@ -1,0 +1,271 @@
+# Dimensions of the semantic layer (docs/components.md, "Dimensions"): the columns a component
+# may group or filter by.
+#
+#   grain:     what the value describes. day and order values are one per receipt, so a metric
+#              with additivity order_grain (orders) may be summed over them; item and line
+#              values can be many per receipt (a receipt has several categories).
+#   models:    the models that have it. column: the column, if not the id; a mapping per model
+#              when the name differs.
+#   sort:      { by: value } or { by: <metric>, desc: true }; the default order of the groups.
+#   domain:    which empty values the compiler fills with zeros: none, span (every integer
+#              between the smallest and largest value), all (every value in `values`) or
+#              calendar (every bucket of the window, through dim_calendar).
+#   labels:    display names of values. null_label: the display name of an empty value.
+#   bins:      ordered buckets of a number: an exact value (1), a range ("2-3") or an open last
+#              bucket ("5+"). A value outside every bin has no bucket.
+#
+# Every dimension of grain day is also on dim_calendar, so the compiler can count the trading
+# days per row (per weekday, per event, ...).
+
+# Time. The time dimensions (domain calendar) group by the buckets of the window: `bucket` in
+# the query's grain (day, week, month or block_7d; default: the window's), the others in their
+# own grain. A series is compared with the prior window bucket by bucket, by position.
+bucket:
+  label: Period
+  description: >-
+    The time bucket in the query's grain, as its first day; computed by the compiler, so it
+    cannot be used in a filter
+  grain: day
+  models: [fct_sales_lines, fct_orders]
+  domain: calendar
+
+sale_date:
+  label: Date
+  grain: day
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  column: { dim_calendar: date }
+  domain: calendar
+
+sale_week:
+  label: Week
+  description: First day of the week (first_weekday in project.yml)
+  grain: day
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  column: { dim_calendar: week_start }
+  domain: calendar
+
+sale_iso_week:
+  label: ISO week
+  description: ISO week label such as 2026-W44
+  grain: day
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  column: { dim_calendar: iso_week }
+
+sale_month:
+  label: Month
+  grain: day
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  column: { dim_calendar: month_start }
+  domain: calendar
+
+sale_quarter:
+  label: Quarter
+  grain: day
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  column: { dim_calendar: quarter }
+
+sale_year:
+  label: Year
+  grain: day
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  column: { dim_calendar: year }
+
+weekday:
+  label: Weekday
+  description: ISO weekday, Monday = 1
+  grain: day
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  domain: all
+  values: [1, 2, 3, 4, 5, 6, 7]
+  labels: { 1: Mon, 2: Tue, 3: Wed, 4: Thu, 5: Fri, 6: Sat, 7: Sun }
+
+# Calendar events of config/calendar_events.csv
+event_kind:
+  label: Calendar event
+  description: The most telling event of the day (closure, holiday, promotion, other)
+  grain: day
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  null_label: No event
+
+event_name:
+  label: Event
+  grain: day
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  null_label: No event
+
+is_holiday:
+  label: Holiday
+  grain: day
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  labels: { true: Holiday, false: No holiday }
+
+has_promotion:
+  label: Promotion day
+  grain: day
+  models: [fct_sales_lines, fct_orders, dim_calendar]
+  labels: { true: Promotion, false: No promotion }
+
+# Order attributes: one value per receipt
+sale_hour:
+  label: Date and hour
+  grain: order
+  models: [fct_sales_lines, fct_orders]
+
+hour_of_day:
+  label: Hour
+  grain: order
+  models: [fct_sales_lines, fct_orders]
+  domain: span
+
+payment_type:
+  label: Payment type
+  grain: order
+  models: [fct_sales_lines, fct_orders]
+  sort: { by: net_sales, desc: true }
+
+has_food:
+  label: Has food
+  grain: order
+  models: [fct_sales_lines, fct_orders]
+  labels: { true: With food, false: Without food }
+
+has_drink:
+  label: Has a drink
+  grain: order
+  models: [fct_sales_lines, fct_orders]
+  labels: { true: With a drink, false: Without a drink }
+
+has_consignment:
+  label: Has consignment
+  grain: order
+  models: [fct_sales_lines, fct_orders]
+  labels: { true: With consignment, false: Without consignment }
+
+has_discount:
+  label: Has a discount
+  grain: order
+  models: [fct_sales_lines, fct_orders]
+  labels: { true: Discounted, false: Not discounted }
+
+has_modifier:
+  label: Has a modifier
+  grain: order
+  models: [fct_sales_lines, fct_orders]
+  labels: { true: With modifier, false: Without modifier }
+
+has_refund:
+  label: Has a refund
+  grain: order
+  models: [fct_orders]
+  labels: { true: Refunded, false: Not refunded }
+
+basket_size:
+  label: Items in the order
+  grain: order
+  models: [fct_sales_lines, fct_orders]
+  column: { fct_sales_lines: order_items, fct_orders: items }
+  bins: [1, 2, 3, 4, "5+"]
+
+order_line_count:
+  label: Lines in the order
+  grain: order
+  models: [fct_sales_lines, fct_orders]
+  column: { fct_sales_lines: order_lines, fct_orders: lines }
+  bins: [1, 2, 3, "4+"]
+
+# Item attributes: many per receipt
+adjusted_category:
+  label: Category
+  description: Category according to today's set of categories (METRICS.md)
+  grain: item
+  models: [fct_sales_lines]
+  sort: { by: net_sales, desc: true }
+
+category_group_level_1:
+  label: Category group
+  description: food, drink, consignment or unmapped (config/category_group.csv)
+  grain: item
+  models: [fct_sales_lines]
+  sort: { by: net_sales, desc: true }
+
+category_group_level_2:
+  label: Category subgroup
+  grain: item
+  models: [fct_sales_lines]
+  sort: { by: net_sales, desc: true }
+  null_label: No subgroup
+
+adjusted_item:
+  label: Item
+  description: Today's name of the item (METRICS.md)
+  grain: item
+  models: [fct_sales_lines]
+  sort: { by: net_sales, desc: true }
+
+adjusted_item_variant:
+  label: Item-variant
+  description: Adjusted item and variant, or just the item when there is no variant
+  grain: item
+  models: [fct_sales_lines]
+  sort: { by: net_sales, desc: true }
+
+category:
+  label: Category at sale
+  description: Category recorded at the time of sale
+  grain: item
+  models: [fct_sales_lines]
+  sort: { by: net_sales, desc: true }
+
+item:
+  label: Item at sale
+  description: Item name recorded at the time of sale
+  grain: item
+  models: [fct_sales_lines]
+  sort: { by: net_sales, desc: true }
+
+item_variant:
+  label: Item-variant at sale
+  grain: item
+  models: [fct_sales_lines]
+  sort: { by: net_sales, desc: true }
+
+variant:
+  label: Variant
+  grain: item
+  models: [fct_sales_lines]
+  sort: { by: net_sales, desc: true }
+  null_label: No variant
+
+# Line attributes
+discount_code:
+  label: Discount code
+  grain: line
+  models: [fct_sales_lines]
+  sort: { by: gross_sales, desc: true }
+  null_label: No discount
+
+discounted:
+  label: Discounted
+  grain: line
+  models: [fct_sales_lines]
+  labels: { true: Discounted, false: Not discounted }
+
+is_refund:
+  label: Refund line
+  grain: line
+  models: [fct_sales_lines]
+  labels: { true: Refund, false: Sale }
+
+modifier_name:
+  label: Modifier
+  grain: line
+  models: [fct_sales_lines]
+  sort: { by: net_sales, desc: true }
+  null_label: No modifier
+
+modifier_option_name:
+  label: Modifier option
+  grain: line
+  models: [fct_sales_lines]
+  sort: { by: net_sales, desc: true }
+  null_label: No modifier

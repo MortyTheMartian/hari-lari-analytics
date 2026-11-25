@@ -8,7 +8,8 @@ import pytest
 
 from hari_lari_analytics.deliver.drive import DriveError, DriveUploader
 from hari_lari_analytics.deliver.telegram import TelegramClient
-from hari_lari_analytics.extract.run import BALI, RunResult
+from hari_lari_analytics.extract.run import RunResult
+from hari_lari_analytics.project import project
 from hari_lari_analytics.weekly.log import JsonLog
 from hari_lari_analytics.weekly.run import (
     Services,
@@ -25,7 +26,8 @@ from .conftest import FIXTURES
 TOKEN = "123456789:AAFakeTokenFakeTokenFakeTokenFake_12"
 GROUP, ADMIN = "-100111", "999"
 ANCHOR = date(2026, 10, 13)
-NOW = datetime(2026, 10, 14, 4, 0, tzinfo=BALI)
+TZ = project().tz
+NOW = datetime(2026, 10, 14, 4, 0, tzinfo=TZ)
 
 
 # ---- fakes -----------------------------------------------------------------------
@@ -312,13 +314,13 @@ def test_logs_are_json_lines_with_severity_and_message(env):
 # ---- 5.6 token reminder -----------------------------------------------------------
 def test_reminder_when_fewer_than_45_days_remain():
     manifest = {"token_expires_at": "2026-11-20T10:00:00+08:00"}
-    text = token_expiry_notice(manifest, datetime(2026, 10, 14, 4, 0, tzinfo=BALI))
+    text = token_expiry_notice(manifest, datetime(2026, 10, 14, 4, 0, tzinfo=TZ))
     assert "20 Nov 2026" in text and "37 days" in text
 
 
 def test_no_reminder_with_45_days_or_more():
     manifest = {"token_expires_at": "2026-11-28T04:00:00+08:00"}
-    assert token_expiry_notice(manifest, datetime(2026, 10, 14, 4, 0, tzinfo=BALI)) is None
+    assert token_expiry_notice(manifest, datetime(2026, 10, 14, 4, 0, tzinfo=TZ)) is None
     assert token_expiry_notice({}, NOW) is None
 
 

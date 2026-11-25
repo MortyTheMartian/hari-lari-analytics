@@ -6,15 +6,17 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
+from hari_lari_analytics.project import project
+
 STALE_WARN_DAYS = 3
 
 
 def last_week_bounds(now: datetime) -> tuple[datetime, datetime]:
-    """Monday 00:00 to next Monday 00:00 of the week before the one containing `now`."""
-    monday = (now - timedelta(days=now.weekday())).replace(
-        hour=0, minute=0, second=0, microsecond=0, tzinfo=None
-    )
-    return monday - timedelta(days=7), monday
+    """The first day of the week 00:00 to the first day of the next week 00:00, for the week
+    before the one containing `now` (weeks start on `first_weekday` of project.yml)."""
+    first = project().week_start(now.date())
+    this_week = datetime(first.year, first.month, first.day)
+    return this_week - timedelta(days=7), this_week
 
 
 def run_checks(

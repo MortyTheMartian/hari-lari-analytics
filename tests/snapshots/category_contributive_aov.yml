@@ -1,0 +1,14 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: category_contributive_aov
+params: {}
+facets:
+- key: null
+  label: null
+  metric: null
+  shape: rows
+  csv: |
+    adjusted_category,is_total,net_sales,share,items_sold,orders,penetration,category_aov,contributive_aov,prior_net_sales,net_sales_change,net_sales_delta,prior_share,share_change,share_delta,prior_items_sold,items_sold_change,items_sold_delta,prior_orders,orders_change,orders_delta,prior_penetration,penetration_change,penetration_delta,prior_category_aov,category_aov_change,category_aov_delta,prior_contributive_aov,contributive_aov_change,contributive_aov_delta,n_orders,prior_n_orders,trading_days,prior_trading_days
+    Coffee,False,70000,0.7142857143,2,2,1,35000,35000,,,,,,,,,,,,,,,,,,,,,,2,,1,
+    Snacks (Focaccia),False,28000,0.2857142857,1,1,0.5,28000,14000,,,,,,,,,,,,,,,,,,,,,,1,,1,
+    ,True,98000,1,3,2,1,49000,49000,,,,,,,,,,,,,,,,,,,,,,2,,1,

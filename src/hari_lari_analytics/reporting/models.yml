@@ -1,0 +1,82 @@
+# Model metadata (docs/components.md, "Models"): one entry per SQL file in models/.
+#
+#   description:  what one row is.
+#   primary_key:  a column or a list of columns; the data checks fail when it is not unique.
+#   time:         the date column the windows filter on; a model without one cannot be queried.
+#   calendar:     true when the trading days of dim_calendar apply to its rows (per window,
+#                 bucket and calendar value); needs time.
+#   sample_size:  the count metric of the default sample-size rule (the default min_n of
+#                 metrics.yml counts it per row); none for a model without orders.
+#   exposed:      whether components may query it; only dim_ and fct_ models can be.
+
+stg_transactions:
+  description: One payment of the API, a sale or a refund, with its receipt and payment type
+  primary_key: payment_id
+
+stg_transaction_lines:
+  description: One line of a payment as the API returns it
+  primary_key: [payment_id, line_uuid]
+
+stg_transaction_line_discounts:
+  description: One discount on a line; a line can have several
+
+stg_transaction_line_modifiers:
+  description: One modifier option on a line
+
+stg_transaction_refunds:
+  description: The reason of a refund payment
+
+stg_items:
+  description: One item of today's catalog, deleted items included
+
+int_item_resolution:
+  description: The adjusted item and category of a sold item, by id or by the alias file
+
+int_signed_lines:
+  description: One line with refund payments turned into negative lines
+  primary_key: [payment_id, line_uuid]
+
+int_sales_lines:
+  description: One cleaned line with its dimensions and category groups, up to the anchor
+  primary_key: [payment_id, line_uuid]
+
+int_order_attributes:
+  description: One receipt with its items, lines and has_food, has_drink and the other flags
+  primary_key: receipt_nr
+
+int_item_lifecycle:
+  description: One adjusted item-variant with its first and last sale
+  primary_key: adjusted_item_variant
+
+dim_items:
+  description: One adjusted item, live or deleted, with its category, groups and sale dates
+  primary_key: adjusted_item
+  exposed: true
+
+dim_categories:
+  description: One adjusted category with its category groups and sale dates
+  primary_key: adjusted_category
+  exposed: true
+
+dim_calendar:
+  description: One day from the first sale to the anchor, with trading days and events
+  primary_key: date
+  time: date
+  calendar: true
+  exposed: true
+
+fct_sales_lines:
+  description: One sold or refunded line, with the attributes of its receipt
+  primary_key: [payment_id, line_uuid]
+  time: sale_date
+  calendar: true
+  sample_size: orders
+  exposed: true
+
+fct_orders:
+  description: One receipt, dated at its payment
+  primary_key: receipt_nr
+  time: sale_date
+  calendar: true
+  sample_size: orders
+  exposed: true

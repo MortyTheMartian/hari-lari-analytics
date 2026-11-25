@@ -1,0 +1,57 @@
+# The KPI tree (docs/components.md, "KPI tree"): identities between metrics. They drive the
+# decompose transform and the top_drivers insight; tests/test_kpi_tree.py checks that each one
+# holds on real data.
+#
+#   product:  kpi = driver × driver × ...
+#   sum:      kpi = ± driver ± driver ...; a leading '-' subtracts the term
+#   sum_over: kpi = Σ driver over the values of `dimension`; `then` names the identity that
+#             splits each member's driver one level further
+
+- id: sales_volume_value
+  description: Net sales grow with more orders or a higher order value
+  kpi: net_sales
+  kind: product
+  drivers: [orders, aov]
+
+- id: net_from_gross
+  description: Net sales are gross sales minus discounts and refunds
+  kpi: net_sales
+  kind: sum
+  drivers: [gross_sales, -discounts, -refunds]
+
+- id: aov_basket
+  description: The order value grows with more items per order or a higher price per item
+  kpi: aov
+  kind: product
+  drivers: [items_per_order, avg_item_price]
+
+- id: aov_by_category
+  description: The AOV is the sum of the contributive AOVs of the categories
+  kpi: aov
+  kind: sum_over
+  dimension: adjusted_category
+  driver: contributive_aov
+  then: category_slice
+
+- id: aov_by_category_group
+  description: The AOV is the sum of the contributive AOVs of food, drink and consignment
+  kpi: aov
+  kind: sum_over
+  dimension: category_group_level_1
+  driver: contributive_aov
+  then: category_slice
+
+- id: category_slice
+  description: >-
+    A category's slice of the AOV grows when it is in more orders (penetration) or when the
+    orders with it spend more on it (category AOV)
+  kpi: contributive_aov
+  kind: product
+  drivers: [penetration, category_aov]
+
+- id: net_sales_by_category
+  description: Net sales are the sum of the net sales of the categories
+  kpi: net_sales
+  kind: sum_over
+  dimension: adjusted_category
+  driver: net_sales
