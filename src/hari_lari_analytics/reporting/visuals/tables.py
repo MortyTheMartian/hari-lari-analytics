@@ -39,6 +39,7 @@ class TableOptions(Options):
     bold: list[str] = []
     rank: bool = False  # number the rows
     total: bool = True  # show the total row, when the query has one
+    fill: bool = False  # spread the rows over the whole area instead of stacking them at the top
     # groups: a row per group; metrics: a row per metric (current, prior, change), the
     # default for a result without dimensions
     orientation: Literal["auto", "groups", "metrics"] = "auto"
@@ -85,9 +86,11 @@ def _fit_rows(area: Area, rows: list[Row], header_rows: int) -> tuple[list[Row],
     return [*regular[: keep - len(total)], *total], len(rows) - keep
 
 
-def _draw(area: Area, df: pd.DataFrame, defs: list[ColumnDefinition], header_rows: int):
+def _draw(
+    area: Area, df: pd.DataFrame, defs: list[ColumnDefinition], header_rows: int, fill: bool
+):
     n = len(df) + header_rows
-    row_h = min(area.points_y(ROW_POINTS), 1 / n)
+    row_h = 1 / n if fill else min(area.points_y(ROW_POINTS), 1 / n)
     ax = area.axes(0, 1 - row_h * n, 1, row_h * n)
     return base.table(ax, area.theme.palette, df, defs, "label", size=area.theme.size("body"))
 
@@ -277,7 +280,7 @@ def _by_group(area: Area, result: Result, options: TableOptions) -> None:
             if m in options.deltas:
                 data[f"delta:{m}"].append(row[f"{m}_{options.deltas[m]}"].text)
     df = pd.DataFrame(data)
-    t = _draw(area, df, defs, 1 + grouped)
+    t = _draw(area, df, defs, 1 + grouped, options.fill)
 
     names = list(df.columns)
     for i, row in enumerate(rows):
@@ -334,7 +337,7 @@ def _by_metric(area: Area, result: Result, options: TableOptions) -> None:
                 textprops={"ha": "right", "weight": "semibold"},
             ),
         ]
-    t = _draw(area, pd.DataFrame(data), defs, 1)
+    t = _draw(area, pd.DataFrame(data), defs, 1, options.fill)
     for i, cell in enumerate(changes):
         if cell is not None:
             t.cells[(i, 3)].text.set_color(change_color(theme, cell))

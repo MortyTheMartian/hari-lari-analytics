@@ -12,4 +12,4 @@ query:
             last_sale_ts]
   window: $period
   compare: prior
-visual: { type: table, orientation: metrics }
+visual: { type: table, orientation: metrics, fill: true }

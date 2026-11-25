@@ -1,14 +1,14 @@
 """Components: the YAML schema, the loader, parameters and the overrides of a report slot.
 
 A component is one YAML file in `components/` (docs/components.md, "Components"): `id`,
-`title`, `hint`, `description`, default `params`, `query`, `transforms`, `facet`, `visual` and
-`insights`. Loading validates it strictly: an unknown key fails with the file and the field,
-and the query, the transforms, the facet, the visual and the insight rules are checked against
-the registries and the compiler without touching any data (on a fixed calendar, since the
-checks need no sales).
+`title`, `hint`, `note`, `description`, default `params`, `query`, `transforms`, `facet`,
+`visual` and `insights`. Loading validates it strictly: an unknown key fails with the file and
+the field, and the query, the transforms, the facet, the visual and the insight rules are
+checked against the registries and the compiler without touching any data (on a fixed
+calendar, since the checks need no sales).
 
 A value written `$name` anywhere in the query, the transforms, the facet or the visual is a
-parameter, and so is a name used as `{{ name }}` in the title or hint (besides `meta` and
+parameter, and so is a name used as `{{ name }}` in the title, hint or note (besides `meta` and
 `facet`). The component's `params` give defaults; a report binds the others, or overrides the
 defaults. A component whose parameters all have a default is checked completely when loaded; a
 component with a parameter only a report binds (`$category`) is checked as far as possible when
@@ -54,9 +54,9 @@ from hari_lari_analytics.reporting.windows import Calendar
 
 PARAMETER = re.compile(r"^\$([a-z_][a-z0-9_]*)$")
 NAME = r"^[a-z][a-z0-9_]*$"
-TEXT_NAMES = frozenset({"meta", "facet"})  # what a title or hint may use besides the parameters
+TEXT_NAMES = frozenset({"meta", "facet"})  # what a text template may use besides the parameters
 BODY = ("query", "transforms", "facet", "visual")  # the fields in which $parameters are replaced
-TEXT = ("title", "hint")  # Jinja templates
+TEXT = ("title", "hint", "note")  # Jinja templates
 SCHEMA_REF = "# yaml-language-server: $schema=../schema/component.schema.json"
 
 
@@ -80,9 +80,9 @@ class ComponentError(ValueError):
 def render_text(
     template: str | None, params: Mapping[str, Any], meta: Any, facet: Any, strict: bool = True
 ) -> str:
-    """A component's title or hint as the builder shows it. The parameters, the result's `meta`
-    and the `facet` are available; an undefined name is an error, or with `strict=False` (a slot
-    without data has no `meta`) an empty string."""
+    """A component's title, hint or note as the builder shows it. The parameters, the result's
+    `meta` and the `facet` are available; an undefined name is an error, or with `strict=False`
+    (a slot without data has no `meta`) an empty string."""
     if not template:
         return ""
     env = _STRICT if strict else _JINJA
@@ -134,6 +134,8 @@ class ComponentSpec(_Strict):
     id: str = Field(pattern=NAME)
     title: str
     hint: str | None = None
+    # a short explanation at the foot of the card, how to read the visual; a line break is kept
+    note: str | None = None
     description: str | None = None
     params: dict[str, ParamValue] = {}
     query: QuerySpec

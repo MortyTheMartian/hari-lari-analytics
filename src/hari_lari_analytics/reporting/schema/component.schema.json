@@ -955,6 +955,18 @@
       "default": null,
       "title": "Hint"
     },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Note"
+    },
     "description": {
       "anyOf": [
         {
@@ -2577,6 +2589,20 @@
                     {
                       "default": true,
                       "title": "Total",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "fill": {
+                  "anyOf": [
+                    {
+                      "default": false,
+                      "title": "Fill",
                       "type": "boolean"
                     },
                     {

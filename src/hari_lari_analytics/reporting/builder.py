@@ -116,6 +116,7 @@ class SlotRun:
     slot: BoundSlot
     title: str
     hint: str
+    note: str
     facets: list[Facet]
     insights: list[Insight]
 
@@ -196,23 +197,21 @@ def page_chrome(ctx: QueryContext, page: ReportPage) -> tuple[list[Chip], str]:
 # --- running a slot -------------------------------------------------------------------------------
 
 
-def slot_texts(ref: BoundRef, facets: Sequence[Facet]) -> tuple[str, str]:
-    """The rendered title and hint of a component: from its first facet's result, or without
-    `meta` when the window has no sales."""
+def slot_texts(ref: BoundRef, facets: Sequence[Facet]) -> tuple[str, str, str]:
+    """The rendered title, hint and note of a component: from its first facet's result, or
+    without `meta` when the window has no sales."""
     spec = ref.bound.spec
     params = ref.bound.params
     first = facets[0] if facets else None
     meta = first.result.meta if first else None
+    templates = (spec.title, spec.hint, spec.note)
     try:
-        return (
-            render_text(spec.title, params, meta, first),
-            render_text(spec.hint, params, meta, first),
-        )
+        title, hint, note = (render_text(t, params, meta, first) for t in templates)
     except jinja2.TemplateError:
-        return (
-            render_text(spec.title, params, meta, first, strict=False),
-            render_text(spec.hint, params, meta, first, strict=False),
+        title, hint, note = (
+            render_text(t, params, meta, first, strict=False) for t in templates
         )
+    return title, hint, note
 
 
 def unfiltered_note(ctx: QueryContext, slot: BoundSlot, in_force: Sequence[AppliedFilter]) -> str:
@@ -238,14 +237,14 @@ def unfiltered_note(ctx: QueryContext, slot: BoundSlot, in_force: Sequence[Appli
 def run_slot(slot: BoundSlot, ctx: QueryContext, in_force: Sequence[AppliedFilter] = ()) -> SlotRun:
     ref = slot.ref
     facets = run_facets(ref.component, ctx, ref.params, ref.with_)
-    title, hint = slot_texts(ref, facets)
-    note = unfiltered_note(ctx, slot, in_force)
-    if note:
-        hint = f"{hint} · {note}" if hint else note
+    title, hint, note = slot_texts(ref, facets)
+    unfiltered = unfiltered_note(ctx, slot, in_force)
+    if unfiltered:
+        hint = f"{hint} · {unfiltered}" if hint else unfiltered
     found = component_insights(
         ref.bound.id, ref.bound.spec.insights, facets, InsightContext(ctx.calendar)
     )
-    return SlotRun(slot, title, hint, facets, found)
+    return SlotRun(slot, title, hint, note, facets, found)
 
 
 def run_page(page: ReportPage, ctx: QueryContext) -> PageRun:

@@ -245,6 +245,30 @@ def test_the_table_ranks_and_ends_with_the_total(ctx):
     assert "Total" in labels
 
 
+def test_a_filled_table_spreads_its_rows_over_the_area(ctx):
+    result = run_facets(component(CASES["table_metrics"], "table_metrics"), ctx)[0].result
+
+    def table_height(fill: bool) -> float:
+        fig = visuals.page()
+        visuals.draw("table", {"fill": fill}, visuals.Area(fig, (0.05, 0.05, 0.4, 0.9)), result)
+        (ax,) = fig.axes
+        return ax.get_position().height
+
+    assert table_height(False) < 0.3  # four rows of at most 24 points each
+    assert table_height(True) == pytest.approx(0.9)
+
+
+def test_a_note_sits_at_the_foot_and_leaves_the_area_above():
+    fig = visuals.page()
+    area = visuals.Area(fig, (0.05, 0.05, 0.9, 0.5))
+    above = visuals.note(area, "First line.\nSecond line.")
+    (text,) = texts(fig)
+    assert text.get_text() == "First line.\nSecond line."
+    assert text.get_color() == DEFAULT_THEME.color("muted")
+    assert above.y > area.y
+    assert above.y + above.h == pytest.approx(area.y + area.h)
+
+
 def test_the_insights_visual_draws_the_sentences(ctx):
     class Sentence:
         def __init__(self, text, tone):

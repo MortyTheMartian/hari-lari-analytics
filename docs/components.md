@@ -943,7 +943,9 @@ visual: { type: heatmap }
 ```
 
 The fields: `id`, `title` and `hint` (short Jinja strings with access to `meta`, `facet` and the
-parameters), `description` (shown in the gallery), `params` (defaults), `query`, `transforms`,
+parameters), `note` (a Jinja string like the hint, but an explanation of how to read the visual,
+written at the foot of the card; a line break in it is kept), `description` (shown in the
+gallery), `params` (defaults), `query`, `transforms`,
 `facet`, `visual` and `insights`. The loader (`components.py`, plan 7.12) validates a component
 with pydantic and the registries, without any data (the queries are compiled on a fixed
 calendar), and fails with the file name and field, listing every schema error at once:
@@ -1131,7 +1133,7 @@ autocompletes `visual:` too.
 | `kpi_card` | single, series | one metric: the value, its change and prior; on a series with `totals: true` the window total and a sparkline of the buckets | `metric` (default: the facet's), `prior`, `sparkline`, `style`, `card` |
 | `summary_card` | single, series | a period card: the window, its comparison and two or three metrics with their change, and a sparkline on a series | `metrics`, `sparkline`, `card` |
 | `text_line` | single | one line of values: "Gross 1.2M · Discounts 85k · Refunds 0 IDR" | `metrics`, `labels`, `style` |
-| `table` | rows, single, series | one row per group: dimension columns, metric columns with bars, prior values and deltas, rank, the total row; a result without dimensions as one row per metric (current, prior, change) | `columns`, `bars`, `deltas`, `prior`, `bold`, `rank`, `total`, `orientation` |
+| `table` | rows, single, series | one row per group: dimension columns, metric columns with bars, prior values and deltas, rank, the total row; a result without dimensions as one row per metric (current, prior, change) | `columns`, `bars`, `deltas`, `prior`, `bold`, `rank`, `total`, `orientation`, `fill` (spread the rows over the whole slot, as the key figures) |
 | `bar_trend` | series, rows | bars over buckets or an ordered dimension (hours), prior ticks, growth labels, a second metric as a line, highlighted bars, event marks | `metric`, `line`, `prior`, `growth`, `labels`, `highlight`, `events`, `color` |
 | `hbar` | rows | horizontal bars of one metric per group, with value labels and prior ticks | `metric`, `prior`, `highlight`, `labels` |
 | `dot_plot` | rows | one dot per group, the prior as a hollow dot joined by a line, coloured by tone | `metric`, `prior`, `labels` |
@@ -1153,8 +1155,10 @@ of `report_pdf.py` unchanged, so the old report keeps rendering identically unti
 
 By default a slot draws a card with the component's `title` and `hint` and gives the visual the
 inner rectangle. `title` and `hint` have access to `meta`, so
-"Average per trading day · {{ meta.trading_days }} days" works. A slot can turn the card off
-with `card: false` (the cover KPI line).
+"Average per trading day · {{ meta.trading_days }} days" works. A component's `note` is written
+at the foot of the slot, below the visual, which gets the rectangle above it (the reading guide
+under the categories table). A slot can turn the card off with `card: false` (the cover KPI
+line).
 
 ## Insights
 
@@ -1564,7 +1568,8 @@ report and an empty page, against it. The contract for a renderer:
 - `pages[]`: `id` (a repeat has a longer one than its `base`), `title`, `period`, `chips`, `note`,
   the `grid` and `slots[]`, the page's ranked `insights`, and `empty_message` for a `when_empty`
   page (then it has no slots).
-- `slots[]`: `component`, the rendered `title` and `hint`, `visual {type, options}`, the facet
+- `slots[]`: `component`, the rendered `title`, `hint` and `note` (empty without one),
+  `visual {type, options}`, the facet
   `layout`, `position`, `card`, the `filters` in force, `results[]` and `facets[]`, which point at
   a result by index (facets by metric share one result).
 - `results[]`: `shape`, `empty`, the `window` with its comparison (`compare_ok` false means show

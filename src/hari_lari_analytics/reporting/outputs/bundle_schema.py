@@ -175,6 +175,7 @@ class Slot(_Strict):
     component: str
     title: str
     hint: str
+    note: str = Field(description="how to read the visual, at the foot of the card; may be empty")
     visual: VisualInfo
     layout: str = Field(description="how the facets are laid out: row, column or grid(RxC)")
     position: Position

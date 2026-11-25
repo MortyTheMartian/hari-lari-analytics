@@ -139,7 +139,8 @@ the real run. What it needed:
 | W1. The comparison chip said "vs prior 14 days" where today's names the days | closed | The chip shows the comparison window's days ("vs 26 Oct 2026 – 08 Nov 2026"). |
 | W2. A text line could not write the caption's week ("Week 47 · 16–22 Nov 2026", and the week before) | closed | `anchor_week` in the template context and the filter `days_ending(n, before=0)`; `date_range` moved from `deliver/caption.py` to `formats.py`. |
 | W3. The details page does not fit today's layout (hours, payments and discounts stacked on the right) with the visuals' minimum sizes | accepted | Two rows: top items and hours, then discounts and payments. |
-| W4. The categories page loses today's paragraph on reading a change in contributive AOV: a page cannot hold a static text | open | A `text` slot (a template, no component) would carry it; the formula is in the card's hint. |
+| W4. The categories page loses today's paragraph on reading a change in contributive AOV: a page cannot hold a static text | closed | A component `note` (a Jinja template, at the foot of the card and in the bundle) carries it: `category_contributive_aov` has today's paragraph. It belongs to the component rather than the page, so it follows the table to every report. |
+| W5. The key figures table stood at the top of its card where today's spreads its rows over the card | closed | The `table` option `fill: true`, set on `key_figures`. |
 
 The caption has today's numbers; its form is the framework's: "Net Sales: 13,752,000 IDR
 (+3.9% vs prior 7 days)" for "Net sales: IDR 13,752,000 (▲ 3.9%)", a blank line between its

@@ -84,6 +84,15 @@ def test_the_tracer_page_renders_to_every_output_without_overflow(built):
     assert all(p.stat().st_size > 0 for p in built.files)
 
 
+def test_a_component_note_is_rendered_and_in_the_bundle(built):
+    kpis, table = built.run.pages[0].slots
+    assert table.note.startswith("Reading a change in contributive AOV: ")
+    assert table.note.count("\n") == 2  # the line breaks of the YAML are kept
+    assert kpis.note == ""
+    slots = json.loads(built.bundle.read_text())["pages"][0]["slots"]
+    assert [s["note"] for s in slots] == [kpis.note, table.note]
+
+
 def test_the_pdf_has_one_page_per_report_page(built):
     data = built.pdf.read_bytes()
     assert data.startswith(b"%PDF")

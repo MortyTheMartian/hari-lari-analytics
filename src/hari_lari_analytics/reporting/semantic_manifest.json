@@ -2016,6 +2016,7 @@
         "bold",
         "columns",
         "deltas",
+        "fill",
         "orientation",
         "prior",
         "rank",
@@ -2124,6 +2125,7 @@
       "title": "Why the average order value moved",
       "description": "The change of the AOV against the prior period, split exactly into the effect of the items per order and of the average net price per item (AOV = items per order × avg item price, LMDI).",
       "hint": "{{ meta.window.current.label }}{% if meta.compare_ok %} vs {{ meta.window.compare_label }}{% endif %} · AOV = items per order × avg net price per item",
+      "note": null,
       "params": {
         "period": "L6W"
       },
@@ -2150,6 +2152,7 @@
       "title": "Food and drink attach rates",
       "description": "Per time bucket: the share of the orders with a drink that also have food, and the share of the orders with food that also have a drink, with the prior period as ticks.",
       "hint": "Food attach = orders with a drink and food ÷ orders with a drink · drink attach the other way round{% if meta.compare_ok %} · ticks = prior period{% endif %}",
+      "note": null,
       "params": {
         "period": "L6W"
       },
@@ -2183,6 +2186,7 @@
       "title": "Adjusted categories & contributive AOV",
       "description": "One row per adjusted category with its share of net sales, penetration, category AOV and contributive AOV, the categories sold only in the prior period, and the total, whose contributive AOV is the AOV.",
       "hint": "Sorted by net sales · AOV = Σ contributive AOV = Σ penetration × category AOV · a category's share of AOV equals its % of net{% if meta.compare_ok %} · Δ vs prior period{% endif %}",
+      "note": "Reading a change in contributive AOV: a moving penetration means the category is in more or fewer orders (an inclusion question);\na moving category AOV means orders with the category spend more or less on it (a pricing or basket-size question).\nOrders are counted per receipt, so they don't add up across categories: the total is all receipts, and its penetration is 100%. Net sales, items and contributive AOV add up.",
       "params": {
         "period": "L6W"
       },
@@ -2218,6 +2222,7 @@
       "title": "Order penetration",
       "description": "The share of orders that contain each adjusted category, highest first, with the prior period as a hollow dot.",
       "hint": "Share of orders containing the category{% if meta.compare_ok %} · ○ prior period{% endif %}",
+      "note": null,
       "params": {
         "period": "L6W"
       },
@@ -2245,6 +2250,7 @@
       "title": "Data notes",
       "description": "Where the data comes from, the extraction's errors and warnings from the run manifest, and the warnings of the data checks.",
       "hint": null,
+      "note": null,
       "params": {},
       "unbound": [],
       "query": {
@@ -2260,6 +2266,7 @@
       "title": "Discounts",
       "description": "Per discount code (and the lines without one): orders, gross sales, discounts and the discount rate, by gross sales.",
       "hint": "By discount code",
+      "note": null,
       "params": {
         "period": "L6W"
       },
@@ -2287,6 +2294,7 @@
       "title": "Gross, discounts and refunds",
       "description": "The line under the cover cards: gross sales, discounts and refunds from the first sale to the anchor, which net sales is made of.",
       "hint": null,
+      "note": null,
       "params": {},
       "unbound": [],
       "query": {
@@ -2308,6 +2316,7 @@
       "title": "Full history",
       "description": "The four headline cards of the cover: net sales, orders, average order value and items sold from the first sale to the anchor.",
       "hint": "{{ meta.window.current.label }}",
+      "note": null,
       "params": {},
       "unbound": [],
       "query": {
@@ -2334,6 +2343,7 @@
       "title": "Key figures",
       "description": "The period's figures against the prior period: net sales, orders, AOV, items sold, gross sales, discounts, refunds, and the first and last sale.",
       "hint": "Amounts in IDR · current vs prior period",
+      "note": null,
       "params": {
         "period": "L6W"
       },
@@ -2364,6 +2374,7 @@
       "title": "Last sale",
       "description": "The time of the last sale up to the anchor, which says how fresh the data is (the note on the cover of today's report).",
       "hint": null,
+      "note": null,
       "params": {},
       "unbound": [],
       "query": {
@@ -2383,6 +2394,7 @@
       "title": "Sales lines",
       "description": "The cleaned sales lines up to the anchor, one row per line, for the workbook of a report: the columns of the Excel file, without personal data and without the line note. It has no visual, so it belongs in `outputs.xlsx`, not on a page.",
       "hint": null,
+      "note": null,
       "params": {},
       "unbound": [],
       "query": {
@@ -2398,6 +2410,7 @@
       "title": "Orders by hour",
       "description": "Orders per trading day in each hour of the day, from the first to the last hour with a sale, with the three busiest hours highlighted.",
       "hint": "Average per trading day · {{ meta.trading_days }} days · top 3 hours highlighted",
+      "note": null,
       "params": {
         "period": "L6W"
       },
@@ -2428,6 +2441,7 @@
       "title": "Orders per trading day by weekday and hour",
       "description": "The average number of orders per trading day in each hour of each weekday: when the café is busy, for staffing. A weekday is divided by its own trading days in the window.",
       "hint": "Average orders per trading day · {{ meta.window.current.label }}",
+      "note": null,
       "params": {
         "period": "L6W"
       },
@@ -2456,6 +2470,7 @@
       "title": "Payment types",
       "description": "The share of net sales per payment type, with the orders and net sales of each; beyond four types the smallest are grouped as \"Other\".",
       "hint": "Share of net sales",
+      "note": null,
       "params": {
         "period": "L6W"
       },
@@ -2487,6 +2502,7 @@
       "title": "Key figures",
       "description": "The four KPI cards of a period's overview: net sales, orders, average order value and items sold, each with its change, the prior value and a sparkline (by day for a daily window, by 7-day block otherwise).",
       "hint": null,
+      "note": null,
       "params": {
         "period": "L6W"
       },
@@ -2520,6 +2536,7 @@
       "title": "Periods",
       "description": "The three period cards of the cover: net sales and orders of the last 14 days, 6 weeks and 3 months with their change against the prior period, and a sparkline of net sales (by day for the 14 days, by 7-day block otherwise).",
       "hint": null,
+      "note": null,
       "params": {
         "period": "L6W"
       },
@@ -2556,6 +2573,7 @@
       "title": "Net sales & orders by {{ meta.grain }}",
       "description": "Net sales per bucket of the period (days for 14 days, weeks for 6 weeks, months for 3 months) with the prior period as ticks and the change against the previous bucket, and the orders as a line below.",
       "hint": "IDR · {% if meta.compare_ok %}ticks = prior period, same position{% else %}no prior period available{% endif %}{% if meta.grain != 'day' %} · ▲▼ {{ meta.grain }}-over-{{ meta.grain }} change{% endif %}",
+      "note": null,
       "params": {
         "period": "L6W"
       },
@@ -2584,6 +2602,7 @@
       "title": "Stock alert",
       "description": "The stock-tracked item-variants at or below their alert-at quantity, with their stock level and status, as Moka counted them at extraction time: negative first (more sold than counted in), then out of stock, then low.",
       "hint": "Stock at or below the alert-at quantity · Moka's count at extraction",
+      "note": null,
       "params": {},
       "unbound": [],
       "query": {
@@ -2614,6 +2633,7 @@
       "title": "Stock status",
       "description": "How many stock-tracked item-variants are negative, out of stock, low or ok, as Moka counted them at the extraction.",
       "hint": "Stock-tracked item-variants per status · Moka's count at extraction",
+      "note": null,
       "params": {},
       "unbound": [],
       "query": {
@@ -2637,6 +2657,7 @@
       "title": "Stock counted at",
       "description": "When the stock levels were read from Moka: the time of the extraction, which a stock report shows because the stock is a snapshot and the anchor says nothing about its age.",
       "hint": null,
+      "note": null,
       "params": {},
       "unbound": [],
       "query": {
@@ -2655,6 +2676,7 @@
       "title": "Top 15 items",
       "description": "The 15 item-variants with the most net sales in the period, with their category, items sold and share of all net sales.",
       "hint": "By net sales",
+      "note": null,
       "params": {
         "period": "L6W"
       },
@@ -2686,6 +2708,7 @@
       "title": "The week",
       "description": "Net sales, orders and average order value of the 7 days ending on the anchor (the week, when the anchor is a Sunday) against the 7 days before: the lines of the weekly caption.",
       "hint": null,
+      "note": null,
       "params": {},
       "unbound": [],
       "query": {
