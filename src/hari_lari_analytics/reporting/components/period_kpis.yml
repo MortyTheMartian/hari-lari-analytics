@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: period_kpis
+title: Key figures
+description: >-
+  The four KPI cards of a period's overview: net sales, orders, average order value and items
+  sold, each with its change, the prior value and a sparkline (by day for a daily window, by
+  7-day block otherwise).
+params: { period: L6W }
+query:
+  model: fct_sales_lines
+  dimensions: [bucket]
+  grain: spark
+  metrics: [net_sales, orders, aov, items_sold]
+  window: $period
+  compare: prior
+  totals: true
+facet: { by: metric, layout: grid(1x4) }
+visual: { type: kpi_card }

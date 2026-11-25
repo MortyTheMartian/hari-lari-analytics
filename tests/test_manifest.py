@@ -175,7 +175,7 @@ def test_a_report_lists_its_schedule_outputs_and_pages():
 
 def test_it_holds_no_business_identifier():
     text = manifest_text().lower()
-    for word in ("telegram", "secret", "chat_id", "gs://", "googleapis"):
+    for word in ("telegram-", "telegram_targets", "secret", "chat_id", "gs://", "googleapis"):
         assert word not in text, word
 
 

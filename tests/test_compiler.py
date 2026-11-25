@@ -179,6 +179,16 @@ def test_top_n_with_other(con):
     assert r.total.net_sales == 213_000
 
 
+def test_other_never_hides_a_single_group(con):
+    # five categories: the top 4 would leave one, which keeps its name instead of "Other (1)"
+    r = q(con, model="fct_sales_lines", dimensions=["adjusted_category"], window="full",
+          metrics=["net_sales"], top={"n": 4, "by": "net_sales", "other": True})  # fmt: skip
+    assert len(r.rows) == 5 and not r.rows["is_other"].any()
+    three = q(con, model="fct_sales_lines", dimensions=["adjusted_category"], window="full",
+              metrics=["net_sales"], top={"n": 3, "by": "net_sales", "other": True})  # fmt: skip
+    assert listed(three.rows["adjusted_category"])[-1] == "Other (2)"
+
+
 def test_top_n_without_other_keeps_the_total_of_everything(con):
     r = q(con, model="fct_sales_lines", dimensions=["adjusted_item_variant", "adjusted_category"],
           window="full", metrics=["net_sales", "share"], top={"n": 2, "by": "net_sales"},
@@ -382,6 +392,39 @@ def test_invalid_queries(con, query, message):
 def test_unknown_keys_fail():
     with pytest.raises(QueryError, match="^query: .*metrcis: Extra inputs are not permitted"):
         parse_query({"model": "fct_orders", "metrcis": ["orders"], "window": "full"})
+
+
+# --- snapshots and sort orders ------------------------------------------------------------------
+
+
+def test_a_snapshot_model_is_queried_without_a_window(con):
+    # fct_stock of the fixture: Latte-Hot out (0), Latte-Cold low (3), Cappucino-Hot ok (40),
+    # Focaccia Tomato negative (-7)
+    r = q(con, model="fct_stock", dimensions=["stock_status"], metrics=["stock_level"])
+    assert r.meta.window is None
+    # in the order of the dimension's values, not alphabetically; the sort metric of the item
+    # grain (net sales) is not on fct_stock, so the values sort by themselves
+    assert listed(r.rows["stock_status"]) == ["negative", "out", "low", "ok"]
+    assert listed(r.rows["stock_level"]) == [-7, 0, 3, 40]
+    alert = q(con, model="fct_stock", dimensions=["adjusted_item_variant"],
+              metrics=["stock_level"],
+              where={"stock_status": ["negative", "out", "low"]})  # fmt: skip
+    assert listed(alert.rows["adjusted_item_variant"]) == [
+        "Focaccia Tomato", "Latte-Cold", "Latte-Hot",
+    ]  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("query", "message"),
+    [
+        ({"model": "fct_stock", "window": "L6W"}, "window: fct_stock has no time column"),
+        ({"model": "fct_stock", "compare": "prior"}, "compare: fct_stock is a snapshot"),
+        ({"model": "fct_orders", "metrics": ["orders"]}, "the query needs a window"),
+    ],
+)
+def test_snapshot_and_time_rules(con, query, message):
+    with pytest.raises(QueryError, match=message):
+        compile_query(Query(**{"metrics": ["stock_level"], **query}), REG, Calendar.from_db(con))
 
 
 # --- @query sources -----------------------------------------------------------------------------

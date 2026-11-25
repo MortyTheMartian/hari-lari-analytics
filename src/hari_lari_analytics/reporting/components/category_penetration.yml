@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: category_penetration
+title: Order penetration
+description: >-
+  The share of orders that contain each adjusted category, highest first, with the prior
+  period as a hollow dot.
+hint: "Share of orders containing the category{% if meta.compare_ok %} · ○ prior period{% endif %}"
+params: { period: L6W }
+query:
+  model: fct_sales_lines
+  dimensions: [adjusted_category]
+  metrics: [penetration]
+  window: $period
+  compare: prior
+transforms:
+  - sort_limit: { by: penetration }
+visual: { type: dot_plot, metric: penetration }

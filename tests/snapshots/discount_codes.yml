@@ -1,0 +1,13 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: discount_codes
+params: {}
+facets:
+- key: null
+  label: null
+  metric: null
+  shape: rows
+  csv: |
+    discount_code,is_total,orders,gross_sales,discounts,discount_rate,n_orders,trading_days
+    ,False,1,108000,0,0,1,1
+    FOUNDER25,False,1,40000,10000,0.25,1,1

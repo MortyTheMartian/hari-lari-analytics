@@ -84,6 +84,15 @@ def test_the_tracer_page_renders_to_every_output_without_overflow(built):
     assert all(p.stat().st_size > 0 for p in built.files)
 
 
+def test_a_component_note_is_rendered_and_in_the_bundle(built):
+    kpis, table = built.run.pages[0].slots
+    assert table.note.startswith("Reading a change in contributive AOV: ")
+    assert table.note.count("\n") == 2  # the line breaks of the YAML are kept
+    assert kpis.note == ""
+    slots = json.loads(built.bundle.read_text())["pages"][0]["slots"]
+    assert [s["note"] for s in slots] == [kpis.note, table.note]
+
+
 def test_the_pdf_has_one_page_per_report_page(built):
     data = built.pdf.read_bytes()
     assert data.startswith(b"%PDF")
@@ -409,9 +418,10 @@ def test_strict_fails_on_an_overflow(capsys, run_dir, tmp_path):
 def test_validate_lists_the_reports(capsys):
     code, out, _ = cli(capsys, "validate")
     assert code == 0, out
+    count = len(load_components())
     assert (
         out.startswith("ok   tracer (1 page(s)")
-        and "1 report(s), 3 component(s), 0 problem(s)" in out
+        and f"1 report(s), {count} component(s), 0 problem(s)" in out
     )
 
 

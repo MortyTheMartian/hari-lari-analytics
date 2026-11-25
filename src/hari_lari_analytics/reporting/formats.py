@@ -12,7 +12,7 @@ metric's format in a style, and a change, delta or growth by the rules of docs/c
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Literal
 
 import pandas as pd
@@ -47,6 +47,22 @@ def headline(value: float, is_idr: bool) -> str:
     """Big KPI number: millions for large amounts, otherwise the full figure."""
     decimals = project().currency.decimals if is_idr else 0
     return project().numbers.headline(value, decimals, short=is_idr)
+
+
+def date_range(start: date, end: date) -> str:
+    """A range of days, short where the month or year repeats: 16–22 Nov 2026."""
+    if start.year != end.year:
+        return f"{start:%-d %b %Y} – {end:%-d %b %Y}"
+    if start.month != end.month:
+        return f"{start:%-d %b} – {end:%-d %b %Y}"
+    return f"{start.day}–{end:%-d %b %Y}"
+
+
+def days_ending(end: date, days: int, before: int = 0) -> str:
+    """The `days` days ending on `end`, moved back by `before` days, as a date range: the week
+    of a caption (`days_ending(anchor, 7)`) and the week before it (`before=7`)."""
+    last = end - timedelta(days=before)
+    return date_range(last - timedelta(days=days - 1), last)
 
 
 def stamp(value) -> str:
@@ -147,8 +163,9 @@ def default_change(metric: Metric) -> ChangeKind:
 
 
 def comparison_text(value, metric: Metric, kind: ChangeKind, style: Style = "full") -> str:
-    """The display string of a change, delta or growth of a metric."""
-    if kind == "delta":
+    """The display string of a change, delta or growth of a metric; the growth of a share or
+    rate is a difference, in percentage points."""
+    if kind == "delta" or (kind == "growth" and metric.format == "pct"):
         return delta_text(value, metric.format, style)
     return ratio_text(value)
 

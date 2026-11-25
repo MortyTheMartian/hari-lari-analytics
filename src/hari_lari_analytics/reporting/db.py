@@ -3,7 +3,8 @@
 The run tables of one extraction run become `raw_<table>` tables and the config CSV files
 `seed_<name>` tables, both with the declared columns cast to fixed types, so an empty table or a
 column that is NULL on every row still has the type the models expect. `run_context` holds the
-anchor and the first day of the week (from project.yml), which the macro `week_start` reads.
+anchor, the first day of the week (from project.yml), which the macro `week_start` reads, and
+the time of the extraction.
 The models are the SQL files in `models/`, one `create or replace view <name> as ...` each,
 named with their layer prefix (`stg_`, `int_`, `dim_`, `fct_`). A model reads only from its own
 or a lower layer; within that rule they are built in the order of the names they use, each once
@@ -14,12 +15,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from graphlib import TopologicalSorter
 from pathlib import Path
 
 import duckdb
 import pandas as pd
+import yaml
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from hari_lari_analytics.load import (
     InputError,
@@ -44,58 +47,39 @@ class Source:
     required: bool = True  # False: a missing or empty table gives an empty view
 
 
-RAW_SOURCES = {
-    "transactions": Source(
-        {
-            "id": "varchar",
-            "payment_no": "varchar",
-            "created_at": "timestamp",
-            "parent_payment_id": "varchar",
-            "payment_type_label": "varchar",
-        },
-        optional={"refund_amount": "double"},
-    ),
-    "transaction_lines": Source(
-        {
-            "payment_id": "varchar",
-            "payment_no": "varchar",
-            "uuid": "varchar",
-            "item_id": "bigint",
-            "item_name": "varchar",
-            "item_variant_name": "varchar",
-            "item_variant_id": "bigint",
-            "category_id": "bigint",
-            "category_name": "varchar",
-            "quantity": "bigint",
-            "gross_sales": "double",
-            "discount_amount": "double",
-            "net_sales": "double",
-        },
-        optional={"id": "bigint", "note": "varchar"},
-    ),
-    "items": Source(
-        {"id": "bigint", "name": "varchar", "category.name": "varchar", "is_deleted": "boolean"}
-    ),
-    "transaction_line_discounts": Source(
-        {"payment_id": "varchar", "line_uuid": "varchar", "discount_name": "varchar"},
-        required=False,
-    ),
-    "transaction_line_modifiers": Source(
-        {
-            "payment_id": "varchar",
-            "line_uuid": "varchar",
-            "modifier_id": "bigint",
-            "modifier_option_id": "bigint",
-            "modifier_name": "varchar",
-            "modifier_option_name": "varchar",
-            "price": "bigint",
-        },
-        required=False,
-    ),
-    "transaction_refunds": Source(
-        {"payment_id": "varchar", "refunded_reason": "varchar"}, required=False
-    ),
-}
+SOURCES_FILE = Path(__file__).with_name("sources.yml")
+SOURCE_TYPES = {"varchar", "bigint", "integer", "double", "boolean", "date", "timestamp"}
+
+
+class _SourceSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    columns: dict[str, str]
+    optional: dict[str, str] = {}
+    required: bool = True
+
+
+def load_sources(path: Path = SOURCES_FILE) -> dict[str, Source]:
+    """The run tables of `sources.yml`; an unknown key or column type fails, naming the table."""
+    raw = yaml.safe_load(path.read_text()) or {}
+    sources: dict[str, Source] = {}
+    for name, entry in raw.items():
+        where = f"{path.name}: {name}"
+        try:
+            spec = _SourceSpec.model_validate(entry)
+        except ValidationError as error:
+            problem = error.errors()[0]
+            field_name = ".".join(str(p) for p in problem["loc"])
+            raise ValueError(f"{where}: {field_name}: {problem['msg']}") from None
+        types = {**spec.columns, **spec.optional}
+        unknown = sorted({t for t in types.values() if t not in SOURCE_TYPES})
+        if unknown:
+            raise ValueError(f"{where}: unknown column type(s) {', '.join(unknown)}")
+        sources[name] = Source(spec.columns, spec.optional, spec.required)
+    return sources
+
+
+RAW_SOURCES = load_sources()
 
 SEED_SOURCES = {
     "item_aliases": Source(
@@ -146,11 +130,13 @@ def connect(
     seeds: Seeds,
     anchor: date | None = None,
     settings: Project | None = None,
+    extracted_at: datetime | None = None,
 ) -> duckdb.DuckDBPyConnection:
     """Register the run tables and seeds and build every model.
 
     The models end on `anchor` (default: the day of the last payment); later sales are left out.
-    The weeks start on the `first_weekday` of `settings` (default: project.yml).
+    The weeks start on the `first_weekday` of `settings` (default: project.yml). `extracted_at`
+    is when the run was extracted, the time of the snapshots (stock levels) in local clock time.
     """
     settings = settings or project()
     con = duckdb.connect()
@@ -163,8 +149,9 @@ def connect(
     if anchor is None:
         anchor = con.execute("select max(created_at)::date from raw_transactions").fetchone()[0]
     con.execute(
-        "create table run_context as select ?::date as anchor, ?::int as first_weekday",
-        [anchor, settings.first_isoweekday],
+        "create table run_context as select ?::date as anchor, ?::int as first_weekday, "
+        "?::timestamp as extracted_at",
+        [anchor, settings.first_isoweekday, extracted_at],
     )
     build_models(con)
     return con
@@ -186,9 +173,15 @@ def open_run(
 
     A failing data check of severity error raises `DataCheckError`.
     """
-    run = load_run(location)
-    con = connect(run.tables, Seeds.from_dir(config_dir), anchor)
+    run = load_run(location, RAW_SOURCES)
+    con = connect(run.tables, Seeds.from_dir(config_dir), anchor, extracted_at=run_time(run))
     return RunDb(run, con, check(con))
+
+
+def run_time(run: ApiRun) -> datetime | None:
+    """When the run was extracted, in local clock time, from its manifest."""
+    value = run.manifest.get("run_at")
+    return datetime.fromisoformat(value).replace(tzinfo=None) if value else None
 
 
 def _register(
@@ -263,15 +256,26 @@ def model_references(models: dict[str, str]) -> dict[str, set[str]]:
 
 
 def build_order(models: dict[str, str]) -> list[str]:
-    """Models in an order that builds every reference first; a reference upwards is an error."""
+    """Models in an order that builds every reference first; a reference upwards, or to a run
+    table or seed that is not declared, is an error."""
     graph: dict[str, set[str]] = {}
     references = model_references(models)
+    sources = {f"raw_{n}" for n in RAW_SOURCES} | {f"seed_{n}" for n in SEED_SOURCES}
     for name in sorted(models):
         layer = LAYER_RANK[name.split("_", 1)[0]]
         for ref in sorted(references[name]):
-            ref_layer = LAYER_RANK.get(ref.split("_", 1)[0])
+            prefix = ref.split("_", 1)[0]
+            ref_layer = LAYER_RANK.get(prefix)
             if ref_layer is not None and ref_layer > layer:
                 raise ValueError(f"model {name} reads {ref} from a higher layer")
+            if prefix == "raw" and ref not in sources:
+                raise ValueError(
+                    f"model {name} reads {ref}, which is not a run table of sources.yml"
+                )
+            if prefix == "seed" and ref not in sources:
+                raise ValueError(f"model {name} reads {ref}, which is not a seed (SEED_SOURCES)")
+            if prefix in LAYER_RANK and ref_layer and ref not in models:
+                raise ValueError(f"model {name} reads {ref}, which is not a model of models/")
         graph[name] = {r for r in references[name] if r in models}
     return list(TopologicalSorter(graph).static_order())
 

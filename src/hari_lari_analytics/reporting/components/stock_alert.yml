@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: stock_alert
+title: Stock alert
+description: >-
+  The stock-tracked item-variants at or below their alert-at quantity, with their stock level
+  and status, as Moka counted them at extraction time: negative first (more sold than counted
+  in), then out of stock, then low.
+hint: Stock at or below the alert-at quantity · Moka's count at extraction
+query:
+  model: fct_stock
+  dimensions: [stock_status, adjusted_item_variant]
+  metrics: [stock_level, alert_at]
+  where: { stock_status: [negative, out, low] }
+visual: { type: table }

@@ -198,6 +198,7 @@ def _slot(run: SlotRun) -> dict:
         "component": spec.id,
         "title": run.title,
         "hint": run.hint,
+        "note": run.note,
         "visual": {"type": slot.visual, "options": spec.visual.options if spec.visual else {}},
         "layout": spec.facet.layout if spec.facet else "row",
         "position": {

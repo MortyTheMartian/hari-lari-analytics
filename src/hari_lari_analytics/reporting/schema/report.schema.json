@@ -8,9 +8,28 @@
         "component": {
           "type": "string",
           "enum": [
+            "aov_basket_bridge",
+            "attach_rate_trend",
             "category_contributive_aov",
+            "category_penetration",
+            "data_notes",
+            "discount_codes",
+            "full_history_amounts",
             "full_history_kpis",
-            "lines_export"
+            "key_figures",
+            "last_sale",
+            "lines_export",
+            "orders_by_hour",
+            "orders_by_weekday_hour",
+            "payment_types",
+            "period_kpis",
+            "period_summaries",
+            "sales_trend",
+            "stock_alert",
+            "stock_by_status",
+            "stock_counted_at",
+            "top_items",
+            "week_kpis"
           ],
           "description": "a component"
         },
@@ -82,9 +101,28 @@
             {
               "type": "string",
               "enum": [
+                "aov_basket_bridge",
+                "attach_rate_trend",
                 "category_contributive_aov",
+                "category_penetration",
+                "data_notes",
+                "discount_codes",
+                "full_history_amounts",
                 "full_history_kpis",
-                "lines_export"
+                "key_figures",
+                "last_sale",
+                "lines_export",
+                "orders_by_hour",
+                "orders_by_weekday_hour",
+                "payment_types",
+                "period_kpis",
+                "period_summaries",
+                "sales_trend",
+                "stock_alert",
+                "stock_by_status",
+                "stock_counted_at",
+                "top_items",
+                "week_kpis"
               ],
               "description": "a component"
             },
@@ -232,6 +270,7 @@
               "category",
               "category_group_level_1",
               "category_group_level_2",
+              "counts_as_order",
               "discount_code",
               "discounted",
               "event_kind",
@@ -259,6 +298,7 @@
               "sale_quarter",
               "sale_week",
               "sale_year",
+              "stock_status",
               "variant",
               "weekday"
             ],
@@ -321,6 +361,7 @@
               "category",
               "category_group_level_1",
               "category_group_level_2",
+              "counts_as_order",
               "discount_code",
               "discounted",
               "event_kind",
@@ -348,6 +389,7 @@
               "sale_quarter",
               "sale_week",
               "sale_year",
+              "stock_status",
               "variant",
               "weekday"
             ],
@@ -674,9 +716,28 @@
         "component": {
           "type": "string",
           "enum": [
+            "aov_basket_bridge",
+            "attach_rate_trend",
             "category_contributive_aov",
+            "category_penetration",
+            "data_notes",
+            "discount_codes",
+            "full_history_amounts",
             "full_history_kpis",
-            "lines_export"
+            "key_figures",
+            "last_sale",
+            "lines_export",
+            "orders_by_hour",
+            "orders_by_weekday_hour",
+            "payment_types",
+            "period_kpis",
+            "period_summaries",
+            "sales_trend",
+            "stock_alert",
+            "stock_by_status",
+            "stock_counted_at",
+            "top_items",
+            "week_kpis"
           ],
           "description": "a component"
         },
@@ -847,6 +908,7 @@
             "category",
             "category_group_level_1",
             "category_group_level_2",
+            "counts_as_order",
             "discount_code",
             "discounted",
             "event_kind",
@@ -874,6 +936,7 @@
             "sale_quarter",
             "sale_week",
             "sale_year",
+            "stock_status",
             "variant",
             "weekday"
           ],
@@ -887,6 +950,7 @@
         "by": {
           "type": "string",
           "enum": [
+            "alert_at",
             "aov",
             "avg_item_price",
             "category_aov",
@@ -908,7 +972,10 @@
             "orders",
             "penetration",
             "refunds",
-            "share"
+            "share",
+            "stock_counted_at",
+            "stock_level",
+            "stock_variants"
           ],
           "description": "a metric"
         },

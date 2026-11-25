@@ -216,12 +216,17 @@ def logs_url(project: str | None = None, region: str | None = None, env: dict | 
     return f"{base}/details/{region}/{job}/logs?project={project}"
 
 
-def format_alert(step: str, error: BaseException | str, link: str | None = None) -> str:
+def format_alert(
+    step: str,
+    error: BaseException | str,
+    link: str | None = None,
+    subject: str = "weekly report",
+) -> str:
     message = scrub(str(error) or type(error).__name__)
     if len(message) > MAX_ALERT_ERROR:
         message = message[: MAX_ALERT_ERROR - 1].rstrip() + "…"
     kind = f"{type(error).__name__}: " if isinstance(error, BaseException) else ""
-    lines = [f"⚠️ Hari Lari weekly report failed at step: {step}", "", f"{kind}{message}"]
+    lines = [f"⚠️ Hari Lari {subject} failed at step: {step}", "", f"{kind}{message}"]
     if link:
         lines += ["", f"Logs: {link}"]
     return "\n".join(lines)
@@ -233,13 +238,14 @@ def send_alert(
     step: str,
     error: BaseException | str,
     link: str | None = None,
+    subject: str = "weekly report",
 ) -> bool:
     """Tell the admin chat which step failed. Never raises: an alert must not hide the real error.
 
     Returns whether the alert was delivered.
     """
     try:
-        client.send_message(admin_chat_id, format_alert(step, error, link or logs_url()))
+        client.send_message(admin_chat_id, format_alert(step, error, link or logs_url(), subject))
     except Exception:  # noqa: BLE001
         return False
     return True

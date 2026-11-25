@@ -39,6 +39,7 @@ class TableOptions(Options):
     bold: list[str] = []
     rank: bool = False  # number the rows
     total: bool = True  # show the total row, when the query has one
+    fill: bool = False  # spread the rows over the whole area instead of stacking them at the top
     # groups: a row per group; metrics: a row per metric (current, prior, change), the
     # default for a result without dimensions
     orientation: Literal["auto", "groups", "metrics"] = "auto"
@@ -85,9 +86,11 @@ def _fit_rows(area: Area, rows: list[Row], header_rows: int) -> tuple[list[Row],
     return [*regular[: keep - len(total)], *total], len(rows) - keep
 
 
-def _draw(area: Area, df: pd.DataFrame, defs: list[ColumnDefinition], header_rows: int):
+def _draw(
+    area: Area, df: pd.DataFrame, defs: list[ColumnDefinition], header_rows: int, fill: bool
+):
     n = len(df) + header_rows
-    row_h = min(area.points_y(ROW_POINTS), 1 / n)
+    row_h = 1 / n if fill else min(area.points_y(ROW_POINTS), 1 / n)
     ax = area.axes(0, 1 - row_h * n, 1, row_h * n)
     return base.table(ax, area.theme.palette, df, defs, "label", size=area.theme.size("body"))
 
@@ -109,8 +112,57 @@ def _style_total(table, idx: int, bar_columns: dict[int, str], area: Area) -> No
         sub.text(0, 0.5, text, va="center", fontsize=7.5, fontweight="bold")
 
 
+def _metric_text(row: Row, metric: str, pres: Presentation, options: TableOptions) -> str:
+    col = pres.columns[metric]
+    text = f"{col.label} {row[metric].text}{' ' + col.unit if col.unit else ''}"
+    if metric in options.deltas:
+        change = row.cells.get(f"{metric}_{options.deltas[metric]}")
+        if change is not None and change.text:
+            text += f" ({change.text})"
+    return text
+
+
+def _table_text(result: Result, options: TableOptions, ctx: DrawContext) -> list[str]:
+    """One line per row: its label, then each column as `label value`; a result without
+    dimensions gives one line per metric with its change."""
+    pres = present(result)
+    metrics = options.columns or pres.metrics
+    orientation = options.orientation
+    if orientation == "auto":
+        orientation = "metrics" if result.meta.shape == "single" else "groups"
+    if orientation == "metrics":
+        row = pres.total or pres.rows[0]
+        compare = result.meta.compare_ok
+        lines = []
+        for m in metrics:
+            spec = result.meta.metrics[m]
+            line = _metric_text(row, m, pres, options.model_copy(update={"deltas": {}}))
+            kind = options.deltas.get(m) or formats.default_change(spec)
+            change = row.cells.get(f"{m}_{kind}")
+            if compare and change is not None:
+                line += f" ({change.text} vs {result.meta.window.compare_label})"
+            lines.append(line)
+        return lines
+    rows = _rows(result, pres, options)
+    if not rows:
+        return ["No rows"]
+    lines = []
+    for row in rows:
+        label = "Total" if row.kind == "total" else row.label
+        if row.small:
+            label += f" ({n_label(row.n)})"
+        values = " · ".join(_metric_text(row, m, pres, options) for m in metrics)
+        lines.append(f"{label}: {values}")
+    return lines
+
+
 @visual(
-    "table", TableOptions, accepts=("rows", "single", "series"), min_size=(0.25, 0.15), check=_check
+    "table",
+    TableOptions,
+    accepts=("rows", "single", "series"),
+    min_size=(0.25, 0.15),
+    check=_check,
+    text=_table_text,
 )
 def table(area: Area, result: Result, options: TableOptions, ctx: DrawContext) -> None:
     """A table: one row per group with bars, deltas, rank and the total row, or one row per
@@ -228,7 +280,7 @@ def _by_group(area: Area, result: Result, options: TableOptions) -> None:
             if m in options.deltas:
                 data[f"delta:{m}"].append(row[f"{m}_{options.deltas[m]}"].text)
     df = pd.DataFrame(data)
-    t = _draw(area, df, defs, 1 + grouped)
+    t = _draw(area, df, defs, 1 + grouped, options.fill)
 
     names = list(df.columns)
     for i, row in enumerate(rows):
@@ -285,7 +337,7 @@ def _by_metric(area: Area, result: Result, options: TableOptions) -> None:
                 textprops={"ha": "right", "weight": "semibold"},
             ),
         ]
-    t = _draw(area, pd.DataFrame(data), defs, 1)
+    t = _draw(area, pd.DataFrame(data), defs, 1, options.fill)
     for i, cell in enumerate(changes):
         if cell is not None:
             t.cells[(i, 3)].text.set_color(change_color(theme, cell))

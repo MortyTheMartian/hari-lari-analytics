@@ -1,0 +1,13 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: category_penetration
+params: {}
+facets:
+- key: null
+  label: null
+  metric: null
+  shape: rows
+  csv: |
+    adjusted_category,is_total,penetration,prior_penetration,penetration_change,penetration_delta,n_orders,prior_n_orders,trading_days,prior_trading_days
+    Coffee,False,1,,,,2,,1,
+    Snacks (Focaccia),False,0.5,,,,1,,1,

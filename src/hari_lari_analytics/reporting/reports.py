@@ -48,7 +48,9 @@ from hari_lari_analytics.reporting.components import (
     Component,
     ComponentError,
     deep_merge,
+    substitute,
 )
+from hari_lari_analytics.reporting.formats import days_ending
 from hari_lari_analytics.reporting.layouts import GridSpec, LayoutError, Rect, SlotSpec
 from hari_lari_analytics.reporting.registry import Registry, RegistryError, default_registry
 from hari_lari_analytics.reporting.windows import parse_window
@@ -59,7 +61,7 @@ TELEGRAM_MESSAGE_LIMIT = 4096
 DRIVE_PLACEHOLDER = "{{ drive_url }}"  # in a text block until the deliver step knows the link
 DRIVE_URL_LENGTH = 100  # what a Drive link counts as when a text block is measured
 PLACEHOLDER = "§"  # the value a repeat over `top` gets in a check without data
-REPORT_VARIABLES = ("anchor", "anchor_iso_week", "report")  # besides the parameters
+REPORT_VARIABLES = ("anchor", "anchor_iso_week", "anchor_week", "report")  # besides the parameters
 
 ParamValue = bool | int | float | str | list[bool | int | float | str]
 FilterValue = bool | int | float | str | None | list[bool | int | float | str | None]
@@ -531,6 +533,7 @@ def slug(value: Any) -> str:
 
 
 _TEMPLATES = jinja2.Environment(undefined=jinja2.StrictUndefined)
+_TEMPLATES.filters["days_ending"] = days_ending  # {{ anchor | days_ending(7) }}: 16–22 Nov 2026
 
 
 def context(report: Report, anchor: date, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -540,6 +543,7 @@ def context(report: Report, anchor: date, params: Mapping[str, Any]) -> dict[str
         **params,
         "anchor": anchor,
         "anchor_iso_week": f"{iso.year}-W{iso.week:02d}",
+        "anchor_week": iso.week,
         "report": report.spec.title,
     }
 
@@ -686,15 +690,18 @@ def _bind_slot(
     return BoundSlot(placement.slot, placement.rect, ref, visual_spec.type, card)
 
 
-def filters_in_force(report: Report, page: PageSpec | None) -> tuple[AppliedFilter, ...]:
-    """The filters of the report and the page, for the chips of a page header."""
+def filters_in_force(
+    report: Report, page: PageSpec | None, params: Mapping[str, Any] | None = None
+) -> tuple[AppliedFilter, ...]:
+    """The filters of the report and the page, for the chips of a page header, with the
+    parameters in scope (a repeat's value) bound."""
     found = []
     for origin, spec in (("report", report.spec.filters), ("page", page.filters if page else None)):
         if spec is None:
             continue
         for kind in ("where", "focus"):
             found += [
-                AppliedFilter(kind, dimension, origin, value)
+                AppliedFilter(kind, dimension, origin, substitute(value, params or {}))
                 for dimension, value in getattr(spec, kind).items()
             ]
     return tuple(found)
@@ -719,7 +726,7 @@ def _bind_page(
         title=title,
         params=params,
         period=str(params["period"]) if "period" in params else None,
-        filters=filters_in_force(report, page),
+        filters=filters_in_force(report, page, params),
         grid=page.grid,
         slots=slots,
         base=page.id,

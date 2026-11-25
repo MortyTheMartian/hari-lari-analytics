@@ -49,7 +49,7 @@ def test_every_model_has_an_entry_with_existing_columns(con):
             assert model.time in columns(con, model.id), model.id
     exposed = {m for m, spec in models.items() if spec.exposed}
     assert exposed == {"dim_items", "dim_categories", "dim_calendar", "fct_sales_lines",
-                       "fct_orders"}  # fmt: skip
+                       "fct_orders", "fct_stock"}  # fmt: skip
     assert models["fct_orders"].sample_size == "orders" and models["fct_orders"].calendar
 
 

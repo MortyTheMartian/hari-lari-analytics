@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from hari_lari_analytics.reporting import formats
 from hari_lari_analytics.reporting.compiler import Query, run_query
 from hari_lari_analytics.reporting.db import connect
 from hari_lari_analytics.reporting.registry import default_registry
@@ -402,6 +403,18 @@ def test_growth_per_group_with_bucket_totals_and_no_growth_for_the_window_total(
     assert col(out, "net_sales_growth") == [
         pytest.approx(115_000 / 68_000 - 1), pytest.approx(115_000 / 98_000 - 1), None,
     ]  # fmt: skip
+
+
+def test_the_growth_of_a_rate_is_the_difference_in_percentage_points(con, ctx):
+    r = q(con, model="fct_orders", window="WTD", grain="week", buckets_before=1,
+          dimensions=["bucket"], metrics=["discount_rate"])  # fmt: skip
+    before, now = r.df["discount_rate"].tolist()
+    assert before > 0 and now == 0  # FOUNDER25 in the week of 5 Oct, no discount after
+    out = run("growth_vs_previous", r, ctx)
+    assert out.df["discount_rate_growth"].iloc[0] == pytest.approx(now - before)
+    spec = out.meta.metrics["discount_rate"]
+    text = formats.comparison_text(now - before, spec, "growth", "compact")
+    assert text.endswith("pp") and text.startswith("-")
 
 
 def test_a_previous_value_of_zero_gives_no_growth(con, ctx):

@@ -134,18 +134,20 @@ def bar_trend(area: Area, result: Result, options: BarTrendOptions, ctx: DrawCon
         ax.bar(i, v, width=width, color=color, alpha=alpha, edgecolor="none")
     high = max(values + [0])
     tick = "text" if top else "prior"  # the highlight has the prior's colour
+    above = list(values)  # the labels sit above the bar or its prior tick, whichever is higher
     if prior:
         prior_values = numbers(rows, f"prior_{metric}")
         ax.hlines(
             prior_values, idx - width * 0.62, idx + width * 0.62, color=theme.color(tick), lw=1.8
         )
         high = max(high, *prior_values)
+        above = [max(v, p) for v, p in zip(values, prior_values, strict=True)]
     for i, row in enumerate(rows):
         label = texts[row.position][metric]
         if options.labels:
             ax.annotate(
                 label.text,
-                (i, values[i]),
+                (i, above[i]),
                 xytext=(0, 3),
                 textcoords="offset points",
                 ha="center",
@@ -158,7 +160,7 @@ def bar_trend(area: Area, result: Result, options: BarTrendOptions, ctx: DrawCon
             if cell.value is not None:
                 ax.annotate(
                     cell.text,
-                    (i, values[i]),
+                    (i, above[i]),
                     xytext=(0, 13 if options.labels else 3),
                     textcoords="offset points",
                     ha="center",

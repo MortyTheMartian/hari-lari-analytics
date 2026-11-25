@@ -7,7 +7,8 @@
 #   deploy/release.sh dryrun [tag]      run the image as hari-lari-weekly-dryrun; fails if the run fails
 #   deploy/release.sh promote [tag]     point the live job at the tag, remembering the previous one
 #   deploy/release.sh rollback [tag]    point the live job at the tag (default: the previous release)
-#   deploy/release.sh all [tag]         build, dryrun, promote; stops at the first failure
+#   deploy/release.sh schedules [tag]   one Cloud Scheduler job per scheduled report of the image
+#   deploy/release.sh all [tag]         build, dryrun, promote, schedules; stops at the first failure
 #   deploy/release.sh status            the image of each job and the previous release
 #
 # Without a tag, the tag is the current commit, which must have no uncommitted changes
@@ -84,8 +85,8 @@ step_build() { # [tag]
   image="$IMAGE_REPO:$tag"
   g auth configure-docker "${REGION}-docker.pkg.dev"
   docker build --platform linux/amd64 --tag "$image" "$ROOT"
-  # The image must start and load its components before it goes anywhere
-  docker run --rm --entrypoint hari-lari-component "$image" validate
+  # The image must start and load its components and reports before it goes anywhere
+  docker run --rm "$image" validate
   docker push "$image"
   echo "built and pushed $image"
 }
@@ -93,8 +94,10 @@ step_build() { # [tag]
 step_dryrun() { # [tag]
   local tag
   tag="$(resolve_tag "${1:-}")"
-  # --args is set every time, so a job whose arguments were cleared can never send a report
-  g run jobs update "$DRYRUN_JOB" --region "$REGION" --image "$IMAGE_REPO:$tag" --args=--dry-run
+  # --args is set every time, so a job whose arguments were cleared can never send a report.
+  # Every report with a schedule must build before the release is promoted.
+  g run jobs update "$DRYRUN_JOB" --region "$REGION" --image "$IMAGE_REPO:$tag" \
+    --args=run,--scheduled,--dry-run
   if ! g run jobs execute "$DRYRUN_JOB" --region "$REGION" --wait; then
     die "the dry run of $tag failed; the live job still runs $(job_tag "$JOB")"
   fi
@@ -124,12 +127,59 @@ step_rollback() { # [tag]
   step_promote "$tag"
 }
 
+# The scheduler jobs follow the reports of the image: hari-lari-report schedules --json lists
+# each report with a schedule and its arguments. Each gets the scheduler job
+# hari-lari-report-<id>, which starts the live job through the Cloud Run v2 API with those
+# arguments as a container override; enabled: false pauses it. A hari-lari-report-* job whose
+# report is gone is deleted; other scheduler jobs are left alone.
+step_schedules() { # [tag]
+  local tag rows existing name cron zone enabled body state
+  local uri="https://run.googleapis.com/v2/projects/${PROJECT}/locations/${REGION}/jobs/${JOB}:run"
+  local wanted=" "
+  tag="$(resolve_tag "${1:-}")"
+  g auth configure-docker "${REGION}-docker.pkg.dev"
+  rows="$(docker run --rm "$IMAGE_REPO:$tag" schedules --json)" ||
+    die "could not read the schedules of $IMAGE_REPO:$tag"
+  existing="$(g scheduler jobs list --location "$REGION" --format 'value(name)' | sed 's#.*/##')"
+  while IFS=$'\t' read -r name cron zone enabled body; do
+    [[ -n "$name" ]] || continue
+    wanted="$wanted$name "
+    local flags=(--location "$REGION" --schedule "$cron" --time-zone "$zone" --uri "$uri"
+      --http-method POST --oauth-service-account-email "$INVOKER_SA" --message-body "$body")
+    if grep -qx "$name" <<<"$existing"; then
+      g scheduler jobs update http "$name" "${flags[@]}" --update-headers Content-Type=application/json
+    else
+      g scheduler jobs create http "$name" "${flags[@]}" --headers Content-Type=application/json
+    fi
+    state="$(g scheduler jobs describe "$name" --location "$REGION" --format 'value(state)')"
+    if [[ "$enabled" == true && "$state" == PAUSED ]]; then
+      g scheduler jobs resume "$name" --location "$REGION"
+    elif [[ "$enabled" != true && "$state" != PAUSED ]]; then
+      g scheduler jobs pause "$name" --location "$REGION"
+    fi
+    echo "scheduler job $name: $cron $zone$([[ "$enabled" == true ]] || echo ' (paused)')"
+  done < <(SCHEDULE_PREFIX="$SCHEDULE_PREFIX" python3 -c '
+import json, os, sys
+for row in json.load(sys.stdin):
+    body = {"overrides": {"containerOverrides": [{"args": row["args"]}]}}
+    print("\t".join([os.environ["SCHEDULE_PREFIX"] + row["report"], row["cron"], row["timezone"],
+                     "true" if row["enabled"] else "false", json.dumps(body, separators=(",", ":"))]))
+' <<<"$rows")
+  for name in $existing; do
+    if [[ "$name" == "$SCHEDULE_PREFIX"* && "$wanted" != *" $name "* ]]; then
+      g scheduler jobs delete "$name" --location "$REGION"
+      echo "scheduler job $name deleted: its report has no schedule any more"
+    fi
+  done
+}
+
 step_all() { # [tag]
   local tag
   tag="$(resolve_tag "${1:-}")"
   step_build "$tag"
   step_dryrun "$tag"
   step_promote "$tag"
+  step_schedules "$tag"
 }
 
 step_status() {
@@ -142,7 +192,7 @@ step_status() {
 
 case "${1:-}" in
   tag) head_tag ;;
-  build|dryrun|promote|rollback|all) "step_$1" "${2:-}" ;;
+  build|dryrun|promote|rollback|schedules|all) "step_$1" "${2:-}" ;;
   status) step_status ;;
   *) usage; exit 1 ;;
 esac

@@ -113,10 +113,15 @@ models many times, and a stack of views would recompute every layer on every que
 took 40 seconds as views and 0.07 seconds as tables, with the build itself at 0.3 seconds). The
 tables are read with the existing `load_run` (local folder or `gs://`) and copied into
 `raw_<table>` tables with the columns the models need, cast to fixed types: an empty table comes
-back from Parquet without any columns, and a column that is NULL on every row has no type. A
-missing optional table (discounts, modifiers, refunds) becomes an empty view; a missing required
-table or column fails the build. `run_context` holds the anchor (default: the day of the last
-payment); the models end on it.
+back from Parquet without any columns, and a column that is NULL on every row has no type. The
+run tables and their columns are declared in `reporting/sources.yml` (plan 9.2), so a new Moka
+table (`item_variants` for the stock) is one entry there and a `stg_` model, without Python; a
+model that reads a `raw_` table not in `sources.yml` (or a `seed_` that is not a seed, or a model
+that does not exist) fails the build with its name. A missing optional table (`required: false`:
+discounts, modifiers, refunds, item variants) becomes an empty view; a missing required table or
+column fails the build. `run_context` holds the anchor (default: the day of the last payment),
+which the models end on, and `extracted_at`, the run's extraction time from its manifest (local
+clock time), which a snapshot model such as `fct_stock` carries as its as-of time.
 
 ## Folder layout
 
@@ -326,13 +331,16 @@ fct_orders:
   exposed: true                # components may query it
 ```
 
-- **`time`**: a model without one cannot be queried, since every query has a window.
+- **`time`**: a model with one is queried over a window, which the query must name. A model
+  without one is a **snapshot** (plan 9.2: `fct_stock`, the stock levels at extraction): its
+  queries name no window and no comparison, there are no trading days, and the as-of time is a
+  column of the model (`counted_at`), shown through a metric such as `stock_counted_at`.
 - **`calendar`**: needs `time`. Without it, `trading_days` is empty and the per-trading-day
   metrics stay blank.
 - **`sample_size`**: a `count` metric on the model. The default `min_n` of `project.yml` counts
   it; a model without one (no orders) has no default sample-size rule.
 - **`exposed`**: only `dim_` and `fct_` models can be. The schema of a component offers the
-  exposed models that have a time column and at least one metric.
+  exposed models that have at least one metric.
 
 Today `fct_sales_lines` and `fct_orders` have all six fields, `dim_calendar` has a time column and
 the calendar, and no primary key is declared where duplicates are legitimate
@@ -570,7 +578,9 @@ per receipt, so `order_grain` metrics such as orders may be summed over them; `i
 category, category groups) and `line` (discount code, modifier, refund line) can have several
 values per receipt. `domain` tells the compiler which empty values to fill: `span`, `all` (the
 listed `values`), `calendar` (the time truncations, through `dim_calendar`) or `none`. `labels`
-and `null_label` are the display names of values and of the empty value. `bins` turns a number
+and `null_label` are the display names of values and of the empty value. A dimension with
+`values` sorts in their order (`stock_status`: negative, out, low, ok), and a `sort` metric that
+is not on the queried model (net sales on `fct_stock`) falls back to sorting by the value. `bins` turns a number
 into ordered buckets, in SQL: an exact value, a range such as `"2-3"`, or an open last bucket
 such as `"5+"`. The category groups of plan 2.11, the order attributes and the calendar events
 are ordinary dimensions.
@@ -637,7 +647,9 @@ so L14D, L6W and L3M keep their tests.
 | `last_n_days(n)`, `last_n_weeks(n)`, `last_n_months(n)` | like L14D, L6W, L3M with any n; also written `L<n>D`, `L<n>W`, `L<n>M` | day, week, month |
 
 Time grains are `day`, `week`, `month` and `block_7d`: 7-day blocks counted back from the window
-end, so the latest block is a full week, as the sparklines do today. Weeks and months are
+end, so the latest block is a full week, as the sparklines do today. `grain: spark` is the
+sparkline grain of today's report: `day` on a window whose trend is daily (L14D), `block_7d`
+otherwise, so one component gives the right sparkline in every facet by period. Weeks and months are
 calendar buckets, so the first and last bucket may reach outside the window. `bucket_before`
 gives the bucket before the first one, for the growth label of the first bucket; it is used
 only when it lies fully within the sales history.
@@ -743,7 +755,9 @@ not those of the totals.
 **Top N.** `top` ranks the groups by `by` over the current window (ties by the dimension values)
 and maps every other group, in both windows, to `Other (k)` in the same statement, so the orders
 of "Other" are distinct receipts, not a sum, and the prior of "Other" holds everything outside
-the top N, including groups sold only in the prior window. Without `other: true` that row is
+the top N, including groups sold only in the prior window. "Other" never hides a single group:
+when it would hold one group of the window and nothing else, that group keeps its name (the top
+3 payment types of four show all four, as today's report does). Without `other: true` that row is
 dropped from the output, but the totals and every relative metric (share, penetration) still
 cover all groups. `by` may be any metric except a relative one. Under a `focus`, the top N and
 "Other" are ranked among the focused groups only. `keep_prior_only` does not combine with
@@ -821,7 +835,7 @@ input; `ctx` holds the registry and the run's calendar, which is in memory. A tr
 | `rank` | add a rank column (`into`, `method` min, dense or first), over the regular rows, optionally inside each group of `within` columns such as the time bucket |
 | `fill_domain` | add the missing values of a dimension's domain as rows with zeros: the bins, all seven weekdays, the hours between the first and last, or the `values` given. A filled row has zero sums and counts, no value for ratios and no comparison (the query dropped what the comparison window held for it); its trading days come from the rows with the same weekday, else from the calendar |
 | `per_trading_day` | divide the metrics that sum (orders, net sales, ...) by the `trading_days` of each row, which the query counted per bucket, per weekday or for the window, and the prior values by the prior trading days; changes are recomputed; ratios, relative metrics and the sample-size columns stay; a count becomes a decimal; a row without trading days has no value |
-| `growth_vs_previous` | add `<metric>_growth`: each bucket over the one before, per group, as a ratio; the first bucket uses the bucket before the window (`buckets_before`, only when fully inside the history), which is dropped afterwards; no growth for a previous value of 0, for the window total, and by default for the daily grain (`grains`) |
+| `growth_vs_previous` | add `<metric>_growth`: each bucket over the one before, per group, as a ratio (for a share or rate, format `pct`, the difference, shown in percentage points: an attach rate from 40% to 45% is +5.0 pp, not +12.5%); the first bucket uses the bucket before the window (`buckets_before`, only when fully inside the history), which is dropped afterwards; no growth for a previous value of 0, for the window total, and by default for the daily grain (`grains`) |
 | `cumulative_share` | add the running share of a fully additive metric, largest first, over the total row when there is one (a top 15 reads against all sales); an `order_grain` metric (orders) only when no dimension has several values per receipt |
 | `pivot` | turn two dimensions into a matrix: the row dimension first, one column per value of the column dimension (shape `matrix`, `meta.matrix` names the value; `Result.matrix_frame()` gives the plain matrix); several rows in one cell are an error |
 | `classify` | add a class column (`into`): `mode: thresholds` (bands with an inclusive `upto`, else `otherwise`; ABC classes from `cumulative_share`), `quadrants` (two columns against their median, mean or a given number; a value on the split is high; the four classes are named by `labels`) or `lifecycle` (see below). Only the regular rows get a class; the classes and the splits used are kept in `meta.classifications` for the visuals |
@@ -929,7 +943,9 @@ visual: { type: heatmap }
 ```
 
 The fields: `id`, `title` and `hint` (short Jinja strings with access to `meta`, `facet` and the
-parameters), `description` (shown in the gallery), `params` (defaults), `query`, `transforms`,
+parameters), `note` (a Jinja string like the hint, but an explanation of how to read the visual,
+written at the foot of the card; a line break in it is kept), `description` (shown in the
+gallery), `params` (defaults), `query`, `transforms`,
 `facet`, `visual` and `insights`. The loader (`components.py`, plan 7.12) validates a component
 with pydantic and the registries, without any data (the queries are compiled on a fixed
 calendar), and fails with the file name and field, listing every schema error at once:
@@ -1103,8 +1119,9 @@ def table(area: Area, result: Result, options: TableOptions, ctx: DrawContext) -
   (`stacked_share_bar`) takes a share (a `pct` metric such as `share`), so it never adds up
   amounts itself. An error names the file and the option, like every loader error.
 - `text(result, options, ctx)`, where a visual has one, gives its plain-text form for the
-  Telegram text blocks (plan 8.5): `kpi_card`, `text_line`, `notes_card` and `insights` have
-  one.
+  Telegram text blocks (plan 8.5): `kpi_card`, `text_line`, `notes_card`, `insights` and
+  `table` (plan 9.2: one line per row, `Negative · Focaccia Tomato: In stock -7 · Alert at 0`;
+  without dimensions one line per metric with its change) have one.
 
 The JSON Schema of a component lists every visual with its options, so the editor
 autocompletes `visual:` too.
@@ -1116,7 +1133,7 @@ autocompletes `visual:` too.
 | `kpi_card` | single, series | one metric: the value, its change and prior; on a series with `totals: true` the window total and a sparkline of the buckets | `metric` (default: the facet's), `prior`, `sparkline`, `style`, `card` |
 | `summary_card` | single, series | a period card: the window, its comparison and two or three metrics with their change, and a sparkline on a series | `metrics`, `sparkline`, `card` |
 | `text_line` | single | one line of values: "Gross 1.2M · Discounts 85k · Refunds 0 IDR" | `metrics`, `labels`, `style` |
-| `table` | rows, single, series | one row per group: dimension columns, metric columns with bars, prior values and deltas, rank, the total row; a result without dimensions as one row per metric (current, prior, change) | `columns`, `bars`, `deltas`, `prior`, `bold`, `rank`, `total`, `orientation` |
+| `table` | rows, single, series | one row per group: dimension columns, metric columns with bars, prior values and deltas, rank, the total row; a result without dimensions as one row per metric (current, prior, change) | `columns`, `bars`, `deltas`, `prior`, `bold`, `rank`, `total`, `orientation`, `fill` (spread the rows over the whole slot, as the key figures) |
 | `bar_trend` | series, rows | bars over buckets or an ordered dimension (hours), prior ticks, growth labels, a second metric as a line, highlighted bars, event marks | `metric`, `line`, `prior`, `growth`, `labels`, `highlight`, `events`, `color` |
 | `hbar` | rows | horizontal bars of one metric per group, with value labels and prior ticks | `metric`, `prior`, `highlight`, `labels` |
 | `dot_plot` | rows | one dot per group, the prior as a hollow dot joined by a line, coloured by tone | `metric`, `prior`, `labels` |
@@ -1138,8 +1155,10 @@ of `report_pdf.py` unchanged, so the old report keeps rendering identically unti
 
 By default a slot draws a card with the component's `title` and `hint` and gives the visual the
 inner rectangle. `title` and `hint` have access to `meta`, so
-"Average per trading day · {{ meta.trading_days }} days" works. A slot can turn the card off
-with `card: false` (the cover KPI line).
+"Average per trading day · {{ meta.trading_days }} days" works. A component's `note` is written
+at the foot of the slot, below the visual, which gets the rectangle above it (the reading guide
+under the categories table). A slot can turn the card off with `card: false` (the cover KPI
+line).
 
 ## Insights
 
@@ -1236,9 +1255,14 @@ extents).
   gives 33% × 10%: give it more columns or rows".
 - *Chrome.* A report has optional `kicker` (default: the title) and `footer` (default: the
   kicker). Each page header shows the kicker, the page title (a template over the parameters,
-  `anchor` and `anchor_iso_week`), chips for the page's window, its comparison ("vs prior 14
-  days", or "no comparison" with the note "The prior period starts before the first sale") and
-  the filters in force. The footer is `<footer> · data through <anchor> · generated <time>`.
+  `anchor`, `anchor_iso_week` and `anchor_week`), chips for the page's window, the days of its
+  comparison ("vs 26 Oct 2026 – 08 Nov 2026", or "no comparison" with the note "The prior
+  period starts before the first sale") and the filters in force, as on today's pages.
+- *Templates.* Titles, folder names and text lines are Jinja templates over the parameters,
+  `anchor` (a date), `anchor_iso_week` (`2026-W47`), `anchor_week` (47) and `report`; the filter
+  `days_ending(n, before=0)` writes the `n` days ending on a date as a short range, so the weekly
+  caption's "Week {{ anchor_week }} · {{ anchor | days_ending(7) }}" reads "Week 47 · 16–22 Nov
+  2026" and `days_ending(7, before=7)` gives the week before. The footer is `<footer> · data through <anchor> · generated <time>`.
 - *Overflow.* The builder records the text artists before and after each slot draws, renders the
   page once and compares every text's extent with its slot rectangle (tolerance 0.3% of the
   page). `build` prints each overflow as a warning and `--strict` makes it an error; the test of
@@ -1261,7 +1285,7 @@ outputs:
   xlsx: [lines_export]
 text_blocks:
   weekly_caption:                    # at most 1,024 characters under the cover photo
-    - component: week_kpis_text      # net sales, orders and AOV against the prior week
+    - component: week_kpis           # net sales, orders and AOV against the prior week
     - insights: { top: 3 }
     - text: "PDF and Excel lines: {{ drive_url }}"   # filled in by the deliver step
 deliver:
@@ -1276,7 +1300,7 @@ pages:
     slots:
       - { component: full_history_kpis,    row: 1, col: 1, span: 12 }
       - { component: full_history_amounts, row: 2, col: 1, span: 12, card: false }
-      - { component: period_summary_cards, row: 3, col: 1, span: 12 }
+      - { component: period_summaries,     row: 3, col: 1, span: 12 }
       - { component: data_notes,           row: 4, col: 1, span: 12 }
   - repeat: { period: [L14D, L6W, L3M] }
     when_empty: { title: Overview, message: "No sales in {{ period }}" }  # one page instead of the group
@@ -1290,6 +1314,13 @@ pages:
       - id: details
         ...
 ```
+
+The packaged `reports/weekly.yml` (plan 9.4) is this report with today's pages in today's
+order and today's caption (the week, net sales, orders and AOV against the week before, the last
+sale, the Drive link), without insights in the caption, which today's has not, and without the
+schedule, which the cut-over adds (9.7) so that nothing runs it before then.
+`tests/test_port.py` checks its pages, chips, footer, empty page and caption against
+`report_pdf.py` and `deliver/caption.py`.
 
 **Repeats as built (8.5, `reports.py`).** `repeat` takes one parameter and either a list of
 values or `{ dimension, top, by, window, model }`: the `top` members of a dimension by a metric
@@ -1446,8 +1477,9 @@ hari-lari-report schedules [--json]           # the schedules, as deploy/ reads 
 hari-lari-report schema [--check]             # the JSON Schemas of reports and components
 ```
 
-`build`, `validate`, `schedules` and `schema` exist since 8.5; `run` and `--scheduled` come with
-the cut-over (9.7), together with `delivery.py` and the scheduler sync.
+`build`, `validate`, `schedules` and `schema` exist since 8.5; `run` and `--scheduled` since the
+cut-over (9.7), in `reporting/delivery.py`, with the scheduler sync in `deploy/release.sh
+schedules`. The job itself has no arguments: every start names what to run.
 
 `build` never sends anything. It opens the latest run in `--run` (default `data/extract`) up to
 the anchor (`--anchor`, else the report's `params.anchor`, else the rule of `project.yml`),
@@ -1537,7 +1569,8 @@ report and an empty page, against it. The contract for a renderer:
 - `pages[]`: `id` (a repeat has a longer one than its `base`), `title`, `period`, `chips`, `note`,
   the `grid` and `slots[]`, the page's ranked `insights`, and `empty_message` for a `when_empty`
   page (then it has no slots).
-- `slots[]`: `component`, the rendered `title` and `hint`, `visual {type, options}`, the facet
+- `slots[]`: `component`, the rendered `title`, `hint` and `note` (empty without one),
+  `visual {type, options}`, the facet
   `layout`, `position`, `card`, the `filters` in force, `results[]` and `facets[]`, which point at
   a result by index (facets by metric share one result).
 - `results[]`: `shape`, `empty`, the `window` with its comparison (`compare_ok` false means show
@@ -1739,27 +1772,28 @@ No step needed Python beyond what the framework provides. With `facet: { by: per
 
 ## Migration
 
-The old report stays untouched and keeps going out every Monday until the cut-over (plan 9.7).
-The component report reads its sales from API runs only: the back-office CSV export is removed
+The old report stays untouched until the cut-over (plan 9.7), which happens before the first
+live Monday, 30 Nov 2026: nothing is in production before then. The component report reads its sales from API runs only: the back-office CSV export is removed
 after four good Mondays (6.7), and the parity tests compare against the old report built from
 the same API run. The config CSVs are not affected; they are seeds of the models. Plan task 8.1
 moves the drawing helpers out of `report_pdf.py`; the old report imports them from there, so
-both paths share them until `report_pdf.py` is deleted. For two Mondays before the cut-over the
-job also builds the component report under `dry-run/` (9.6). There is no pixel diff: the numbers
-must match, the drawing may improve.
+both paths share them until `report_pdf.py` is deleted. Instead of side-by-side Mondays, the
+component report is checked once before the cut-over (9.6: a fresh extraction with the parity
+tests, the cloud dry run and a real run to the admin chat), and the first live Monday is its
+test. There is no pixel diff: the numbers must match, the drawing may improve.
 
 The command name: `hari-lari-report` was the old local CLI that writes the PDF and Excel from
 the CSV export or an API run. Since 8.5 that one is `hari-lari-report-legacy` and the name
 belongs to the new subcommands (the live job runs `hari-lari-weekly`, so nothing changed for
-it); 9.7 deletes the legacy command. At the cut-over (9.7):
+it); 9.7b deletes the legacy command after a good first live Monday. At the cut-over (9.7):
 
 - The image's entry point becomes `hari-lari-report`, and `hari-lari-weekly` becomes
   `hari-lari-report run --report weekly` (`reports/weekly.yml` carries the Monday 04:00 schedule
   and today's delivery). The release script sets the dry-run job's arguments to
   `run --scheduled --dry-run`.
 - The first release syncs the scheduler job `hari-lari-report-weekly`; the old scheduler job
-  `hari-lari-weekly` is deleted by hand in the same session (runbook), so no Monday runs twice
-  or not at all.
+  `hari-lari-weekly` is paused by hand in the same session (runbook), so no Monday runs twice
+  or not at all. It stays paused as the fallback and is deleted with the old code (9.7b).
 - The weekly report also reads the old marker `sent/<anchor>.json`, so re-running a week sent
   before the cut-over cannot send it again. Earlier outputs stay in `reports/<anchor>/`; new
   ones go to `reports/weekly/<anchor>/`.

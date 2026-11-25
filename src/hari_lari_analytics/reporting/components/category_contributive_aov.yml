@@ -8,6 +8,10 @@ description: >-
 hint: >-
   Sorted by net sales · AOV = Σ contributive AOV = Σ penetration × category AOV ·
   a category's share of AOV equals its % of net{% if meta.compare_ok %} · Δ vs prior period{% endif %}
+note: |-
+  Reading a change in contributive AOV: a moving penetration means the category is in more or fewer orders (an inclusion question);
+  a moving category AOV means orders with the category spend more or less on it (a pricing or basket-size question).
+  Orders are counted per receipt, so they don't add up across categories: the total is all receipts, and its penetration is 100%. Net sales, items and contributive AOV add up.
 params: { period: L6W }
 query:
   model: fct_sales_lines

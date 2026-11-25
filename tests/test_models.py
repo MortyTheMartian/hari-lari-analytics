@@ -14,9 +14,11 @@ from hari_lari_analytics.load import (
 )
 from hari_lari_analytics.load_api import api_sales_lines, load_api_sales
 from hari_lari_analytics.reporting.db import (
+    RAW_SOURCES,
     Seeds,
     build_order,
     connect,
+    load_sources,
     model_references,
     open_run,
 )
@@ -230,6 +232,46 @@ def test_required_table_and_columns():
         connect(tables, SEEDS)
 
 
+def test_the_run_tables_come_from_sources_yml(tmp_path):
+    assert RAW_SOURCES["item_variants"].required is False
+    assert RAW_SOURCES["transactions"].required is True
+    path = tmp_path / "sources.yml"
+    path.write_text("stock:\n  columns: { id: bigint, level: money }\n")
+    with pytest.raises(ValueError, match=r"sources.yml: stock: unknown column type\(s\) money"):
+        load_sources(path)
+    path.write_text("stock:\n  columns: { id: bigint }\n  requried: false\n")
+    with pytest.raises(ValueError, match="sources.yml: stock: requried: Extra inputs"):
+        load_sources(path)
+
+
+def test_build_order_refuses_a_table_that_is_not_declared():
+    with pytest.raises(ValueError, match="stg_x reads raw_stock, which is not a run table of"):
+        build_order({"stg_x": "create or replace view stg_x as select * from raw_stock"})
+    with pytest.raises(ValueError, match="stg_x reads seed_menu, which is not a seed"):
+        build_order({"stg_x": "create or replace view stg_x as select * from seed_menu"})
+    with pytest.raises(ValueError, match="fct_x reads int_gone, which is not a model"):
+        build_order({"fct_x": "create or replace view fct_x as select * from int_gone"})
+
+
+def test_stock_is_a_snapshot_of_the_tracked_live_variants_at_the_extraction():
+    at = datetime(2026, 10, 14, 9, 30)
+    con = connect(api_tables(), SEEDS, extracted_at=at)
+    rows = _query(
+        con,
+        "select adjusted_item_variant, in_stock, alert_at, stock_status, counted_at "
+        "from fct_stock order by variant_id",
+    )
+    assert rows == [
+        ("Latte-Hot", 0, 5, "out", at),
+        ("Latte-Cold", 3, 5, "low", at),
+        ("Cappucino-Hot", 40, 5, "ok", at),
+        ("Focaccia Tomato", -7, 0, "negative", at),  # no stock alert: alert at 0
+    ]
+    tables = api_tables()
+    del tables["item_variants"]  # a run from before the table was extracted
+    assert _query(connect(tables, SEEDS), "select count(*) from fct_stock") == [(0,)]
+
+
 def test_build_order_puts_references_first_and_refuses_upward_references():
     models = {
         "fct_a": "create or replace view fct_a as select * from int_b join dim_c using (x)",
@@ -268,7 +310,7 @@ def test_build_order_reads_joins_subqueries_ctes_and_unions():
             "create or replace view fct_a as with c as (select * from int_b)\n"
             "select title_case(x), week_start(d), (select max(y) from dim_c) as m "
             "from c join Stg_D as d using (k) where k in (select k from raw_transactions) "
-            "union all select 1, 2, 3 from main.seed_e, generate_series(1, 3)"
+            "union all select 1, 2, 3 from main.seed_item_aliases, generate_series(1, 3)"
         ),
         "int_b": "create or replace view int_b as select 1 as x",
         "dim_c": "create or replace view dim_c as select 1 as y",
@@ -277,7 +319,7 @@ def test_build_order_reads_joins_subqueries_ctes_and_unions():
     # `c` is a CTE, not a table; names are case-folded; functions need not exist; USING needs
     # no tables to exist, since DuckDB only parses
     assert model_references(models)["fct_a"] == {
-        "int_b", "dim_c", "stg_d", "raw_transactions", "seed_e",
+        "int_b", "dim_c", "stg_d", "raw_transactions", "seed_item_aliases",
     }  # fmt: skip
     assert build_order(models).index("fct_a") == 3
 

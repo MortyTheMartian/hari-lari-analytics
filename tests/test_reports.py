@@ -113,7 +113,7 @@ def test_a_report_needs_pages():
 
 def test_an_unknown_component_names_the_known_ones():
     refuse(
-        r"slot 1 \(nope\): no component 'nope' \(known: category_contributive_aov, ",
+        r"slot 1 \(nope\): no component 'nope' \(known: [a-z_, ]*category_contributive_aov, ",
         pages=[page(slots=[{**KPIS, "component": "nope"}])],
     )
 
@@ -408,6 +408,14 @@ def test_the_page_chips_list_the_filters_in_force():
         ("report", "where", "payment_type"),
         ("page", "focus", "adjusted_category"),
     ]
+
+
+def test_the_page_chips_show_the_repeats_value():
+    r = report(
+        repeat={"category": ["Coffee", "Tea"]},
+        filters={"focus": {"adjusted_category": "$category"}},
+    )
+    assert [p.filters[0].value for p in expand(r, ANCHOR)] == ["Coffee", "Tea"]
 
 
 # --- outputs, text blocks and delivery ------------------------------------------------------------

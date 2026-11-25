@@ -205,3 +205,42 @@ drink_attach_rate:
   additivity: none
   derived: food_and_drink_orders / nullif(food_orders, 0)
   min_n: { food_orders: 30 }
+
+# Stock (fct_stock): the levels at extraction time, a snapshot without a history
+stock_level:
+  label: In stock
+  description: >-
+    Units in stock at extraction time, as Moka counts them; negative when more was sold than
+    was counted in
+  format: count
+  up_is_good: true
+  additivity: full
+  sql:
+    fct_stock: sum(in_stock)
+
+alert_at:
+  label: Alert at
+  description: The stock level at or below which Moka's stock alert fires; 0 without an alert
+  format: count
+  up_is_good: null
+  additivity: full
+  sql:
+    fct_stock: sum(alert_at)
+
+stock_counted_at:
+  label: Stock counted at
+  description: When the stock levels were read from Moka (the extraction of the run)
+  format: timestamp
+  up_is_good: null
+  additivity: none
+  sql:
+    fct_stock: max(counted_at)
+
+stock_variants:
+  label: Variants
+  description: Stock-tracked item-variants
+  format: count
+  up_is_good: null
+  additivity: full
+  sql:
+    fct_stock: count(*)

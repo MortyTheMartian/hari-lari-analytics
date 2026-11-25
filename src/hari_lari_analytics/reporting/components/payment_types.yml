@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: payment_types
+title: Payment types
+description: >-
+  The share of net sales per payment type, with the orders and net sales of each; beyond four
+  types the smallest are grouped as "Other".
+hint: Share of net sales
+params: { period: L6W }
+query:
+  model: fct_sales_lines
+  dimensions: [payment_type]
+  metrics: [share, orders, net_sales]
+  window: $period
+  top: { n: 3, by: net_sales, other: true }
+visual: { type: stacked_share_bar, metric: share, details: [orders, net_sales] }

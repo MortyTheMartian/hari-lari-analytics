@@ -1,0 +1,15 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: top_items
+params: {}
+facets:
+- key: null
+  label: null
+  metric: null
+  shape: rows
+  csv: |
+    adjusted_item_variant,adjusted_category,is_total,items_sold,net_sales,share,n_orders,trading_days
+    Latte-Hot,Coffee,False,1,40000,0.4081632653,1,1
+    Latte-Cold,Coffee,False,1,30000,0.306122449,1,1
+    Focaccia Tomato,Snacks (Focaccia),False,1,28000,0.2857142857,1,1
+    Cappucino-Hot,Coffee,False,0,0,0,0,1

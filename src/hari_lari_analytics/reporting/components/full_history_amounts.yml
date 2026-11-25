@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: full_history_amounts
+title: Gross, discounts and refunds
+description: >-
+  The line under the cover cards: gross sales, discounts and refunds from the first sale to the
+  anchor, which net sales is made of.
+query:
+  model: fct_sales_lines
+  metrics: [gross_sales, discounts, refunds]
+  window: full
+visual:
+  type: text_line
+  labels: { gross_sales: Gross, discounts: discounts, refunds: refunds }

@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: period_summaries
+title: Periods
+description: >-
+  The three period cards of the cover: net sales and orders of the last 14 days, 6 weeks and 3
+  months with their change against the prior period, and a sparkline of net sales (by day for
+  the 14 days, by 7-day block otherwise).
+params: { period: L6W }
+query:
+  model: fct_sales_lines
+  dimensions: [bucket]
+  grain: spark
+  metrics: [net_sales, orders]
+  window: $period
+  compare: prior
+  totals: true
+facet: { by: period, values: [L14D, L6W, L3M], layout: row }
+visual: { type: summary_card, sparkline: net_sales }

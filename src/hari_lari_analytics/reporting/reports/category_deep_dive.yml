@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=../schema/report.schema.json
+id: category_deep_dive
+title: Category deep dive
+description: >-
+  One page for each of the five categories with the most net sales in the last 6 weeks: its
+  penetration and category AOV per week, its top items, its orders by hour, and the share of its
+  orders that also have food or a drink (the attach rate with the other group). Built from
+  existing components with slot overrides only (plan 9.5).
+kicker: Hari Lari Cafe · category deep dive
+footer: Hari Lari Cafe · Moka POS sales
+params: { period: L6W }
+repeat:
+  category: { dimension: adjusted_category, top: 5, by: net_sales, window: $period }
+filters:
+  focus: { adjusted_category: $category }
+outputs:
+  pdf: true
+pages:
+  - id: category
+    title: "{{ category }}"
+    grid: { columns: 12, rows: [1, 1] }
+    slots:
+      - component: sales_trend
+        row: 1
+        col: 1
+        span: 7
+        with:
+          title: "Penetration & category AOV by {{ meta.grain }}"
+          hint: >-
+            Share of orders with the category · category AOV = its net sales per order with
+            it{% if meta.compare_ok %} · ticks = prior period{% endif %} · ▲▼ change in pp
+          query: { metrics: [penetration, category_aov] }
+          visual: { metric: penetration, line: category_aov }
+      - component: top_items
+        row: 1
+        col: 8
+        span: 5
+        with:
+          title: Top items
+          hint: By net sales · % of all net sales
+          query: { dimensions: [adjusted_item_variant], top: { n: 8 } }
+          visual: { columns: [net_sales, share] }
+      - component: orders_by_hour
+        row: 2
+        col: 1
+        span: 6
+        with:
+          hint: "Orders with the category per trading day · {{ meta.trading_days }} days · top 3 hours highlighted"
+          query: { model: fct_sales_lines }
+      - component: category_penetration
+        row: 2
+        col: 7
+        span: 6
+        ignore_filters: [adjusted_category]
+        with:
+          title: Attach rate with food and drinks
+          hint: >-
+            Share of the orders with the category, by whether they also have food and a
+            drink{% if meta.compare_ok %} · ○ prior period{% endif %}
+          query:
+            dimensions: [has_food, has_drink]
+            where: { adjusted_category: $category }

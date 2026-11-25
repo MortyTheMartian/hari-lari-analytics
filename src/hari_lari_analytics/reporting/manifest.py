@@ -214,6 +214,7 @@ def _component(c: Component) -> dict:
         "title": raw["title"],
         "description": raw.get("description"),
         "hint": raw.get("hint"),
+        "note": raw.get("note"),
         "params": dict(c.defaults),
         "unbound": sorted(c.unbound),
         "query": query,

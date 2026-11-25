@@ -19,6 +19,7 @@
                     "category",
                     "category_group_level_1",
                     "category_group_level_2",
+                    "counts_as_order",
                     "discount_code",
                     "discounted",
                     "event_kind",
@@ -46,6 +47,7 @@
                     "sale_quarter",
                     "sale_week",
                     "sale_year",
+                    "stock_status",
                     "variant",
                     "weekday"
                   ],
@@ -155,7 +157,8 @@
               "type": "string",
               "enum": [
                 "fct_orders",
-                "fct_sales_lines"
+                "fct_sales_lines",
+                "fct_stock"
               ],
               "description": "the model to query"
             },
@@ -174,6 +177,7 @@
                   {
                     "type": "string",
                     "enum": [
+                      "alert_at",
                       "aov",
                       "avg_item_price",
                       "category_aov",
@@ -195,7 +199,10 @@
                       "orders",
                       "penetration",
                       "refunds",
-                      "share"
+                      "share",
+                      "stock_counted_at",
+                      "stock_level",
+                      "stock_variants"
                     ],
                     "description": "a metric of metrics.yml"
                   },
@@ -234,6 +241,7 @@
                       "category",
                       "category_group_level_1",
                       "category_group_level_2",
+                      "counts_as_order",
                       "discount_code",
                       "discounted",
                       "event_kind",
@@ -261,6 +269,7 @@
                       "sale_quarter",
                       "sale_week",
                       "sale_year",
+                      "stock_status",
                       "variant",
                       "weekday"
                     ],
@@ -379,6 +388,7 @@
                   "category",
                   "category_group_level_1",
                   "category_group_level_2",
+                  "counts_as_order",
                   "discount_code",
                   "discounted",
                   "event_kind",
@@ -406,6 +416,7 @@
                   "sale_quarter",
                   "sale_week",
                   "sale_year",
+                  "stock_status",
                   "variant",
                   "weekday"
                 ],
@@ -482,6 +493,7 @@
                   "category",
                   "category_group_level_1",
                   "category_group_level_2",
+                  "counts_as_order",
                   "discount_code",
                   "discounted",
                   "event_kind",
@@ -509,6 +521,7 @@
                   "sale_quarter",
                   "sale_week",
                   "sale_year",
+                  "stock_status",
                   "variant",
                   "weekday"
                 ],
@@ -584,6 +597,10 @@
                   "type": "string"
                 },
                 {
+                  "const": "spark",
+                  "type": "string"
+                },
+                {
                   "type": "null"
                 }
               ],
@@ -627,6 +644,7 @@
                   "category",
                   "category_group_level_1",
                   "category_group_level_2",
+                  "counts_as_order",
                   "discount_code",
                   "discounted",
                   "event_kind",
@@ -654,6 +672,7 @@
                   "sale_quarter",
                   "sale_week",
                   "sale_year",
+                  "stock_status",
                   "variant",
                   "weekday"
                 ],
@@ -685,8 +704,7 @@
       },
       "required": [
         "model",
-        "metrics",
-        "window"
+        "metrics"
       ],
       "title": "Query",
       "type": "object"
@@ -755,6 +773,7 @@
             {
               "type": "string",
               "enum": [
+                "alert_at",
                 "aov",
                 "avg_item_price",
                 "category_aov",
@@ -776,7 +795,10 @@
                 "orders",
                 "penetration",
                 "refunds",
-                "share"
+                "share",
+                "stock_counted_at",
+                "stock_level",
+                "stock_variants"
               ],
               "description": "a metric of metrics.yml"
             },
@@ -831,6 +853,7 @@
             {
               "type": "string",
               "enum": [
+                "alert_at",
                 "aov",
                 "avg_item_price",
                 "category_aov",
@@ -852,7 +875,10 @@
                 "orders",
                 "penetration",
                 "refunds",
-                "share"
+                "share",
+                "stock_counted_at",
+                "stock_level",
+                "stock_variants"
               ],
               "description": "a metric of metrics.yml"
             },
@@ -928,6 +954,18 @@
       ],
       "default": null,
       "title": "Hint"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Note"
     },
     "description": {
       "anyOf": [
@@ -1319,7 +1357,7 @@
           },
           {
             "type": "object",
-            "description": "Add `<metric>_growth`: each bucket over the one before it, per group, as a ratio.",
+            "description": "Add `<metric>_growth`: each bucket over the one before it, per group, as a ratio; for a",
             "properties": {
               "growth_vs_previous": {
                 "anyOf": [
@@ -2551,6 +2589,20 @@
                     {
                       "default": true,
                       "title": "Total",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "fill": {
+                  "anyOf": [
+                    {
+                      "default": false,
+                      "title": "Fill",
                       "type": "boolean"
                     },
                     {

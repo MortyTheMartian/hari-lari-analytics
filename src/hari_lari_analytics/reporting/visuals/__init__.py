@@ -358,6 +358,27 @@ def card(area: Area, title: str = "", hint: str = "") -> Area:
     return Area(area.fig, rect, area.theme)
 
 
+NOTE_LINESPACING = 1.6
+
+
+def note(area: Area, text: str) -> Area:
+    """Write a note at the foot of the area, wrapped to its width (a line break in the text is
+    kept), and return the area left above it."""
+    lines = [line for part in text.strip().split("\n") for line in wrap(part, area, "hint")]
+    size = area.theme.size("hint")
+    area.text(
+        0,
+        0,
+        "\n".join(lines),
+        role="hint",
+        color="muted",
+        va="bottom",
+        linespacing=NOTE_LINESPACING,
+    )
+    used = area.points_y(size * (NOTE_LINESPACING * len(lines) + 1))
+    return area.sub(0, used, 1, max(1 - used, 0.05))
+
+
 def page(theme: Theme = DEFAULT_THEME) -> Figure:
     """An empty A4 landscape page in the theme."""
     fig = Figure(figsize=(W, H))

@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: orders_by_weekday_hour
+title: Orders per trading day by weekday and hour
+description: >-
+  The average number of orders per trading day in each hour of each weekday: when the café is
+  busy, for staffing. A weekday is divided by its own trading days in the window.
+hint: Average orders per trading day · {{ meta.window.current.label }}
+params: { period: L6W }
+query:
+  model: fct_orders
+  dimensions: [weekday, hour_of_day]
+  metrics: [orders]
+  window: $period
+transforms:
+  - per_trading_day
+  - pivot: { rows: weekday, columns: hour_of_day }
+visual: { type: heatmap }

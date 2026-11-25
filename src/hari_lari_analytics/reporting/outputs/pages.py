@@ -19,10 +19,13 @@ EMPTY_PAGE_AREA: Rect = (layouts.LEFT, layouts.BOTTOM, layouts.RIGHT - layouts.L
 
 
 def draw_slot(fig: Figure, theme: Theme, slot: SlotRun, insights: Sequence) -> None:
-    """One slot: the card with the component's title and hint, and its facets inside."""
+    """One slot: the card with the component's title and hint, its facets inside and the note
+    at the foot."""
     area = Area(fig, slot.slot.rect, theme)
     if slot.slot.card:
         area = visuals.card(area, slot.title, slot.hint)
+    if slot.note:
+        area = visuals.note(area, slot.note)
     spec = slot.slot.bound.spec
     visual = spec.visual
     layout = spec.facet.layout if spec.facet else "row"

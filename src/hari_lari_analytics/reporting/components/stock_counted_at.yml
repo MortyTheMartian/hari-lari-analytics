@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: stock_counted_at
+title: Stock counted at
+description: >-
+  When the stock levels were read from Moka: the time of the extraction, which a stock report
+  shows because the stock is a snapshot and the anchor says nothing about its age.
+query:
+  model: fct_stock
+  metrics: [stock_counted_at]
+visual: { type: text_line, labels: { stock_counted_at: Moka stock counted at } }

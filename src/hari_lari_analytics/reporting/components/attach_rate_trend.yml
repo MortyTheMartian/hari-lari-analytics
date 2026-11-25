@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: attach_rate_trend
+title: Food and drink attach rates
+description: >-
+  Per time bucket: the share of the orders with a drink that also have food, and the share of
+  the orders with food that also have a drink, with the prior period as ticks.
+hint: >-
+  Food attach = orders with a drink and food ÷ orders with a drink · drink attach the other way
+  round{% if meta.compare_ok %} · ticks = prior period{% endif %}
+params: { period: L6W }
+query:
+  model: fct_orders
+  dimensions: [bucket]
+  metrics: [food_attach_rate, drink_attach_rate]
+  window: $period
+  compare: prior
+transforms:
+  - growth_vs_previous
+facet: { by: metric, layout: row }
+visual: { type: bar_trend }
+insights: [best_bucket]
