@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: discount_codes
+title: Discounts
+description: >-
+  Per discount code (and the lines without one): orders, gross sales, discounts and the
+  discount rate, by gross sales.
+hint: By discount code
+params: { period: L6W }
+query:
+  model: fct_sales_lines
+  dimensions: [discount_code]
+  metrics: [orders, gross_sales, discounts, discount_rate]
+  window: $period
+visual: { type: table, bold: [discount_rate] }

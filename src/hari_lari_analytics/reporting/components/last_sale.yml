@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: last_sale
+title: Last sale
+description: >-
+  The time of the last sale up to the anchor, which says how fresh the data is (the note on the
+  cover of today's report).
+query:
+  model: fct_sales_lines
+  metrics: [last_sale_ts]
+  window: full
+visual: { type: text_line, labels: { last_sale_ts: Last sale } }

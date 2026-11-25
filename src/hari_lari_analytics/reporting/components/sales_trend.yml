@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: sales_trend
+title: "Net sales & orders by {{ meta.grain }}"
+description: >-
+  Net sales per bucket of the period (days for 14 days, weeks for 6 weeks, months for 3 months)
+  with the prior period as ticks and the change against the previous bucket, and the orders as
+  a line below.
+hint: >-
+  IDR · {% if meta.compare_ok %}ticks = prior period, same position{% else %}no prior period
+  available{% endif %}{% if meta.grain != 'day' %} · ▲▼ {{ meta.grain }}-over-{{ meta.grain }} change{% endif %}
+params: { period: L6W }
+query:
+  model: fct_sales_lines
+  dimensions: [bucket]
+  metrics: [net_sales, orders]
+  window: $period
+  compare: prior
+transforms: [growth_vs_previous]
+visual: { type: bar_trend, metric: net_sales, line: orders }

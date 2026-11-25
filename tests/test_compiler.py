@@ -179,6 +179,16 @@ def test_top_n_with_other(con):
     assert r.total.net_sales == 213_000
 
 
+def test_other_never_hides_a_single_group(con):
+    # five categories: the top 4 would leave one, which keeps its name instead of "Other (1)"
+    r = q(con, model="fct_sales_lines", dimensions=["adjusted_category"], window="full",
+          metrics=["net_sales"], top={"n": 4, "by": "net_sales", "other": True})  # fmt: skip
+    assert len(r.rows) == 5 and not r.rows["is_other"].any()
+    three = q(con, model="fct_sales_lines", dimensions=["adjusted_category"], window="full",
+              metrics=["net_sales"], top={"n": 3, "by": "net_sales", "other": True})  # fmt: skip
+    assert listed(three.rows["adjusted_category"])[-1] == "Other (2)"
+
+
 def test_top_n_without_other_keeps_the_total_of_everything(con):
     r = q(con, model="fct_sales_lines", dimensions=["adjusted_item_variant", "adjusted_category"],
           window="full", metrics=["net_sales", "share"], top={"n": 2, "by": "net_sales"},

@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: key_figures
+title: Key figures
+description: >-
+  The period's figures against the prior period: net sales, orders, AOV, items sold, gross
+  sales, discounts, refunds, and the first and last sale.
+hint: "Amounts in IDR · current vs prior period"
+params: { period: L6W }
+query:
+  model: fct_sales_lines
+  metrics: [net_sales, orders, aov, items_sold, gross_sales, discounts, refunds, first_sale_ts,
+            last_sale_ts]
+  window: $period
+  compare: prior
+visual: { type: table, orientation: metrics }

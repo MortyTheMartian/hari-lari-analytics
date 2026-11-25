@@ -185,7 +185,7 @@ def summary_card(area: Area, result: Result, options: SummaryCardOptions, ctx: D
     line = area.points_y(theme.size("card_title") * 1.6)
     if window is not None:
         area.text(px, top - line, window.current.label, role="body", color="muted", va="top")
-        grain = formats.GRAIN_WORD[result.meta.grain or window.current.grain]
+        grain = formats.GRAIN_WORD[window.current.grain]  # the period's view, not the sparkline's
         compare = ""
         if window.compare != "none":
             compare = f"vs {window.compare_label}" if window.compare_ok else "no comparison"

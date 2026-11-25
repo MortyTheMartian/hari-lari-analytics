@@ -19,6 +19,7 @@
                     "category",
                     "category_group_level_1",
                     "category_group_level_2",
+                    "counts_as_order",
                     "discount_code",
                     "discounted",
                     "event_kind",
@@ -240,6 +241,7 @@
                       "category",
                       "category_group_level_1",
                       "category_group_level_2",
+                      "counts_as_order",
                       "discount_code",
                       "discounted",
                       "event_kind",
@@ -386,6 +388,7 @@
                   "category",
                   "category_group_level_1",
                   "category_group_level_2",
+                  "counts_as_order",
                   "discount_code",
                   "discounted",
                   "event_kind",
@@ -490,6 +493,7 @@
                   "category",
                   "category_group_level_1",
                   "category_group_level_2",
+                  "counts_as_order",
                   "discount_code",
                   "discounted",
                   "event_kind",
@@ -593,6 +597,10 @@
                   "type": "string"
                 },
                 {
+                  "const": "spark",
+                  "type": "string"
+                },
+                {
                   "type": "null"
                 }
               ],
@@ -636,6 +644,7 @@
                   "category",
                   "category_group_level_1",
                   "category_group_level_2",
+                  "counts_as_order",
                   "discount_code",
                   "discounted",
                   "event_kind",

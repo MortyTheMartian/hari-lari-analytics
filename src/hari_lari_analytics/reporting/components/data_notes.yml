@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: data_notes
+title: Data notes
+description: >-
+  Where the data comes from, the extraction's errors and warnings from the run manifest, and
+  the warnings of the data checks.
+query: { source: notes }
+visual: { type: notes_card, column: note, empty: No data notes }

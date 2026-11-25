@@ -1,0 +1,12 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: last_sale
+params: {}
+facets:
+- key: null
+  label: null
+  metric: null
+  shape: single
+  csv: |
+    is_total,last_sale_ts,n_orders
+    True,2026-10-13 11:00:00,4

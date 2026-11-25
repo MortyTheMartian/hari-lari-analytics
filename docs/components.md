@@ -647,7 +647,9 @@ so L14D, L6W and L3M keep their tests.
 | `last_n_days(n)`, `last_n_weeks(n)`, `last_n_months(n)` | like L14D, L6W, L3M with any n; also written `L<n>D`, `L<n>W`, `L<n>M` | day, week, month |
 
 Time grains are `day`, `week`, `month` and `block_7d`: 7-day blocks counted back from the window
-end, so the latest block is a full week, as the sparklines do today. Weeks and months are
+end, so the latest block is a full week, as the sparklines do today. `grain: spark` is the
+sparkline grain of today's report: `day` on a window whose trend is daily (L14D), `block_7d`
+otherwise, so one component gives the right sparkline in every facet by period. Weeks and months are
 calendar buckets, so the first and last bucket may reach outside the window. `bucket_before`
 gives the bucket before the first one, for the growth label of the first bucket; it is used
 only when it lies fully within the sales history.
@@ -753,7 +755,9 @@ not those of the totals.
 **Top N.** `top` ranks the groups by `by` over the current window (ties by the dimension values)
 and maps every other group, in both windows, to `Other (k)` in the same statement, so the orders
 of "Other" are distinct receipts, not a sum, and the prior of "Other" holds everything outside
-the top N, including groups sold only in the prior window. Without `other: true` that row is
+the top N, including groups sold only in the prior window. "Other" never hides a single group:
+when it would hold one group of the window and nothing else, that group keeps its name (the top
+3 payment types of four show all four, as today's report does). Without `other: true` that row is
 dropped from the output, but the totals and every relative metric (share, penetration) still
 cover all groups. `by` may be any metric except a relative one. Under a `focus`, the top N and
 "Other" are ranked among the focused groups only. `keep_prior_only` does not combine with

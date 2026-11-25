@@ -1,0 +1,14 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: payment_types
+params: {}
+facets:
+- key: null
+  label: null
+  metric: null
+  shape: rows
+  csv: |
+    payment_type,is_total,is_other,share,orders,net_sales,n_orders,trading_days
+    BCA,False,False,0.693877551,1,68000,1,1
+    Cash,False,False,0.306122449,1,30000,1,1
+    Gopay,False,False,0,0,0,0,1

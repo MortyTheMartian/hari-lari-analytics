@@ -29,6 +29,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass
 from datetime import date
+from typing import Literal
 
 import duckdb
 import pandas as pd
@@ -94,7 +95,7 @@ class Query(_Strict):
     totals: bool = False
     keep_prior_only: bool = False
     top: TopSpec | None = None
-    grain: Grain | None = None
+    grain: Grain | Literal["spark"] | None = None  # spark: daily on a daily window, else block_7d
     bins: dict[str, list[int | str]] = {}
     buckets_before: int = Field(default=0, ge=0)
 
@@ -251,8 +252,11 @@ class _Compiler:
             raise QueryError(f"grain needs a time dimension ({TIME_BUCKET} or {_time_dims()})")
         if fixed and q.grain and q.grain != fixed:
             raise QueryError(f"grain {q.grain} contradicts the dimension {self.time} ({fixed})")
+        grain = q.grain
+        if grain == "spark":
+            grain = "day" if self.window and self.window.current.grain == "day" else "block_7d"
         self.grain: Grain | None = (
-            (fixed or q.grain or self.window.current.grain) if self.time else None
+            (fixed or grain or self.window.current.grain) if self.time else None
         )
         if q.buckets_before and self.time is None:
             raise QueryError("buckets_before needs a time dimension")
@@ -601,6 +605,8 @@ class _Compiler:
         """Map the groups outside the top N to "Other (k)"; without `other` the frame drops that
         group later, so that the totals still cover every row."""
         n = self.q.top.n
+        if self.q.top.other:
+            n = self._top_cut(n)
         on = " and ".join(self._n_keys("r", "k"))
         other = f"'Other (' || ((select count(*) from ranked) - {n})::varchar || ')'"
         replace = [f"case when k._rank <= {n} then r._n0::varchar else {other} end as _n0"]
@@ -612,6 +618,20 @@ class _Compiler:
             f"select r.* replace ({', '.join(replace)}), coalesce(k._rank > {n}, true) as _other\n"
             f"from {side}_r as r\nleft join ranked as k on {on}"
         )
+
+    def _top_cut(self, n: int) -> str:
+        """The rank that ends the top: one more than `n` when "Other" would hold a single group of
+        the window and no group of the other windows, so that no "Other (1)" hides a name."""
+        single = [f"(select count(*) from ranked) = {n + 1}"]
+        for side in ["prior", "extra"]:
+            if side == "prior" and not self.compare_run or side == "extra" and not self.extra:
+                continue
+            keys = " and ".join(self._n_keys("o", "k"))
+            single.append(
+                f"not exists (select 1 from {side}_r as o "
+                f"where not exists (select 1 from ranked as k where {keys}))"
+            )
+        return f"(case when {' and '.join(single)} then {n + 1} else {n} end)"
 
     def _aggregated(self, side: str) -> str:
         source = f"{side}_k" if self.q.top else f"{side}_r"

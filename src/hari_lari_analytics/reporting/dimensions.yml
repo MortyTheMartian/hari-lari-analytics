@@ -250,6 +250,12 @@ discounted:
   models: [fct_sales_lines]
   labels: { true: Discounted, false: Not discounted }
 
+counts_as_order:
+  label: Counts as order
+  grain: order
+  models: [fct_sales_lines, fct_orders]
+  labels: { true: Order, false: Fully refunded }
+
 is_refund:
   label: Refund line
   grain: line

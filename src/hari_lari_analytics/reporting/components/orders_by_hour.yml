@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: orders_by_hour
+title: Orders by hour
+description: >-
+  Orders per trading day in each hour of the day, from the first to the last hour with a sale,
+  with the three busiest hours highlighted.
+hint: "Average per trading day · {{ meta.trading_days }} days · top 3 hours highlighted"
+params: { period: L6W }
+query:
+  model: fct_orders
+  dimensions: [hour_of_day]
+  metrics: [orders]
+  where: { counts_as_order: true }  # a fully refunded receipt adds no hour
+  window: $period
+transforms: [per_trading_day, fill_domain]
+visual: { type: bar_trend, metric: orders, highlight: { top: 3 }, prior: false, growth: false }

@@ -279,6 +279,7 @@
         "variant",
         "discount_code",
         "discounted",
+        "counts_as_order",
         "is_refund",
         "modifier_name",
         "modifier_option_name"
@@ -365,7 +366,8 @@
         "has_modifier",
         "has_refund",
         "basket_size",
-        "order_line_count"
+        "order_line_count",
+        "counts_as_order"
       ]
     }
   ],
@@ -1478,6 +1480,25 @@
       }
     },
     {
+      "id": "counts_as_order",
+      "label": "Counts as order",
+      "description": null,
+      "grain": "order",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "labels": {
+        "True": "Order",
+        "False": "Fully refunded"
+      }
+    },
+    {
       "id": "is_refund",
       "label": "Refund line",
       "description": null,
@@ -2193,6 +2214,96 @@
       ]
     },
     {
+      "id": "category_penetration",
+      "title": "Order penetration",
+      "description": "The share of orders that contain each adjusted category, highest first, with the prior period as a hollow dot.",
+      "hint": "Share of orders containing the category{% if meta.compare_ok %} · ○ prior period{% endif %}",
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_sales_lines",
+        "dimensions": [
+          "adjusted_category"
+        ],
+        "metrics": [
+          "penetration"
+        ],
+        "window": "$period",
+        "compare": "prior"
+      },
+      "transforms": [
+        "sort_limit"
+      ],
+      "facet": null,
+      "visual": "dot_plot",
+      "insights": []
+    },
+    {
+      "id": "data_notes",
+      "title": "Data notes",
+      "description": "Where the data comes from, the extraction's errors and warnings from the run manifest, and the warnings of the data checks.",
+      "hint": null,
+      "params": {},
+      "unbound": [],
+      "query": {
+        "source": "notes"
+      },
+      "transforms": [],
+      "facet": null,
+      "visual": "notes_card",
+      "insights": []
+    },
+    {
+      "id": "discount_codes",
+      "title": "Discounts",
+      "description": "Per discount code (and the lines without one): orders, gross sales, discounts and the discount rate, by gross sales.",
+      "hint": "By discount code",
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_sales_lines",
+        "dimensions": [
+          "discount_code"
+        ],
+        "metrics": [
+          "orders",
+          "gross_sales",
+          "discounts",
+          "discount_rate"
+        ],
+        "window": "$period"
+      },
+      "transforms": [],
+      "facet": null,
+      "visual": "table",
+      "insights": []
+    },
+    {
+      "id": "full_history_amounts",
+      "title": "Gross, discounts and refunds",
+      "description": "The line under the cover cards: gross sales, discounts and refunds from the first sale to the anchor, which net sales is made of.",
+      "hint": null,
+      "params": {},
+      "unbound": [],
+      "query": {
+        "model": "fct_sales_lines",
+        "metrics": [
+          "gross_sales",
+          "discounts",
+          "refunds"
+        ],
+        "window": "full"
+      },
+      "transforms": [],
+      "facet": null,
+      "visual": "text_line",
+      "insights": []
+    },
+    {
       "id": "full_history_kpis",
       "title": "Full history",
       "description": "The four headline cards of the cover: net sales, orders, average order value and items sold from the first sale to the anchor.",
@@ -2219,6 +2330,55 @@
       "insights": []
     },
     {
+      "id": "key_figures",
+      "title": "Key figures",
+      "description": "The period's figures against the prior period: net sales, orders, AOV, items sold, gross sales, discounts, refunds, and the first and last sale.",
+      "hint": "Amounts in IDR · current vs prior period",
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_sales_lines",
+        "metrics": [
+          "net_sales",
+          "orders",
+          "aov",
+          "items_sold",
+          "gross_sales",
+          "discounts",
+          "refunds",
+          "first_sale_ts",
+          "last_sale_ts"
+        ],
+        "window": "$period",
+        "compare": "prior"
+      },
+      "transforms": [],
+      "facet": null,
+      "visual": "table",
+      "insights": []
+    },
+    {
+      "id": "last_sale",
+      "title": "Last sale",
+      "description": "The time of the last sale up to the anchor, which says how fresh the data is (the note on the cover of today's report).",
+      "hint": null,
+      "params": {},
+      "unbound": [],
+      "query": {
+        "model": "fct_sales_lines",
+        "metrics": [
+          "last_sale_ts"
+        ],
+        "window": "full"
+      },
+      "transforms": [],
+      "facet": null,
+      "visual": "text_line",
+      "insights": []
+    },
+    {
       "id": "lines_export",
       "title": "Sales lines",
       "description": "The cleaned sales lines up to the anchor, one row per line, for the workbook of a report: the columns of the Excel file, without personal data and without the line note. It has no visual, so it belongs in `outputs.xlsx`, not on a page.",
@@ -2231,6 +2391,36 @@
       "transforms": [],
       "facet": null,
       "visual": null,
+      "insights": []
+    },
+    {
+      "id": "orders_by_hour",
+      "title": "Orders by hour",
+      "description": "Orders per trading day in each hour of the day, from the first to the last hour with a sale, with the three busiest hours highlighted.",
+      "hint": "Average per trading day · {{ meta.trading_days }} days · top 3 hours highlighted",
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_orders",
+        "dimensions": [
+          "hour_of_day"
+        ],
+        "metrics": [
+          "orders"
+        ],
+        "where": {
+          "counts_as_order": true
+        },
+        "window": "$period"
+      },
+      "transforms": [
+        "per_trading_day",
+        "fill_domain"
+      ],
+      "facet": null,
+      "visual": "bar_trend",
       "insights": []
     },
     {
@@ -2259,6 +2449,134 @@
       ],
       "facet": null,
       "visual": "heatmap",
+      "insights": []
+    },
+    {
+      "id": "payment_types",
+      "title": "Payment types",
+      "description": "The share of net sales per payment type, with the orders and net sales of each; beyond four types the smallest are grouped as \"Other\".",
+      "hint": "Share of net sales",
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_sales_lines",
+        "dimensions": [
+          "payment_type"
+        ],
+        "metrics": [
+          "share",
+          "orders",
+          "net_sales"
+        ],
+        "window": "$period",
+        "top": {
+          "n": 3,
+          "by": "net_sales",
+          "other": true
+        }
+      },
+      "transforms": [],
+      "facet": null,
+      "visual": "stacked_share_bar",
+      "insights": []
+    },
+    {
+      "id": "period_kpis",
+      "title": "Key figures",
+      "description": "The four KPI cards of a period's overview: net sales, orders, average order value and items sold, each with its change, the prior value and a sparkline (by day for a daily window, by 7-day block otherwise).",
+      "hint": null,
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_sales_lines",
+        "dimensions": [
+          "bucket"
+        ],
+        "grain": "spark",
+        "metrics": [
+          "net_sales",
+          "orders",
+          "aov",
+          "items_sold"
+        ],
+        "window": "$period",
+        "compare": "prior",
+        "totals": true
+      },
+      "transforms": [],
+      "facet": {
+        "by": "metric",
+        "layout": "grid(1x4)"
+      },
+      "visual": "kpi_card",
+      "insights": []
+    },
+    {
+      "id": "period_summaries",
+      "title": "Periods",
+      "description": "The three period cards of the cover: net sales and orders of the last 14 days, 6 weeks and 3 months with their change against the prior period, and a sparkline of net sales (by day for the 14 days, by 7-day block otherwise).",
+      "hint": null,
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_sales_lines",
+        "dimensions": [
+          "bucket"
+        ],
+        "grain": "spark",
+        "metrics": [
+          "net_sales",
+          "orders"
+        ],
+        "window": "$period",
+        "compare": "prior",
+        "totals": true
+      },
+      "transforms": [],
+      "facet": {
+        "by": "period",
+        "values": [
+          "L14D",
+          "L6W",
+          "L3M"
+        ],
+        "layout": "row"
+      },
+      "visual": "summary_card",
+      "insights": []
+    },
+    {
+      "id": "sales_trend",
+      "title": "Net sales & orders by {{ meta.grain }}",
+      "description": "Net sales per bucket of the period (days for 14 days, weeks for 6 weeks, months for 3 months) with the prior period as ticks and the change against the previous bucket, and the orders as a line below.",
+      "hint": "IDR · {% if meta.compare_ok %}ticks = prior period, same position{% else %}no prior period available{% endif %}{% if meta.grain != 'day' %} · ▲▼ {{ meta.grain }}-over-{{ meta.grain }} change{% endif %}",
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_sales_lines",
+        "dimensions": [
+          "bucket"
+        ],
+        "metrics": [
+          "net_sales",
+          "orders"
+        ],
+        "window": "$period",
+        "compare": "prior"
+      },
+      "transforms": [
+        "growth_vs_previous"
+      ],
+      "facet": null,
+      "visual": "bar_trend",
       "insights": []
     },
     {
@@ -2330,6 +2648,37 @@
       "transforms": [],
       "facet": null,
       "visual": "text_line",
+      "insights": []
+    },
+    {
+      "id": "top_items",
+      "title": "Top 15 items",
+      "description": "The 15 item-variants with the most net sales in the period, with their category, items sold and share of all net sales.",
+      "hint": "By net sales",
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_sales_lines",
+        "dimensions": [
+          "adjusted_item_variant",
+          "adjusted_category"
+        ],
+        "metrics": [
+          "items_sold",
+          "net_sales",
+          "share"
+        ],
+        "window": "$period",
+        "top": {
+          "n": 15,
+          "by": "net_sales"
+        }
+      },
+      "transforms": [],
+      "facet": null,
+      "visual": "table",
       "insights": []
     }
   ],

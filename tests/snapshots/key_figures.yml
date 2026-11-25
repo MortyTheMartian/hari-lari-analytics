@@ -1,0 +1,12 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: key_figures
+params: {}
+facets:
+- key: null
+  label: null
+  metric: null
+  shape: single
+  csv: |
+    is_total,net_sales,orders,aov,items_sold,gross_sales,discounts,refunds,first_sale_ts,last_sale_ts,prior_net_sales,net_sales_change,net_sales_delta,prior_orders,orders_change,orders_delta,prior_aov,aov_change,aov_delta,prior_items_sold,items_sold_change,items_sold_delta,prior_gross_sales,gross_sales_change,gross_sales_delta,prior_discounts,discounts_change,discounts_delta,prior_refunds,refunds_change,refunds_delta,prior_first_sale_ts,prior_last_sale_ts,n_orders,prior_n_orders
+    True,98000,2,49000,3,148000,10000,40000,2026-10-05 07:00:00,2026-10-05 08:00:00,,,,,,,,,,,,,,,,,,,,,,,,2,

@@ -97,3 +97,31 @@ G2 was structural, so one more new component on the snapshot model, YAML only:
 | Component | Time | YAML only | Notes |
 | --- | --- | --- | --- |
 | `stock_by_status`: stock-tracked item-variants per status (a new `count(*)` metric `stock_variants` on `fct_stock`, `hbar`) | 1 min | yes | First run right and in status order; `fill_domain` added the "Out of stock 0" bar. Placed next to the table on the stock page. |
+
+## Port of today's report (9.3, 25 Nov 2026)
+
+Every piece of today's report is a packaged component now, and `tests/test_port.py` checks each
+one's result against `report_data.Section` (or the cover's own figures) for L14D, L6W and L3M, on
+the fixture run (where L14D has no comparison and L3M no sales) and on the real run of 22 Nov:
+`full_history_kpis`, `full_history_amounts`, `last_sale`, `period_summaries`, `data_notes`,
+`period_kpis`, `sales_trend`, `key_figures`, `category_contributive_aov`,
+`category_penetration`, `top_items`, `orders_by_hour`, `payment_types`, `discount_codes` and
+`lines_export`. The page chips, the footer and the empty-period page belong to the report, not
+to a component, and are checked with `reports/weekly.yml` (9.4).
+
+What the port needed beyond YAML:
+
+| Gap | Status | How |
+| --- | --- | --- |
+| P1. A facet by period cannot change the grain, so one component could not draw today's sparklines (by day for L14D, by 7-day block otherwise) | closed | `grain: spark` in a query: `day` on a daily window, `block_7d` otherwise (compiler). |
+| P2. `top: {n: 3, other: true}` turned a fourth payment type into "Other (1)", where today's report shows all four | closed | "Other" never hides a single group: when it would hold one group of the window and no group of the prior window or the buckets before, that group keeps its name (compiler). |
+| P3. The summary card said "by week" for L3M, from its sparkline's 7-day blocks | closed | The card names the period's own grain, as today ("by month"). |
+| P4. A fully refunded receipt adds an hour with 0 orders to "Orders by hour" | closed in YAML | A dimension `counts_as_order` and `where: { counts_as_order: true }`. |
+| P5. The cover's note "Last sale 22 Nov 2026 11:58" has no place: a page note is only the "no comparison" note | open | The component `last_sale` (a `text_line`) shows it on the page instead. A page `note` template would be the general form. |
+| P6. A hint cannot name the currency, so `sales_trend` and `key_figures` write "IDR" | open | Small: the currency in the template context of titles and hints. Matters for the publishable repository (phase 11), not for the café. |
+| P7. The orders line under the trend has no growth labels (today's has them) | open | Drawing only; the numbers are in the result. |
+
+Differences that are improvements, not gaps: today's cleaning notes (unmatched items, unmapped
+categories) are data-check warnings now, worded by the checks; small samples are drawn pale
+(hours with few orders, categories in few orders); the line "Metric definitions: see
+METRICS.md" is not repeated on every cover.

@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: top_items
+title: Top 15 items
+description: >-
+  The 15 item-variants with the most net sales in the period, with their category, items sold
+  and share of all net sales.
+hint: By net sales
+params: { period: L6W }
+query:
+  model: fct_sales_lines
+  dimensions: [adjusted_item_variant, adjusted_category]
+  metrics: [items_sold, net_sales, share]
+  window: $period
+  top: { n: 15, by: net_sales }
+visual: { type: table, rank: true, bars: [share], bold: [net_sales] }
