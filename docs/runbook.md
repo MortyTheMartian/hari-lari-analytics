@@ -137,3 +137,56 @@ Commands: `hari-lari-drive whoami` (does the token work?), `hari-lari-drive fold
 If the Drive upload fails with `invalid_grant`, the consent was revoked or expired (for example
 when the app is still in "Testing" mode, or the password changed). Redo the consent:
 `auth-url`, open it, allow, then `exchange` with the address the browser ends up on.
+
+## Release path
+
+Since 7A.8 an image reaches the Monday job only through `deploy/release.sh`, and only after a
+cloud dry run succeeded. Do not run `gcloud builds submit` plus `run jobs update` by hand any more.
+
+```
+merge to main -> build image <commit> -> smoke test -> push -> dry run (hari-lari-weekly-dryrun)
+              -> only if it succeeded: point hari-lari-weekly at <commit>
+```
+
+* **Automatic:** `.github/workflows/release.yml` runs the script on every push to `main`. It
+  signs in to Google Cloud with Workload Identity Federation (no key file) as the service
+  account `hari-lari-release`, which may only push to the registry, update and run the two jobs,
+  and act as `hari-lari-job`. Only tokens of this repository on the branch `main` are accepted.
+* **The image tag is the first 12 characters of the commit.** The live job keeps the tag it ran
+  before as the label `previous-release`.
+* **The dry run** is the job `hari-lari-weekly-dryrun`: the same configuration as the live job,
+  always started with `--dry-run` (the script sets the argument on every release), so it sends
+  nothing, writes under `dry-run/` and has no scheduler. If it fails, the live job still runs the
+  old image and the workflow fails; read the execution log in Cloud Run.
+* **Rolling back:** Actions > Release > Run workflow > `rollback`, or by hand
+  `deploy/release.sh rollback` (previous release) or `deploy/release.sh rollback <tag>`.
+* **By hand:** `deploy/release.sh {build|dryrun|promote|rollback|all|status} [tag]`; without a tag
+  it uses the current commit, which must be committed (`ALLOW_DIRTY=1` overrides). `status` shows
+  the image of both jobs and the previous release. Needs `docker` and a `gcloud` login.
+* **A release that is promoted but wrong on a Monday:** roll back, then re-run the week with
+  `--force` if needed (see "Re-running a week").
+* **Registry clean-up:** a policy keeps `latest` and the 20 most recent versions and deletes
+  anything older than 60 days. The live image and its rollback target are always recent,
+  because only a release that passed its dry run is promoted.
+* **Cost:** Cloud Build is not used. The build runs on a GitHub runner: about 10 minutes per
+  release against 2,000 free minutes a month for a private repository. Artifact Registry
+  charges from 0.5 GB stored; the clean-up policy limits that. Check the bill after the first
+  month.
+
+### One-time setup (you run it, with an owner login in `gcloud`)
+
+```bash
+deploy/setup.sh apis          # also enables iamcredentials, needed for the token exchange
+deploy/setup.sh dryrun-job    # the job hari-lari-weekly-dryrun, with the live job's image
+deploy/setup.sh cleanup-policy
+deploy/setup.sh wif           # pool, provider, release service account, roles
+```
+
+Each step is safe to re-run. `GITHUB_REPO=owner/name` overrides the repository the provider
+trusts. `wif` prints two values: add them in GitHub under Settings > Secrets and variables >
+Actions > **Variables** as `GCP_WORKLOAD_IDENTITY_PROVIDER` and `GCP_RELEASE_SERVICE_ACCOUNT`.
+Then push to `main`, or run the workflow by hand, and check that the dry run and the promotion
+went through (`deploy/release.sh status`).
+
+Note: `deploy/setup.sh job` no longer resets the image of an existing job to `latest`; the
+release path owns the image from now on.

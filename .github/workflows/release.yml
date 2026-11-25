@@ -1,0 +1,55 @@
+name: Release
+
+# Phase 7A.8. A merge to main builds the image (tagged with the commit), runs it as a dry run in
+# the job hari-lari-weekly-dryrun, and only when that succeeds points the live job
+# hari-lari-weekly at the new tag. Everything is deploy/release.sh, the same script you run by
+# hand. See docs/runbook.md, "Release path".
+#
+# Google Cloud sign-in is Workload Identity Federation: no key file. Set two repository
+# variables (Settings > Secrets and variables > Actions > Variables), printed by
+# `deploy/setup.sh wif`: GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_RELEASE_SERVICE_ACCOUNT.
+# The provider only accepts tokens of this repository on the branch main.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "all = release this commit; rollback = live job back to the previous release"
+        type: choice
+        options: [all, rollback]
+        default: all
+
+# One release at a time, and never cancel one halfway through a job update.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write   # the token exchanged for the release service account
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40   # the image build, then a dry run of about 2 minutes
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_RELEASE_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - name: Release
+        env:
+          ACTION: ${{ inputs.action || 'all' }}
+        run: deploy/release.sh "$ACTION"
+
+      - name: Status
+        if: always()
+        run: deploy/release.sh status

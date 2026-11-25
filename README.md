@@ -88,7 +88,9 @@ The run prints a note for every item name it could not match to today's items.
 `hari-lari-weekly` runs the whole chain (extract the Moka API, build the report, store the files,
 upload to Google Drive, send to Telegram). Useful options: `--dry-run` (sends nothing),
 `--to admin` (private run to the admin chat), `--anchor YYYY-MM-DD`, `--force`. The runbook
-(`docs/runbook.md`) explains the options, the files it writes and what each alert means.
+(`docs/runbook.md`) explains the options, the files it writes and what each alert means, and how a merge to `main` is released: `deploy/release.sh` builds the
+image, runs it as a cloud dry run and only then points the live job at it (GitHub Actions with
+Workload Identity Federation, see "Release path" there).
 
 ## Item aliases
 
