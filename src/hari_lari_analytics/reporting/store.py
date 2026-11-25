@@ -1,10 +1,11 @@
-"""Where the weekly job keeps its files: a local folder or `gs://bucket[/prefix]`.
+"""Where the report job keeps its files: a local folder or `gs://bucket[/prefix]`.
 
 Layout under the root (a `dry-run/` prefix goes in front of all of it for a dry run):
 
-    raw/<run date>/...           the extraction (Parquet tables, manifest, raw JSON)
-    reports/<anchor>/...         the PDF, the cover PNG and the Excel lines
-    sent/<anchor>.json           the sent-marker (5.3)
+    raw/<run date>/...                the extraction (Parquet tables, manifest, raw JSON)
+    reports/<report>/<anchor>/...     the outputs of a report (`delivery.py`)
+    sent/<report>/<anchor>.json       the sent-marker
+    reports/<anchor>/, sent/<anchor>.json   the same, by the weekly job before the cut-over
 """
 
 from __future__ import annotations

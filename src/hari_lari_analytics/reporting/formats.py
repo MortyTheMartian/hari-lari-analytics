@@ -4,8 +4,8 @@ The module does not import matplotlib, so the PDF visuals, the Telegram text and
 (plan 8.9) all write the same strings. The separators, the currency and the short forms come
 from `project.yml` (`project()`). A missing value is `–`, a comparison that is not valid `n/a`.
 
-The helpers of today's report (`idr`, `pct`, `compact`, `headline`, `stamp`, `change_text`)
-are unchanged and `report_pdf.py` imports them from here. The others write a value by its
+The helpers `idr`, `pct`, `compact`, `headline`, `stamp` and `change_text` write the strings
+of the report before the component port (plan 9). The others write a value by its
 metric's format in a style, and a change, delta or growth by the rules of docs/components.md,
 "Visuals": a signed percentage for amounts and counts, percentage points for `pct` metrics.
 """

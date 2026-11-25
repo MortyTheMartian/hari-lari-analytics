@@ -249,7 +249,7 @@ key fails with the file name and the key) and `project()` hands the settings to 
 | `timezone` | the time zone of the business | the extraction, the anchor, the weekly job; the Dockerfile, `deploy/setup.sh` and the scheduler must use the same, and a test checks the first two |
 | `first_weekday` | the first day of the week (`monday` ... `sunday`) | `sale_week` in the models (`week_start` macro, from `run_context`) and in the pandas lines, the complete weeks of `L<n>W`, `WTD`, the buckets of the windows, "last week" in the extraction check |
 | `min_n` | the default sample-size rule | the registry (`Registry.default_min_n`) |
-| `anchor` | the last day of a report when none is given: `yesterday` or `today` | `hari-lari-report`, `hari-lari-weekly` |
+| `anchor` | the last day of a report when none is given: `yesterday` or `today` | `hari-lari-report` |
 | `reference_date` | the date on which the loader compiles components without data | `check_calendar()` in `components.py` |
 | `telegram_targets` | the Telegram chats a report may deliver to: a name per chat, mapped to the Secret Manager secret that holds its chat id (never the id itself); `admin` is required, because failure alerts go there; `project.py` validates the names and the secret names, and the report loader checks every `deliver` target against it | `deliver` of a report, `deploy/setup.sh` |
 
@@ -1049,8 +1049,7 @@ show the same numbers as the PDF.
   string from the settings of `project.yml`: values by the metric's `format` (`idr`,
   `idr_compact`, `count`, `decimal`, `pct`, `timestamp`) in a `style` (`full`, `compact`,
   `headline`), changes, deltas and growth, bucket labels and window labels. The old helpers
-  `idr`, `pct`, `compact`, `headline`, `stamp` and `change_text` live there too, and
-  `report_pdf.py` imports them.
+  `idr`, `pct`, `compact`, `headline`, `stamp` and `change_text` live there too.
 - **One presentation step.** `reporting/present.py` turns a result into display cells: for each
   row and column the raw value, the display string, the tone of a change, the sample-size flag
   and its `n`, plus the row's label. The matplotlib visuals draw from these cells, and the JSON
@@ -1150,8 +1149,8 @@ them (`labels: true`, the default) leaves the axis out. Under every chart a one-
 names what needs naming: the prior ticks, "pale: small sample" and the kinds of calendar event
 marked.
 
-The first ones replace the drawing code of today's report (plan 8.1 moves its building blocks out
-of `report_pdf.py` unchanged, so the old report keeps rendering identically until 9.7).
+The first ones replaced the drawing code of the old report (plan 8.1 moved its building blocks
+out of `report_pdf.py` unchanged; the old report was deleted at the cut-over, 9.7b).
 
 By default a slot draws a card with the component's `title` and `hint` and gives the visual the
 inner rectangle. `title` and `hint` have access to `meta`, so
@@ -1319,8 +1318,9 @@ The packaged `reports/weekly.yml` (plan 9.4) is this report with today's pages i
 order and today's caption (the week, net sales, orders and AOV against the week before, the last
 sale, the Drive link), without insights in the caption, which today's has not, and without the
 schedule, which the cut-over adds (9.7) so that nothing runs it before then.
-`tests/test_port.py` checks its pages, chips, footer, empty page and caption against
-`report_pdf.py` and `deliver/caption.py`.
+`tests/test_port.py` checked its pages, chips, footer, empty page and caption against
+`report_pdf.py` and `deliver/caption.py` until they were deleted (9.7b); the pages, chips, footer
+and empty page are still checked against the periods and the lines.
 
 **Repeats as built (8.5, `reports.py`).** `repeat` takes one parameter and either a list of
 values or `{ dimension, top, by, window, model }`: the `top` members of a dimension by a metric
@@ -1493,7 +1493,7 @@ delivery; use it locally and on the dry run. `--report` takes an id from `report
 path of a YAML file. `--reports <folder>` and `--components <folder>`, before the command, point
 at other folders (the tests use `tests/fixtures/reports/`).
 
-`run` does what `hari-lari-weekly` does today, for any report: check the sent-marker, extract
+`run` does what the old weekly command did, for any report: check the sent-marker, extract
 (unless `--run` names an existing run), the Moka token reminder, build the models and run the
 checks, build the outputs, store them, evaluate `when`, upload to Drive, send to Telegram and
 write the marker. Each step is timed and logged as JSON, and a failing step sends the admin
@@ -1736,7 +1736,8 @@ No step needed Python beyond what the framework provides. With `facet: { by: per
 - **Compiler** (7.9): hand-computed results on a small fixture for totals, prior-only rows, top
   N with "Other", bins, filters, filtered metrics, series, trading days and invalid queries;
   parity with `report_data.Section` on the run of 2026-11-22 for the KPIs, categories, top
-  items, payment types, discounts, orders by hour, the trend and the sparklines.
+  items, payment types, discounts, orders by hour, the trend and the sparklines, until the old
+  report was deleted (9.7b).
 - **Transforms and decompose** (7.10, 7.11): one hand-computed test each; decompose effects add
   up to the change exactly, and the worked example above is a test.
 - **Loader and facets** (7.12, 7.13): one test per validation rule, each with a readable
@@ -1768,37 +1769,28 @@ No step needed Python beyond what the framework provides. With `facet: { by: per
   what a frontend needs and what must not be in it (line notes, SQL).
 - **Manifest** (8.10): `tests/test_manifest.py`.
 - **Authoring examples** (8.8): `tests/test_authoring_examples.py`.
-- **Ported components** (9.3): parity of the numbers with `report_data.Section`.
+- **Ported components** (9.3): parity of the numbers with `report_data.Section`, until the old
+  report was deleted (9.7b); since then the cover, the pages and the deep dive against the lines.
 
 ## Migration
 
-The old report stays untouched until the cut-over (plan 9.7), which happens before the first
-live Monday, 30 Nov 2026: nothing is in production before then. The component report reads its sales from API runs only: the back-office CSV export is removed
-after four good Mondays (6.7), and the parity tests compare against the old report built from
-the same API run. The config CSVs are not affected; they are seeds of the models. Plan task 8.1
-moves the drawing helpers out of `report_pdf.py`; the old report imports them from there, so
-both paths share them until `report_pdf.py` is deleted. Instead of side-by-side Mondays, the
-component report is checked once before the cut-over (9.6: a fresh extraction with the parity
-tests, the cloud dry run and a real run to the admin chat), and the first live Monday is its
-test. There is no pixel diff: the numbers must match, the drawing may improve.
+Done (plan 9.7 and 9.7b, 25 Nov 2026). The old report (`report_data.py`, `report_pdf.py`,
+`deliver/caption.py`, the commands `hari-lari-weekly` and `hari-lari-report-legacy`) was checked
+once against the component report (9.6: a fresh extraction with the parity tests, the cloud dry
+run and a real run to the admin chat) instead of side-by-side Mondays, and deleted after the
+cut-over. There was no pixel diff: the numbers had to match, the drawing could improve.
 
-The command name: `hari-lari-report` was the old local CLI that writes the PDF and Excel from
-the CSV export or an API run. Since 8.5 that one is `hari-lari-report-legacy` and the name
-belongs to the new subcommands (the live job runs `hari-lari-weekly`, so nothing changed for
-it); 9.7b deletes the legacy command after a good first live Monday. At the cut-over (9.7):
-
-- The image's entry point becomes `hari-lari-report`, and `hari-lari-weekly` becomes
-  `hari-lari-report run --report weekly` (`reports/weekly.yml` carries the Monday 04:00 schedule
-  and today's delivery). The release script sets the dry-run job's arguments to
-  `run --scheduled --dry-run`.
-- The first release syncs the scheduler job `hari-lari-report-weekly`; the old scheduler job
-  `hari-lari-weekly` is paused by hand in the same session (runbook), so no Monday runs twice
-  or not at all. It stays paused as the fallback and is deleted with the old code (9.7b).
+- The image's entry point is `hari-lari-report`; the live job runs `run --report weekly`
+  (`reports/weekly.yml` carries the Monday 04:00 schedule and the delivery), started by the
+  scheduler job `hari-lari-report-weekly`, and the dry-run job runs `run --scheduled --dry-run`.
+  The old scheduler job `hari-lari-weekly` is deleted.
 - The weekly report also reads the old marker `sent/<anchor>.json`, so re-running a week sent
   before the cut-over cannot send it again. Earlier outputs stay in `reports/<anchor>/`; new
   ones go to `reports/weekly/<anchor>/`.
-- `--to admin`, `--force`, `--dry-run` and `--anchor` keep the meaning they have in
-  `hari-lari-weekly`; the runbook's commands change only in name.
+- `--to admin`, `--force`, `--dry-run` and `--anchor` kept the meaning they had in the old
+  command.
+- The reports read API runs only. The back-office CSV loader stays for a parity test and goes
+  after four good Mondays (6.7), with the pandas pipeline that the model tests compare against.
 
 ## Out of scope
 

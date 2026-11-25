@@ -3,7 +3,6 @@ from datetime import date, timedelta
 import pytest
 
 from hari_lari_analytics.periods import report_periods, shift_months
-from hari_lari_analytics.report_data import build_section
 from hari_lari_analytics.reporting.db import connect
 from hari_lari_analytics.reporting.windows import (
     Bucket,
@@ -153,14 +152,15 @@ def test_trading_days_per_window():
     assert resolve("L1D", _cal(anchor, trading)).current.trading_days == 1
 
 
-def test_the_trading_days_match_the_old_report():
+def test_the_trading_days_are_the_days_with_an_order_in_the_pandas_lines():
     lines = _pandas_lines(
         api_tables(), FIXTURES / "item_aliases.csv", FIXTURES / "category_group.csv", LAST_SALE
     )
+    orders = lines[lines["counts_as_order"]]
     cal = Calendar.from_db(connect(api_tables(), SEEDS, LAST_SALE))
     assert cal.trading_dates == {date(2026, 10, 5), date(2026, 10, 12), date(2026, 10, 13)}
     for period in report_periods(LAST_SALE):
-        expected = build_section(lines, period, cal.first_sale).trading_days
+        expected = orders.loc[period.mask(orders["sale_ts"]), "sale_date"].nunique()
         assert resolve(period.key, cal).current.trading_days == expected
 
 

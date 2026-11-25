@@ -1,5 +1,4 @@
-"""The query compiler (plan 7.9): hand-computed results on the fixture, and parity with today's
-report (`report_data.build_section`) on the real run of 2026-11-22.
+"""The query compiler (plan 7.9): hand-computed results on the fixture.
 
 The fixture, up to Tue 13 Oct 2026 (trading days: Mon 5, Mon 12 and Tue 13 Oct):
 
@@ -22,8 +21,6 @@ import pandas as pd
 import pytest
 
 from hari_lari_analytics.load_api import ApiRun
-from hari_lari_analytics.periods import report_periods
-from hari_lari_analytics.report_data import build_section
 from hari_lari_analytics.reporting.checks import check
 from hari_lari_analytics.reporting.compiler import Query, QueryError, compile_query, run_query
 from hari_lari_analytics.reporting.db import connect, open_run
@@ -463,19 +460,19 @@ def test_execute_runs_a_compiled_query(con):
     assert r.df.iloc[0].orders == 4
 
 
-# --- parity with today's report on the real run -------------------------------------------------
+# --- the real run, for the tests of the transforms, facets, focus and decompose ----------------
 
 ANCHOR = date(2026, 11, 22)
 real = pytest.mark.skipif(not REAL_RUN.is_dir(), reason="needs the real extraction run")
+PERIODS = ["L14D", "L6W", "L3M"]
 
 
 @pytest.fixture(scope="module")
 def real_run():
+    """The models of the real run of 2026-11-22: the connection, the calendar and the lines."""
     db = open_run(REAL_RUN, Path("config"), ANCHOR)
     lines = db.con.execute("select * from fct_sales_lines").df()
-    first = lines["sale_ts"].min().date()
-    sections = {p.key: build_section(lines, p, first) for p in report_periods(ANCHOR)}
-    return db.con, Calendar.from_db(db.con), sections
+    return db.con, Calendar.from_db(db.con), lines
 
 
 def rq(real_run, **query):
@@ -485,118 +482,3 @@ def rq(real_run, **query):
 
 def same(a, b) -> bool:
     return np.allclose(np.asarray(a, float), np.asarray(b, float), equal_nan=True, rtol=1e-12)
-
-
-PERIODS = ["L14D", "L6W", "L3M"]
-
-
-@real
-@pytest.mark.parametrize("period", PERIODS)
-def test_parity_kpis(real_run, period):
-    s = real_run[2][period]
-    keys = s.kpis["key"].tolist()
-    r = rq(real_run, model="fct_sales_lines", metrics=[*keys, "first_sale_ts", "last_sale_ts"],
-           window=period, compare="prior")  # fmt: skip
-    row = r.df.iloc[0]
-    assert r.meta.compare_ok == s.prior_ok and r.meta.trading_days == s.trading_days
-    assert same([row[k] for k in keys], s.kpis["current"])
-    assert same([row[f"prior_{k}"] for k in keys], s.kpis["prior"])
-    assert same([row[f"{k}_change"] for k in keys], s.kpis["change"])
-    assert row.first_sale_ts == s.times["first"] and row.last_sale_ts == s.times["last"]
-
-
-@real
-@pytest.mark.parametrize("period", PERIODS)
-def test_parity_categories(real_run, period):
-    s = real_run[2][period]
-    r = rq(real_run, model="fct_sales_lines", dimensions=["adjusted_category"], window=period,
-           metrics=["net_sales", "items_sold", "orders", "share", "penetration", "category_aov",
-                    "contributive_aov"],
-           compare="prior", totals=True, keep_prior_only=True)  # fmt: skip
-    rows, cats = r.rows, s.categories
-    assert rows["adjusted_category"].tolist() == cats["adjusted_category"].tolist()
-    columns = ["net_sales", "items_sold", "orders", "share", "penetration", "category_aov",
-               "contributive_aov", "prior_penetration", "prior_category_aov",
-               "prior_contributive_aov", "category_aov_change",
-               "contributive_aov_delta"]  # fmt: skip
-    for c in columns:
-        assert same(rows[c], cats[c]), c
-    assert same(rows["penetration_delta"] * 100, cats["delta_pp"])
-    total = r.total
-    for c in ["net_sales", "items_sold", "orders", "share", "penetration", "category_aov",
-              "contributive_aov", "prior_penetration", "prior_category_aov",
-              "prior_contributive_aov", "category_aov_change"]:  # fmt: skip
-        assert same([total[c]], [s.category_total[c]]), c
-
-
-@real
-@pytest.mark.parametrize("period", PERIODS)
-def test_parity_top_items_payments_and_discounts(real_run, period):
-    s = real_run[2][period]
-    items = rq(real_run, model="fct_sales_lines", window=period,
-               dimensions=["adjusted_item_variant", "adjusted_category"],
-               metrics=["net_sales", "items_sold", "orders", "share"],
-               top={"n": 15, "by": "net_sales"})  # fmt: skip
-    key = ["adjusted_item_variant", "adjusted_category"]
-    expected = s.items.sort_values(["net_sales", *key], ascending=[False, True, True])
-    assert items.df[key].values.tolist() == expected[key].values.tolist()
-    for c in ["net_sales", "items_sold", "orders", "share"]:
-        assert same(items.df[c], expected[c]), c
-
-    pay = rq(real_run, model="fct_sales_lines", dimensions=["payment_type"], window=period,
-             metrics=["net_sales", "orders", "share"])  # fmt: skip
-    expected = s.payments.set_index("payment_type").loc[pay.df["payment_type"]]
-    assert same(pay.df["net_sales"], expected["net_sales"]) and len(pay.df) == len(s.payments)
-    assert same(pay.df["share"], expected["share"])
-
-    disc = rq(real_run, model="fct_sales_lines", dimensions=["discount_code"], window=period,
-              metrics=["gross_sales", "discounts", "discount_rate", "orders"])  # fmt: skip
-    codes = disc.df["discount_code"].fillna("No discount")
-    assert codes.tolist() == s.discounts["code"].tolist()  # both by gross sales
-    for ours, theirs in [("gross_sales", "gross_sales"), ("discounts", "discounts"),
-                         ("discount_rate", "rate"), ("orders", "orders")]:  # fmt: skip
-        assert same(disc.df[ours], s.discounts[theirs]), ours
-
-
-@real
-@pytest.mark.parametrize("period", PERIODS)
-def test_parity_orders_by_hour_per_trading_day(real_run, period):
-    s = real_run[2][period]
-    r = rq(real_run, model="fct_sales_lines", dimensions=["hour_of_day"], window=period,
-           metrics=["orders"])  # fmt: skip
-    ours = dict(zip(r.df["hour_of_day"], r.df["orders"] / r.df["trading_days"], strict=True))
-    theirs = dict(zip(s.hours["hour"], s.hours["orders"], strict=True))
-    assert set(theirs) <= set(ours) | {h for h, v in theirs.items() if v == 0}
-    assert all(math.isclose(ours.get(h, 0), v) for h, v in theirs.items())
-    assert all(ours[h] == 0 for h in set(ours) - set(theirs))
-
-
-@real
-@pytest.mark.parametrize("period", PERIODS)
-def test_parity_trend_with_prior_and_growth(real_run, period):
-    s = real_run[2][period]
-    r = rq(real_run, model="fct_sales_lines", dimensions=["bucket"], window=period,
-           metrics=["net_sales", "orders"], compare="prior", buckets_before=1)  # fmt: skip
-    window = r.df[r.df["in_window"]]
-    assert window["bucket"].tolist() == s.trend["bucket"].tolist()
-    for c in ["net_sales", "orders", "prior_net_sales", "prior_orders"]:
-        assert same(window[c], s.trend[c]), c
-    if s.trend["net_sales_growth"].notna().any():  # weekly and monthly views
-        previous = r.df["net_sales"].shift(1)
-        if r.df["in_window"].all():
-            previous.iloc[0] = np.nan  # no bucket before: the first has no growth
-        growth = (r.df["net_sales"] / previous.replace(0, np.nan) - 1)[r.df["in_window"]]
-        assert same(growth, s.trend["net_sales_growth"])
-
-
-@real
-@pytest.mark.parametrize("period", PERIODS)
-def test_parity_sparklines(real_run, period):
-    s = real_run[2][period]
-    grain = "day" if period == "L14D" else "block_7d"
-    r = rq(real_run, model="fct_sales_lines", dimensions=["bucket"], window=period, grain=grain,
-           metrics=["net_sales", "orders", "aov", "items_sold"])  # fmt: skip
-    assert r.df["bucket"].tolist() == s.spark.index.tolist()
-    for c in ["net_sales", "orders", "items_sold"]:
-        assert same(r.df[c], s.spark[c]), c
-    assert same(r.df["aov"].fillna(0), s.spark["aov"])

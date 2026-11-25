@@ -37,6 +37,7 @@ from hari_lari_analytics.reporting.builder import BuildResult, build_report
 from hari_lari_analytics.reporting.checks import CheckReport
 from hari_lari_analytics.reporting.db import open_run
 from hari_lari_analytics.reporting.facets import Facet, run_facets
+from hari_lari_analytics.reporting.log import JsonLog
 from hari_lari_analytics.reporting.outputs.telegram import fill_drive_url
 from hari_lari_analytics.reporting.queries import QueryContext
 from hari_lari_analytics.reporting.reports import (
@@ -46,8 +47,7 @@ from hari_lari_analytics.reporting.reports import (
     render,
     resolve_anchor,
 )
-from hari_lari_analytics.weekly.log import JsonLog
-from hari_lari_analytics.weekly.store import Store
+from hari_lari_analytics.reporting.store import Store
 
 TOKEN_WARN_DAYS = 45
 

@@ -1,8 +1,9 @@
 # Metrics and dimensions
 
-All figures are computed from line-level Moka sales data after cleaning: either the back-office
-*Item Details* export or the Moka API (`--source`, see the README). Both give the same lines.
-Amounts are whole Indonesian Rupiah (IDR).
+All figures are computed from line-level Moka sales data after cleaning, from the Moka API. The
+cleaning rules below were first written for the back-office *Item Details* export; its loader
+stays for a parity test until plan 6.7, and both give the same lines. The report models
+(`reporting/models/`) apply the same rules in SQL. Amounts are whole Indonesian Rupiah (IDR).
 
 ## Cleaning rules
 
@@ -142,9 +143,8 @@ get today's spelling and category.
 ## Report periods
 
 All periods end at the **anchor**, the last day of the report. Sales after the anchor are
-ignored. The anchor is set with `--anchor`; by default it is the date of the last sale for the
-CSV source, and yesterday (Bali date) for the API source, so the report that is sent on a
-Monday morning covers up to and including Sunday.
+ignored. The anchor is set with `--anchor`; by default it is yesterday (Bali date), so the
+report that is sent on a Monday morning covers up to and including Sunday.
 
 | Section | Period | Trend by | Compared with |
 | --- | --- | --- | --- |

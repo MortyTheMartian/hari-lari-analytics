@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+from pathlib import Path
+
 import pandas as pd
 
+from hari_lari_analytics.clean import CleanResult
+from hari_lari_analytics.load import InputError, load_category_groups
 from hari_lari_analytics.project import project
 
 
@@ -54,3 +59,17 @@ def add_category_groups(
             f"'{UNMAPPED}': " + ", ".join(unmapped)
         )
     return df, notes
+
+
+def prepare_lines(
+    result: CleanResult, category_groups: Path, anchor: date
+) -> tuple[pd.DataFrame, date]:
+    """The pandas lines of a run: the dimensions and category groups added, the lines after the
+    anchor day cut off. The tests compare the models (`fct_sales_lines`) with them."""
+    lines = add_dimensions(result.lines)
+    lines, group_notes = add_category_groups(lines, load_category_groups(category_groups))
+    result.notes.extend(group_notes)
+    lines = lines[lines["sale_ts"] < pd.Timestamp(anchor + timedelta(days=1))]
+    if lines.empty:
+        raise InputError(f"There are no sales up to {anchor:%d %b %Y}")
+    return lines, anchor

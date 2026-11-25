@@ -10,21 +10,21 @@ git. The only data in this repository is a small made-up sample in `tests/fixtur
 
 ## What it produces
 
-Every run reads the full sales history and writes three files to `data/output/<run date>/`:
+The weekly report (`reports/weekly.yml`) reads the full sales history up to its anchor day and
+writes these files to `data/output/reports/weekly/<anchor>/`:
 
-- **`hari_lari_sales_report_<anchor>.pdf`**: a landscape report made for reading on
-  screen. The cover page shows the full-history totals and a summary card per section. The
+- **`weekly_<anchor>.pdf`**: a landscape report made for reading on screen. The cover page shows the full-history totals and a summary card per section. The
   three sections are _last 14 days_ (by day), _last 6 complete ISO weeks_ (by week) and
   _last 3 complete months_ (by month), with three pages each: an overview (KPI cards, trend
   chart with week-over-week or month-over-month growth, key figures), adjusted categories with
   order penetration, category AOV and the AOV split into contributive AOVs per category (with
   a total line), and top items, orders by hour of day, payment types and discounts. Every
   section compares with the equally long period before it.
-- **`hari_lari_sales_cover_<anchor>.png`**: the cover page as a picture (1753 × 1240 px), for
-  sending in a chat.
-- **`hari_lari_sales_lines_<anchor>.xlsx`**: the cleaned sales lines as an Excel table
-  for your own pivots, plus a sheet describing every column. Customer and staff names are
-  removed.
+- **`weekly_<anchor>_cover.png`**: the cover page as a picture, for sending in a chat.
+- **`weekly_<anchor>.xlsx`**: the cleaned sales lines as an Excel table for your own pivots,
+  plus a sheet describing every column. Customer and staff names are removed.
+- **`weekly_caption.txt`**: the Telegram caption under the cover, with the week's figures.
+- **`bundle.json`**: every page and result as data, for a frontend (see "Reports" below).
 
 The exact definition of every metric and dimension is in [METRICS.md](METRICS.md).
 
@@ -38,51 +38,28 @@ cd hari-lari-analytics
 uv sync
 ```
 
-## Data sources
+## Data source
 
-The report reads either of two sources and gives the same figures (`--source`):
+The reports read the Parquet tables of a Moka API extraction run (`hari-lari-extract run`), by
+default the latest run in `data/extract/`. No export has to be downloaded by hand, and the item
+library is not needed: items are matched by their Moka id.
 
-- **`csv`** (default): the two back-office exports described below.
-- **`api`**: the Parquet tables of a Moka API extraction run (`hari-lari-extract run`), by
-  default the latest run in `data/extract/`. `--extract-dir` points to a run folder, a folder
-  of dated runs or a `gs://bucket/prefix`. No export has to be downloaded by hand, and the
-  item library is not needed: items are matched by their Moka id.
-
-For the 948 receipts and 1,700 lines up to 31 Oct 2026, both sources give identical lines
-(`tests/test_load_api.py` checks this when the real data is present).
-
-### Input files for `--source csv`
-
-Export two files from the Moka back office and put them in `data/input/`, keeping exactly one
-of each (replace the old ones, every run uses the full history):
-
-| File         | Moka export                                  | Name pattern                                                     |
-| ------------ | -------------------------------------------- | ---------------------------------------------------------------- |
-| Item library | Item library export                          | `YYYY_MM_DD_item_library.csv`                                    |
-| Sales        | Sales report _Item Details_, full date range | `YYYY_MM_DD_sales_report_item_details_DD-MM-YYYY_DD-MM-YYYY.csv` |
-
-`YYYY_MM_DD` is the export date; the sales file also carries the exported date range.
+The two back-office exports (item library and sales _Item Details_) were the first source. Their
+loader (`load.py`, `clean.py`) stays only for a parity test: for the 948 receipts and 1,700 lines
+up to 31 Oct 2026 both sources give identical lines (`tests/test_load_api.py`, when the real
+data is present). It goes once the API source has had four good Mondays (plan 6.7).
 
 ## Run
 
 ```bash
-uv run hari-lari-report-legacy
+uv run hari-lari-report build --report weekly                       # latest extraction, up to yesterday
+uv run hari-lari-report build --report weekly --anchor 2026-11-15   # re-run an earlier week
 ```
 
 Alternatively, `source setup.sh` activates the venv and loads variables from an optional,
-git-ignored `.env` file; after that, `hari-lari-report-legacy` works without `uv run`. (The name
-`hari-lari-report` now belongs to the component report builder, see "Reports" below.)
-
-```bash
-uv run hari-lari-report-legacy --source api                    # latest extraction, up to yesterday
-uv run hari-lari-report-legacy --source api --anchor 2026-11-15  # re-run an earlier week
-```
-
-Options: `--source`, `--input-dir`, `--extract-dir`, `--output-dir` and `--aliases` override
-the defaults. `--anchor YYYY-MM-DD` sets the last day of the report; later sales are ignored,
-so a week can be rebuilt as it looked then. It defaults to yesterday in Bali for `--source api`
-(the Monday report covers up to Sunday) and to the date of the last sale for `--source csv`.
-The run prints a note for every item name it could not match to today's items.
+git-ignored `.env` file; after that, `hari-lari-report` works without `uv run`. `--anchor
+YYYY-MM-DD` sets the last day of the report; later sales are ignored, so a week can be rebuilt as
+it looked then. It defaults to yesterday in Bali (the Monday report covers up to Sunday).
 
 ## Reports (component framework)
 
@@ -104,9 +81,7 @@ again on every save:
 uv run hari-lari-component run category_contributive_aov --png --watch   # data/output/preview/<id>.png
 ```
 
-`--span` (1 to 12 columns) and `--height` (1 to 6 parts of the page body) set the slot. Until the
-cut-over (plan 9.7) the Monday job still runs the old report (`hari-lari-weekly`), and
-`hari-lari-report run` and `--scheduled` do not exist yet.
+`--span` (1 to 12 columns) and `--height` (1 to 6 parts of the page body) set the slot.
 
 Two more outputs help to see what the framework can do and what it writes:
 
@@ -143,14 +118,18 @@ component, a transform, a visual and a report, the commands above and two worked
 run as tests in `tests/test_authoring_examples.py`: a refund-rate metric with a component
 (YAML only), and a transform in Python. The design note is `docs/components.md`.
 
-## Weekly job
+## Report job
 
-`hari-lari-weekly` runs the whole chain (extract the Moka API, build the report, store the files,
-upload to Google Drive, send to Telegram). Useful options: `--dry-run` (sends nothing),
-`--to admin` (private run to the admin chat), `--anchor YYYY-MM-DD`, `--force`. The runbook
-(`docs/runbook.md`) explains the options, the files it writes and what each alert means, and how a merge to `main` is released: `deploy/release.sh` builds the
-image, runs it as a cloud dry run and only then points the live job at it (GitHub Actions with
-Workload Identity Federation, see "Release path" there).
+`hari-lari-report run --report weekly` runs the whole chain for one report (extract the Moka
+API, check the data, build the report, store the files, upload to Google Drive, send to
+Telegram); `--scheduled` runs every report with a `schedule` on one extraction. Useful options:
+`--dry-run` (sends nothing), `--to admin` (private run to the admin chat), `--anchor
+YYYY-MM-DD`, `--force`. In the cloud, the Cloud Run job `hari-lari-weekly` runs it, started by
+one Cloud Scheduler job per scheduled report (`hari-lari-report-weekly`: Mondays at 04:00 in
+Bali). The runbook (`docs/runbook.md`) explains the options, the files it writes and what each
+alert means, and how a merge to `main` is released: `deploy/release.sh` builds the image, runs
+it as a cloud dry run, only then points the live job at it and syncs the scheduler jobs
+(GitHub Actions with Workload Identity Federation, see "Release path" there).
 
 ## Item aliases
 
@@ -164,18 +143,16 @@ item names to today's names and, where needed, overrides the category:
 | `adjusted_category` | Category override (empty: take it from the item library) |
 | `note`              | Free text, ignored by the program                        |
 
-Items that are neither in the library nor in the alias file fall back to their most recent
-category in the sales export and are listed in the run output and on the PDF cover page.
-With `--source api` the alias file still wins when it lists a sales name; every other item
-follows its Moka id to today's name and category (see [METRICS.md](METRICS.md)). So the file
-only needs rows for what an id cannot tell: deleted items merged into a live one, add-ons that
-reuse an old item id, and categories that Moka still has as `Uncategorized`. A renamed item
-needs no row. The shorter file is meant for the API source; the CSV source matches by name and
-needs a row for every rename (`tests/fixtures/item_aliases_full_2026-11.csv` is the full list).
+The alias file wins when it lists a sales name; every other item follows its Moka id to today's
+name and category (see [METRICS.md](METRICS.md)). So the file only needs rows for what an id
+cannot tell: deleted items merged into a live one, add-ons that reuse an old item id, and
+categories that Moka still has as `Uncategorized`. A renamed item needs no row. The CSV loader
+matches by name and needs a row for every rename (`tests/fixtures/item_aliases_full_2026-11.csv`
+is the full list, for its parity test).
 
 ## Using it for your own cafe
 
-The code expects the column layout of Moka's _Item Details_ export. Replace
+The code reads the Moka API with your own token (`hari-lari-extract`, see the runbook). Replace
 `config/item_aliases.csv` with your own mapping (or empty it) and run as above (with an old
 itemized sales report from Moka POS, any LLM can quickly draft the item_aliases.csv for you).
 
@@ -190,8 +167,9 @@ The PDF is made for reading on screen, not for printing. These are the choices b
 - **Colors.** One accent color carries the meaning throughout: teal for the current period
   and for good changes, coral for the prior period and for highlights (such as the three
   busiest hours), and orange-red for bad changes. Whether a change is good depends on the
-  metric: more discounts or refunds show as bad. All colors live in the `Palette` at the top
-  of `report_pdf.py`; passing another palette to `PdfReport` re-themes the whole report.
+  metric: more discounts or refunds show as bad. All colors live in the `Palette` of
+  `reporting/visuals/theme.py`; visuals name colour tokens, so another palette re-themes the
+  whole report.
 - **Font.** [Inter](https://rsms.me/inter/), bundled in `src/hari_lari_analytics/fonts/`
   under the SIL Open Font License (`Inter-OFL.txt`) and embedded in the PDF, so the report
   looks the same on every machine.
@@ -224,12 +202,11 @@ uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
 
-Code lives in `src/hari_lari_analytics/`: `load.py` (find and validate the CSV inputs),
-`clean.py` (tidy lines, refunds, adjusted items and categories from the CSV exports),
-`load_api.py` (the same cleaned lines from an API extraction run), `extract/` (the Moka API
-extraction), `dimensions.py`, `metrics.py`,
-`periods.py`, `report_data.py` (the figures of each report section), `report_pdf.py` (the
-layout, see [Report design](#report-design)), `report_excel.py` and `cli.py`.
+Code lives in `src/hari_lari_analytics/`: `extract/` (the Moka API extraction), `reporting/`
+(the models, components, reports, outputs and the report job; `docs/components.md`), and
+`deliver/` (Telegram and Drive). `report_excel.py` writes the sheets of the Excel lines. The old
+pandas pipeline (`load.py`, `clean.py`, `load_api.py`, `dimensions.py`, `metrics.py`,
+`periods.py`) stays as the oracle of the model tests until plan 6.7.
 
 ## License
 
