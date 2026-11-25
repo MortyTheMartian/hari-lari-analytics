@@ -7,7 +7,8 @@ outputs, because the main goal is a framework in which new components and report
 build. Decisions D1 and D2 stand as agreed; D3 and D4 changed and D5 to D10 are new, all agreed
 on 24 Nov 2026 (task 7.1b). Phase 7 builds the core, phase 8 the
 presentation, phase 9 proves the framework and ports today's report, phase 10 builds the driving
-reports.
+reports. On 25 Nov 2026 (task 7A.9) the reports gained filters, a schedule and a delivery, and
+one command runs any report; D11 to D14 record the decisions.
 
 ## Goal
 
@@ -70,6 +71,10 @@ old PDF.
 | **Report** | Pages on a grid, parameters, repeats and outputs | YAML | `reports/weekly.yml` |
 | **Parameter** | A placeholder that a report or a default binds | YAML | `$period`, `$category` |
 | **Output** | One rendered form of a report | builder | PDF, PNG, Telegram text, XLSX |
+| **Filter** | A `where` or `focus` on a report or page, applied to every slot whose model has the dimension | report YAML | `focus: { adjusted_category: $category }` |
+| **Schedule** | When a report runs by itself | report YAML | Monday 04:00 WITA |
+| **Delivery** | Where a report's outputs go, and an optional condition | report YAML | the cover and PDF to the group, the files to Drive |
+| **Target** | A named Telegram chat; its chat id is a secret | `project.yml` | `group`, `admin` |
 
 A **facet** repeats a visual inside one slot; a **repeat** duplicates whole pages. Today's three
 period sections are a repeat; the three period cards on the cover are a facet.
@@ -98,6 +103,7 @@ flowchart LR
   Insights --> Builder
   Report["report YAML"] --> Builder
   Builder --> Out["PDF, PNG, Telegram text, XLSX"]
+  Out --> Deliver["delivery: Telegram, Drive"]
 ```
 
 One run opens one in-memory DuckDB connection, builds all models over the run's tables, runs
@@ -153,7 +159,10 @@ src/hari_lari_analytics/reporting/
     png.py
     telegram.py
     xlsx.py
+  delivery.py         # schedule and deliver of a report: conditions, Telegram, Drive, marker
+  run.py              # hari-lari-report run: extract, build, deliver, with the admin alert
   cli.py              # hari-lari-component
+  report_cli.py       # hari-lari-report: run, build, validate, schedules
   metrics.yml
   dimensions.yml
   kpi_tree.yml
@@ -225,6 +234,7 @@ key fails with the file name and the key) and `project()` hands the settings to 
 | `min_n` | the default sample-size rule | the registry (`Registry.default_min_n`) |
 | `anchor` | the last day of a report when none is given: `yesterday` or `today` | `hari-lari-report`, `hari-lari-weekly` |
 | `reference_date` | the date on which the loader compiles components without data | `check_calendar()` in `components.py` |
+| `telegram_targets` | the Telegram chats a report may deliver to: a name per chat, mapped to the Secret Manager secret that holds its chat id (never the id itself); `admin` is required, because failure alerts go there (planned, 8.5) | `deliver` of a report, `deploy/setup.sh` |
 
 ISO week labels (`sale_iso_week`, "week 47" in a Drive folder name) and the ISO weekday
 (`weekday`, Monday = 1) stay ISO whatever the first weekday is. The Excel lines export keeps
@@ -1075,16 +1085,22 @@ id: weekly
 title: Sales report
 params:
   anchor: yesterday                  # overridden by --anchor
+schedule:
+  cron: "0 4 * * 1"                  # Monday 04:00, in the time zone of project.yml
 outputs:
   pdf: true
   png: [cover]                       # page ids, or `all`
-  telegram: weekly_caption           # a text block, below
+  telegram: [weekly_caption]         # the text blocks to render, below
   xlsx: [lines_export]
 text_blocks:
   weekly_caption:                    # at most 1,024 characters under the cover photo
     - component: week_kpis_text      # net sales, orders and AOV against the prior week
     - insights: { top: 3 }
     - text: "PDF and Excel lines: {{ drive_url }}"   # filled in by the deliver step
+deliver:
+  drive: { folder: "{{ anchor }} (week {{ anchor_iso_week }})", files: [pdf, xlsx] }
+  telegram:
+    - { to: group, photo: cover, document: pdf, text: weekly_caption }
 pages:
   - id: cover
     title: Sales report
@@ -1115,34 +1131,177 @@ id: category_deep_dive
 params: { period: L6W }
 repeat:
   category: { top: 5, by: net_sales, window: L6W }
+filters:
+  focus: { adjusted_category: $category }
 pages:
   - id: category
     title: "{{ category }}"
     grid: { columns: 12, rows: [1, 1] }
     slots:
-      - { component: penetration_aov_trend, row: 1, col: 1, span: 8,
-          with: { query: { focus: { adjusted_category: $category } } } }
-      - { component: top_items, row: 1, col: 9, span: 4,
-          with: { query: { focus: { adjusted_category: $category }, top: { n: 8 } } } }
+      - { component: penetration_aov_trend, row: 1, col: 1, span: 8 }
+      - { component: top_items, row: 1, col: 9, span: 4, with: { query: { top: { n: 8 } } } }
+      - { component: category_hours, row: 2, col: 1, span: 6 }    # on fct_sales_lines
       ...
 ```
 
-The slots use `focus`, not `where`: the penetration of the category is over all orders, and
+The filter is a `focus`, not a `where`: the penetration of the category is over all orders, and
 its top items are ranked within the category while their shares stay shares of everything.
+Without a filter, each slot would repeat `with: { query: { focus: ... } }`.
 
 The builder (plan 8.5) resolves the anchor, expands every repeat (binding the parameters and the
-page chrome), replaces a repeated group by its `when_empty` page when the window has no sales,
-runs the components and facets, draws the visuals into their slots, collects the insights, and
-writes the requested outputs.
+page chrome), applies the filters, replaces a repeated group by its `when_empty` page when the
+window has no sales, runs the components and facets, draws the visuals into their slots,
+collects the insights, and writes the requested outputs. Delivering them is a separate step
+(below), so `build` never sends anything.
+
+### Filters
+
+A report and each page may have `filters`, with the same two keys and the same meaning as in a
+query (see "`where` and `focus`"). They apply to every slot whose component queries a model that
+has the dimension (the dimension's `models` in `dimensions.yml`), like Lightdash's dashboard
+filters:
+
+```yaml
+filters:
+  where: { payment_type: [Cash] }            # narrows the universe of every slot
+  focus: { adjusted_category: $category }    # picks the member; totals stay the whole
+```
+
+- **Precedence.** A filter replaces the component's own filter of the same kind on the same
+  dimension; it is not combined with it. The more specific one wins: the component, then the
+  report, then the page, then the slot's `with:`. A `where` and a `focus` on the same dimension
+  are separate filters and both apply.
+- **Opt-out.** A slot ignores every filter with `ignore_filters: true`, or some with
+  `ignore_filters: [payment_type]`: the full-history KPIs on the cover of a filtered report, say.
+- **Where a filter does not apply.** A slot whose model lacks the dimension, a slot that opts
+  out, and a `@query` source (the data notes, the lines export) run unfiltered. Its card hint
+  says so ("all payment types"), and the page header shows the filters that are in force as
+  chips, so a printed page never looks filtered where it is not.
+- **Values** are bound parameters, so `$category` from a repeat works; a list means any of the
+  values, `null` the empty value.
+- **Repeats and facets.** The values of a repeat (`top: 5`) and of a facet (`top`, `all`) are
+  decided under the report's and page's `where`, not under its `focus` (which is usually the
+  repeated value itself). A facet by a dimension that a filter of its slot sets is refused,
+  because the facet would replace the filter; opt the slot out of that filter instead.
+- **Checks.** The loader merges the filters into each slot's component and validates the result
+  like a component with `with:`, so the rules of 7A.2 hold: a `where` with a relative metric on a
+  query without a dimension besides time is refused, and the message names the report or page
+  filter it came from. A filter that applies to no slot of its report or page is an error (a
+  typo, or a filter on a dimension no model has). `hari-lari-report validate` lists, per filter,
+  the slots it does not apply to.
+
+### Schedule and delivery
+
+```yaml
+schedule:
+  cron: "0 6 * * *"            # five fields: minute hour day month weekday
+  timezone: Asia/Makassar      # optional; defaults to the time zone of project.yml
+  enabled: true                # optional; false keeps the scheduler job paused
+deliver:
+  when: [{ insight: low_margin_items }]   # optional; any one condition sends
+  drive: { folder: "{{ anchor }} (week {{ anchor_iso_week }})", files: [pdf, xlsx] }
+  telegram:
+    - { to: managers, text: daily_flash }
+```
+
+**Schedule.** One per report; a report without one runs only on demand. The loader checks the
+cron expression and the time zone. The anchor is the report's `anchor` parameter, by default the
+rule of `project.yml` (yesterday), so the daily flash at 06:00 covers yesterday and the weekly
+report on Monday at 04:00 ends on Sunday.
+
+**Telegram.** Each entry names a target and what to send: `text` (a text block of
+`outputs.telegram`), optionally `photo` (a page of `outputs.png`, with the text as its caption)
+and `document` (`pdf` or `xlsx`). With a photo, the text is the caption, then the document
+follows, as `send_report` does today; with a document only, the text is its caption; without
+either, it is a message. The builder checks the text against the limit of its form (1,024
+characters for a caption, 4,096 for a message) and fails rather than let Telegram cut it.
+Several entries send to several chats, each with its own content.
+
+**Targets.** A report names chats, never chat ids, because the YAML is public. `project.yml` maps
+each name to the Secret Manager secret that holds the id:
+
+```yaml
+telegram_targets:
+  group: telegram-chat-id            # owners and managers
+  admin: telegram-admin-chat-id      # required: failure alerts and notices go here
+  # managers: telegram-chat-id-managers   (10.17)
+  # stock: telegram-chat-id-stock         (a stock alert group)
+```
+
+The job reads each id from an environment variable named after its secret, upper case with `_`
+for `-` (`TELEGRAM_CHAT_ID`, `TELEGRAM_ADMIN_CHAT_ID`, the names used today), and `deploy/setup.sh`
+builds the job's `--set-secrets` from this list. A new chat is `deploy/setup.sh telegram-chat
+<name> <chat id>`, which creates the secret, plus one line here and a release. The loader refuses
+a delivery to a name that is not listed.
+
+**Drive.** `drive` uploads the listed files into a subfolder of `DRIVE_FOLDER_ID` named by the
+template (`anchor`, `anchor_iso_week` and the report's parameters are available), and its link
+is `{{ drive_url }}` in the text blocks. As today, a failed upload does not stop the delivery:
+the text goes out without the lines that use `drive_url`, and the admin chat is told.
+
+**Conditions.** Without `when`, a report is always delivered. With `when`, it is delivered only
+if one of its conditions holds, which turns a report into an alert:
+
+| Condition | Holds when |
+| --- | --- |
+| `{ insight: <rule> }` | the rule wrote at least one sentence in this build (so never about a sample below its `min_n`) |
+| `{ rows: <component> }` | the component's result has at least one regular row, for example the items below a stock level |
+| `{ checks: warn }` | a data check of severity `warn` failed; an error-level check fails the run anyway, with the admin alert |
+
+When no condition holds, the outputs are still built and stored, nothing is sent, no sent-marker
+is written, the log says which conditions were checked, and the run succeeds.
+
+**Sent-marker.** One per report and anchor, `sent/<report>/<anchor>.json`, written after the last
+delivery of a real run to the report's own targets; a run whose marker exists sends nothing
+unless `--force` is given (plan 5.3). The stored outputs go to `reports/<report>/<anchor>/`.
+
+### Running a report
+
+One command runs any report, locally and in Cloud Run:
+
+```text
+hari-lari-report run --report weekly [--anchor YYYY-MM-DD] [--dry-run] [--to admin] [--force] [--run <run>]
+hari-lari-report run --scheduled --dry-run    # every report with a schedule, on one extraction
+hari-lari-report build --report weekly --run <run> [--anchor ...]   # outputs only (8.5)
+hari-lari-report validate                     # every report and component, the JSON Schemas
+hari-lari-report schedules [--json]           # the schedules, as deploy/ reads them
+```
+
+`run` does what `hari-lari-weekly` does today, for any report: check the sent-marker, extract
+(unless `--run` names an existing run), the Moka token reminder, build the models and run the
+checks, build the outputs, store them, evaluate `when`, upload to Drive, send to Telegram and
+write the marker. Each step is timed and logged as JSON, and a failing step sends the admin
+alert and exits 1, as in plan 5.4.
+
+- `--dry-run` does everything except sending: the files go under `dry-run/`, there is no Drive
+  upload, no marker and no admin alert, and the log shows, per target, what would be sent and
+  whether `when` held.
+- `--to <target>` sends every Telegram delivery of the report to that one chat instead (usually
+  `admin`, for a private check), reads and writes no marker, and still uploads to Drive.
+- `--scheduled` runs every report that has a schedule, enabled or not, one after the other on
+  one extraction, and exits 1 if any of them failed. The release path's dry run (7A.8) uses it,
+  so a release is only promoted when every scheduled report builds.
+
+**In Google Cloud.** All reports share one Cloud Run job, so the release path keeps promoting
+exactly the live job and its dry-run twin. Each report with a schedule gets one Cloud Scheduler
+job, `hari-lari-report-<id>`, which starts that Cloud Run job with the arguments
+`run --report <id>` (a run with container overrides of the Cloud Run Admin API; the scheduler's
+account needs `roles/run.jobsExecutorWithOverrides` on the job instead of `run.invoker`). The
+release workflow syncs them from `hari-lari-report schedules --json` after a successful dry run
+and promotion: it creates or updates a scheduler job per report, pauses it when `enabled` is
+false and deletes a `hari-lari-report-*` job whose report is gone. It leaves any other scheduler
+job alone. A schedule change therefore goes live with the image that contains it. For this the
+release service account gets `roles/cloudscheduler.admin` on the project (Cloud Scheduler has no
+per-job roles) and `iam.serviceAccountUser` on the scheduler's account.
 
 ## Outputs
 
 - **PDF**: A4 landscape, as today.
 - **PNG**: the chosen pages, at a resolution that reads well on a phone.
-- **Telegram text**: plain text from a text block. A caption under a photo holds at most 1,024
-  characters and a message 4,096; the builder fails when a block is too long rather than let
-  Telegram cut it. Values known only at delivery, such as the Drive link, are filled in by the
-  deliver step.
+- **Telegram text**: plain text from each text block in `outputs.telegram`. A caption under a
+  photo or document holds at most 1,024 characters and a message 4,096; the builder fails when
+  a block is too long for the form its delivery sends it in, rather than let Telegram cut it.
+  Values known only at delivery, such as the Drive link, are filled in by the deliver step.
 - **XLSX**: one formatted sheet per listed component (its result in the output convention), and
   the lines export without personal data and without the line note.
 
@@ -1284,6 +1443,23 @@ both paths share them until `report_pdf.py` is deleted. For two Mondays before t
 job also builds the component report under `dry-run/` (9.6). There is no pixel diff: the numbers
 must match, the drawing may improve.
 
+The command name: until 8.5, `hari-lari-report` is the old local CLI that writes the PDF and
+Excel from the CSV export or an API run. Plan 8.5 renames that one to `hari-lari-report-legacy`
+and gives the name to the new subcommands; 9.7 deletes the legacy command. At the cut-over (9.7):
+
+- The image's entry point becomes `hari-lari-report`, and `hari-lari-weekly` becomes
+  `hari-lari-report run --report weekly` (`reports/weekly.yml` carries the Monday 04:00 schedule
+  and today's delivery). The release script sets the dry-run job's arguments to
+  `run --scheduled --dry-run`.
+- The first release syncs the scheduler job `hari-lari-report-weekly`; the old scheduler job
+  `hari-lari-weekly` is deleted by hand in the same session (runbook), so no Monday runs twice
+  or not at all.
+- The weekly report also reads the old marker `sent/<anchor>.json`, so re-running a week sent
+  before the cut-over cannot send it again. Earlier outputs stay in `reports/<anchor>/`; new
+  ones go to `reports/weekly/<anchor>/`.
+- `--to admin`, `--force`, `--dry-run` and `--anchor` keep the meaning they have in
+  `hari-lari-weekly`; the runbook's commands change only in name.
+
 ## Out of scope
 
 - Arbitrary SQL or Python inside a component or report. A new need becomes a compiler option, a
@@ -1297,7 +1473,8 @@ must match, the drawing may improve.
 ## Decisions
 
 D1 and D2 were agreed on 24 Nov 2026 with the first version. D3 to D10 were agreed on the same
-day after the revision (plan task 7.1b), each as proposed.
+day after the revision (plan task 7.1b), each as proposed. D11 to D14 were agreed on 25 Nov 2026
+(plan task 7A.9).
 
 | # | Question | Decision |
 | --- | --- | --- |
@@ -1311,3 +1488,7 @@ day after the revision (plan task 7.1b), each as proposed.
 | D8 | Build or adopt | agreed: own framework, with dbt's model layers and MetricFlow's metric kinds as concepts only; no dbt installation; models stay plain SQL run by DuckDB in-process |
 | D9 | Acceptance of the port | agreed: parity of each ported component's numbers with `report_data.Section`; no pixel diff, so the drawing may improve |
 | D10 | Joining category groups | agreed: by adjusted category name; `category_id` in `config/category_group.csv` is informational, because Moka reuses category ids |
+| D11 | Meaning of a report or page filter | agreed: two keys, `where` and `focus`, with their query meaning; a filter replaces the component's own on the same dimension, and a slot can opt out |
+| D12 | Running several scheduled reports | agreed: one Cloud Run job for all reports, one Cloud Scheduler job per report that passes `run --report <id>`; the release path still promotes one live job and its dry-run twin |
+| D13 | Who keeps the scheduler jobs in line with the YAML | agreed: the release workflow, after the dry run and promotion; the release service account gets `cloudscheduler.admin` on the project |
+| D14 | Telegram chats a report can deliver to | agreed: named targets in `project.yml`, each mapped to the Secret Manager secret of its chat id; `admin` is required; a new chat (managers, a stock-alert group) needs no code |
