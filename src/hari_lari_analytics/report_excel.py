@@ -82,30 +82,35 @@ PIVOT_TIPS = [
 ]
 
 
-def write_excel(path: Path, lines: pd.DataFrame) -> None:
+def write_lines_sheets(writer: pd.ExcelWriter, lines: pd.DataFrame) -> None:
+    """The lines table and its column guide as two sheets of an open workbook (openpyxl)."""
     columns = [c for c, *_ in COLUMNS]
     data = lines[columns].rename(columns={c: h for c, h, *_ in COLUMNS})
     data = data.sort_values(["Sale Timestamp", "Receipt Nr"]).reset_index(drop=True)
 
-    with pd.ExcelWriter(path, engine="openpyxl") as writer:
-        data.to_excel(writer, sheet_name="Sales Lines", index=False)
-        ws = writer.sheets["Sales Lines"]
-        last = f"{get_column_letter(len(COLUMNS))}{len(data) + 1}"
-        table = Table(displayName="SalesLines", ref=f"A1:{last}")
-        table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium7", showRowStripes=True)
-        ws.add_table(table)
-        ws.freeze_panes = "B2"
-        for index, (_, header, number_format, _) in enumerate(COLUMNS, start=1):
-            letter = get_column_letter(index)
-            ws.column_dimensions[letter].width = max(12, len(header) + 4)
-            if number_format:
-                for (cell,) in ws.iter_rows(min_row=2, min_col=index, max_col=index):
-                    cell.number_format = number_format
+    data.to_excel(writer, sheet_name="Sales Lines", index=False)
+    ws = writer.sheets["Sales Lines"]
+    last = f"{get_column_letter(len(COLUMNS))}{len(data) + 1}"
+    table = Table(displayName="SalesLines", ref=f"A1:{last}")
+    table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium7", showRowStripes=True)
+    ws.add_table(table)
+    ws.freeze_panes = "B2"
+    for index, (_, header, number_format, _) in enumerate(COLUMNS, start=1):
+        letter = get_column_letter(index)
+        ws.column_dimensions[letter].width = max(12, len(header) + 4)
+        if number_format:
+            for (cell,) in ws.iter_rows(min_row=2, min_col=index, max_col=index):
+                cell.number_format = number_format
 
-        guide = pd.DataFrame([(h, d) for _, h, _, d in COLUMNS], columns=["Column", "Description"])
-        guide.to_excel(writer, sheet_name="Column Guide", index=False)
-        tips = pd.DataFrame({"How to pivot": PIVOT_TIPS})
-        tips.to_excel(writer, sheet_name="Column Guide", index=False, startrow=len(guide) + 2)
-        guide_ws = writer.sheets["Column Guide"]
-        guide_ws.column_dimensions["A"].width = 28
-        guide_ws.column_dimensions["B"].width = 90
+    guide = pd.DataFrame([(h, d) for _, h, _, d in COLUMNS], columns=["Column", "Description"])
+    guide.to_excel(writer, sheet_name="Column Guide", index=False)
+    tips = pd.DataFrame({"How to pivot": PIVOT_TIPS})
+    tips.to_excel(writer, sheet_name="Column Guide", index=False, startrow=len(guide) + 2)
+    guide_ws = writer.sheets["Column Guide"]
+    guide_ws.column_dimensions["A"].width = 28
+    guide_ws.column_dimensions["B"].width = 90
+
+
+def write_excel(path: Path, lines: pd.DataFrame) -> None:
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        write_lines_sheets(writer, lines)

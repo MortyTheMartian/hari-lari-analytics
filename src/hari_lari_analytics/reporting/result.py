@@ -18,7 +18,7 @@ from typing import Literal
 import pandas as pd
 
 from hari_lari_analytics.reporting.registry import Dimension, Metric
-from hari_lari_analytics.reporting.windows import Grain, ResolvedWindow
+from hari_lari_analytics.reporting.windows import DayEvent, Grain, ResolvedWindow
 
 Shape = Literal["single", "rows", "series", "matrix", "decomposition"]
 
@@ -84,6 +84,8 @@ class ResultMeta:
     matrix: MatrixSpec | None = None  # set by `pivot`
     classifications: dict[str, Classification] = field(default_factory=dict)  # by column
     decomposition: DecompositionSpec | None = None  # set by `decompose`
+    # the calendar events of both windows (and the buckets before), for a query by time
+    events: tuple[DayEvent, ...] = ()
 
     @property
     def n_columns(self) -> dict[str, Metric]:

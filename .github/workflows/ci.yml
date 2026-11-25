@@ -3,6 +3,9 @@ name: CI
 # Every push and every pull request: lint, tests, and the two checks of the component
 # framework. The real-data tests skip themselves (data/ is not in git), so what runs here is
 # the made-up sample in tests/fixtures/. See docs/runbook.md, "Release path".
+#
+# No separate `hari-lari-report build --strict` step: the tests already build the gallery (all
+# components) and the tracer report on the fixture and assert that no text overflows its slot.
 
 on:
   push:
@@ -42,5 +45,11 @@ jobs:
       - name: Validate components
         run: uv run --no-sync hari-lari-component validate
 
-      - name: Check the exported JSON schema
+      - name: Validate reports
+        run: uv run --no-sync hari-lari-report validate
+
+      - name: Check the exported JSON schemas
         run: uv run --no-sync hari-lari-component schema --check
+
+      - name: Check the semantic manifest
+        run: uv run --no-sync hari-lari-component manifest --check

@@ -66,15 +66,16 @@ of each (replace the old ones, every run uses the full history):
 ## Run
 
 ```bash
-uv run hari-lari-report
+uv run hari-lari-report-legacy
 ```
 
 Alternatively, `source setup.sh` activates the venv and loads variables from an optional,
-git-ignored `.env` file; after that, `hari-lari-report` works without `uv run`.
+git-ignored `.env` file; after that, `hari-lari-report-legacy` works without `uv run`. (The name
+`hari-lari-report` now belongs to the component report builder, see "Reports" below.)
 
 ```bash
-uv run hari-lari-report --source api                    # latest extraction, up to yesterday
-uv run hari-lari-report --source api --anchor 2026-11-15  # re-run an earlier week
+uv run hari-lari-report-legacy --source api                    # latest extraction, up to yesterday
+uv run hari-lari-report-legacy --source api --anchor 2026-11-15  # re-run an earlier week
 ```
 
 Options: `--source`, `--input-dir`, `--extract-dir`, `--output-dir` and `--aliases` override
@@ -82,6 +83,65 @@ the defaults. `--anchor YYYY-MM-DD` sets the last day of the report; later sales
 so a week can be rebuilt as it looked then. It defaults to yesterday in Bali for `--source api`
 (the Monday report covers up to Sunday) and to the date of the last sale for `--source csv`.
 The run prints a note for every item name it could not match to today's items.
+
+## Reports (component framework)
+
+Reports are YAML files over the components in `src/hari_lari_analytics/reporting/`
+(`docs/components.md` explains the whole framework). `hari-lari-report` builds them from an
+extraction run; it never sends anything:
+
+```bash
+uv run hari-lari-report validate                              # every report and component, the schemas
+uv run hari-lari-report build --report tracer --anchor 2026-11-22   # PDF, PNG, text, XLSX, bundle.json
+uv run hari-lari-report schedules --json                      # the schedules, as deploy/ reads them
+```
+
+The outputs go to `data/output/reports/<report>/<anchor>/` (`--out` changes it); `--strict` fails
+when a text runs over its slot. To work on one component, draw it into the size of a slot, and
+again on every save:
+
+```bash
+uv run hari-lari-component run category_contributive_aov --png --watch   # data/output/preview/<id>.png
+```
+
+`--span` (1 to 12 columns) and `--height` (1 to 6 parts of the page body) set the slot. Until the
+cut-over (plan 9.7) the Monday job still runs the old report (`hari-lari-weekly`), and
+`hari-lari-report run` and `--scheduled` do not exist yet.
+
+Two more outputs help to see what the framework can do and what it writes:
+
+```bash
+uv run hari-lari-report gallery            # every component on the latest run, one page each (data/output/gallery/)
+uv run hari-lari-component manifest        # semantic_manifest.json: every metric, dimension, component, ...
+```
+
+The gallery is the visual check after a change to a visual, a transform or the theme. Every
+build also writes `bundle.json`, the JSON results bundle: each page, slot and result as display
+cells (raw value, display string, tone, small-sample flag) with the theme colours, so a frontend
+can draw the report without computing anything. Its contract is
+`src/hari_lari_analytics/reporting/schema/bundle.schema.json`, and a test checks every bundle
+against it. `semantic_manifest.json` is the catalogue of the semantic layer (like dbt's
+manifest); CI fails when it or the JSON Schemas are out of date (`uv run hari-lari-report schema`
+and `uv run hari-lari-component manifest` rewrite them).
+
+### Adding a metric, component, transform, visual or report
+
+A new component is usually a YAML file in `src/hari_lari_analytics/reporting/components/`; a
+new metric is a few lines in `metrics.yml`. The loop, from a similar component to a snapshot:
+
+```bash
+uv run hari-lari-component new orders_by_weekday --from category_contributive_aov
+uv run hari-lari-component run orders_by_weekday --period L6W --sql   # the result and its SQL
+uv run hari-lari-component run orders_by_weekday --png --watch        # a picture on every save
+uv run pytest tests/test_snapshots.py --update-snapshots -k orders_by_weekday
+uv run hari-lari-component validate && uv run hari-lari-report validate
+```
+
+The authoring guide is the Cursor rule `.cursor/rules/reporting-components.mdc` (it applies to
+the files of `reporting/`, and an LLM reads it as the procedure): how to add a metric, a
+component, a transform, a visual and a report, the commands above and two worked examples, both
+run as tests in `tests/test_authoring_examples.py`: a refund-rate metric with a component
+(YAML only), and a transform in Python. The design note is `docs/components.md`.
 
 ## Weekly job
 

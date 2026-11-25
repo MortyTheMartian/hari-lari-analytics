@@ -1,0 +1,26 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: period_cards
+params: {}
+facets:
+- key: WTD
+  label: Week to date
+  metric: null
+  shape: single
+  csv: |
+    is_total,net_sales,orders,prior_net_sales,net_sales_change,net_sales_delta,prior_orders,orders_change,orders_delta,n_orders,prior_n_orders
+    True,115000,2,98000,0.1734693878,17000,2,0,0,2,2
+- key: L14D
+  label: Last 14 days
+  metric: null
+  shape: single
+  csv: |
+    is_total,net_sales,orders,prior_net_sales,net_sales_change,net_sales_delta,prior_orders,orders_change,orders_delta,n_orders,prior_n_orders
+    True,213000,4,,,,,,,4,
+- key: full
+  label: Full history
+  metric: null
+  shape: single
+  csv: |
+    is_total,net_sales,orders,prior_net_sales,net_sales_change,net_sales_delta,prior_orders,orders_change,orders_delta,n_orders,prior_n_orders
+    True,213000,4,,,,,,,4,

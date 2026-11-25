@@ -51,6 +51,7 @@ from hari_lari_analytics.reporting.windows import (
     Bucket,
     Calendar,
     Compare,
+    DayEvent,
     Grain,
     ResolvedWindow,
     Window,
@@ -111,6 +112,7 @@ class CompiledQuery:
     grain: Grain | None
     buckets: tuple[BucketInfo, ...]
     prior_buckets: tuple[BucketInfo, ...]
+    events: tuple[DayEvent, ...] = ()
 
     def run(self, con: duckdb.DuckDBPyConnection) -> Result:
         return self.wrap(con.execute(self.sql, self.params).df())
@@ -135,6 +137,7 @@ class CompiledQuery:
             prior_buckets=self.prior_buckets,
             sql=self.sql,
             params=self.params,
+            events=self.events,
         )
         df = df.drop(columns=["_lvl", "_rows", "_td", "_ptd"]).reset_index(drop=True)
         return Result(df, meta)
@@ -495,7 +498,20 @@ class _Compiler:
             prior_buckets=tuple(
                 BucketInfo(i, b.start, b.end) for i, b in enumerate(self.prior_buckets)
             ),
+            events=self._events(),
         )
+
+    def _events(self) -> tuple[DayEvent, ...]:
+        """The calendar events of the ranges a query by time shows: the window, the buckets
+        before it and the comparison window."""
+        if self.time is None:
+            return ()
+        cur = self.window.current
+        ranges = [(self.extra[0].bucket.start if self.extra else cur.start, cur.end)]
+        if self.compare_run:
+            ranges.append((self.window.comparison.start, self.window.comparison.end))
+        days = {e.date: e for lo, hi in ranges for e in self.cal.events_between(lo, hi)}
+        return tuple(days[d] for d in sorted(days))
 
     def _metric_specs(self) -> dict[str, Metric]:
         """The metric of every column, with its sample-size rule on the query's model."""

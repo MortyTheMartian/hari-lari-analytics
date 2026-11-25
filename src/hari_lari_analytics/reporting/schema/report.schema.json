@@ -1,0 +1,1183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "ComponentRef": {
+      "additionalProperties": false,
+      "description": "A component outside a page grid (a text block, a sheet of the workbook): a slot without\na position.",
+      "properties": {
+        "component": {
+          "type": "string",
+          "enum": [
+            "category_contributive_aov",
+            "full_history_kpis",
+            "lines_export"
+          ],
+          "description": "a component"
+        },
+        "with": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "With"
+        },
+        "params": {
+          "additionalProperties": true,
+          "default": {},
+          "title": "Params",
+          "type": "object"
+        },
+        "ignore_filters": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": false,
+          "title": "Ignore Filters"
+        }
+      },
+      "required": [
+        "component"
+      ],
+      "title": "ComponentRef",
+      "type": "object"
+    },
+    "Condition": {
+      "additionalProperties": false,
+      "description": "When to deliver: the rule wrote a sentence, the component has rows, a data check warned.",
+      "properties": {
+        "insight": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "best_bucket",
+                "data_notes",
+                "discount_rate_high",
+                "movers",
+                "top_drivers"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "a rule of insights.yml"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "category_contributive_aov",
+                "full_history_kpis",
+                "lines_export"
+              ],
+              "description": "a component"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checks": {
+          "anyOf": [
+            {
+              "const": "warn",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Checks"
+        }
+      },
+      "title": "Condition",
+      "type": "object"
+    },
+    "DeliverSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "when": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Condition"
+          },
+          "title": "When",
+          "type": "array"
+        },
+        "drive": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DriveSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "telegram": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TelegramDelivery"
+          },
+          "title": "Telegram",
+          "type": "array"
+        }
+      },
+      "title": "DeliverSpec",
+      "type": "object"
+    },
+    "DriveSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "folder": {
+          "title": "Folder",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "enum": [
+              "pdf",
+              "xlsx",
+              "json"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Files",
+          "type": "array"
+        }
+      },
+      "required": [
+        "folder",
+        "files"
+      ],
+      "title": "DriveSpec",
+      "type": "object"
+    },
+    "FilterSpec": {
+      "additionalProperties": false,
+      "description": "Filters of a report or a page, with the meaning they have in a query: `where` narrows the\nuniverse, `focus` picks the members (docs/components.md, \"Filters\").",
+      "properties": {
+        "where": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default": {},
+          "title": "Where",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "enum": [
+              "adjusted_category",
+              "adjusted_item",
+              "adjusted_item_variant",
+              "basket_size",
+              "bucket",
+              "category",
+              "category_group_level_1",
+              "category_group_level_2",
+              "discount_code",
+              "discounted",
+              "event_kind",
+              "event_name",
+              "has_consignment",
+              "has_discount",
+              "has_drink",
+              "has_food",
+              "has_modifier",
+              "has_promotion",
+              "has_refund",
+              "hour_of_day",
+              "is_holiday",
+              "is_refund",
+              "item",
+              "item_variant",
+              "modifier_name",
+              "modifier_option_name",
+              "order_line_count",
+              "payment_type",
+              "sale_date",
+              "sale_hour",
+              "sale_iso_week",
+              "sale_month",
+              "sale_quarter",
+              "sale_week",
+              "sale_year",
+              "variant",
+              "weekday"
+            ],
+            "description": "a dimension of dimensions.yml"
+          }
+        },
+        "focus": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default": {},
+          "title": "Focus",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "enum": [
+              "adjusted_category",
+              "adjusted_item",
+              "adjusted_item_variant",
+              "basket_size",
+              "bucket",
+              "category",
+              "category_group_level_1",
+              "category_group_level_2",
+              "discount_code",
+              "discounted",
+              "event_kind",
+              "event_name",
+              "has_consignment",
+              "has_discount",
+              "has_drink",
+              "has_food",
+              "has_modifier",
+              "has_promotion",
+              "has_refund",
+              "hour_of_day",
+              "is_holiday",
+              "is_refund",
+              "item",
+              "item_variant",
+              "modifier_name",
+              "modifier_option_name",
+              "order_line_count",
+              "payment_type",
+              "sale_date",
+              "sale_hour",
+              "sale_iso_week",
+              "sale_month",
+              "sale_quarter",
+              "sale_week",
+              "sale_year",
+              "variant",
+              "weekday"
+            ],
+            "description": "a dimension of dimensions.yml"
+          }
+        }
+      },
+      "title": "FilterSpec",
+      "type": "object"
+    },
+    "GridSpec": {
+      "additionalProperties": false,
+      "description": "The grid of a page: 12 columns, and the heights of the rows in parts of the usable\nheight (`[2, 5]`: the first row gets two sevenths).",
+      "properties": {
+        "columns": {
+          "const": 12,
+          "default": 12,
+          "title": "Columns",
+          "type": "integer"
+        },
+        "rows": {
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1,
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rows"
+      ],
+      "title": "GridSpec",
+      "type": "object"
+    },
+    "InsightsItem": {
+      "additionalProperties": false,
+      "properties": {
+        "insights": {
+          "$ref": "#/$defs/InsightsLine"
+        }
+      },
+      "required": [
+        "insights"
+      ],
+      "title": "InsightsItem",
+      "type": "object"
+    },
+    "InsightsLine": {
+      "additionalProperties": false,
+      "description": "The best insight sentences of the pages, ranked, one line each.",
+      "properties": {
+        "top": {
+          "default": 3,
+          "minimum": 1,
+          "title": "Top",
+          "type": "integer"
+        },
+        "pages": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pages"
+        }
+      },
+      "title": "InsightsLine",
+      "type": "object"
+    },
+    "OutputsSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "pdf": {
+          "default": false,
+          "title": "Pdf",
+          "type": "boolean"
+        },
+        "png": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "const": "all",
+              "type": "string"
+            }
+          ],
+          "default": [],
+          "title": "Png"
+        },
+        "telegram": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Telegram",
+          "type": "array"
+        },
+        "xlsx": {
+          "default": [],
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ComponentRef"
+              }
+            ]
+          },
+          "title": "Xlsx",
+          "type": "array"
+        }
+      },
+      "title": "OutputsSpec",
+      "type": "object"
+    },
+    "PageSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "default": {},
+          "title": "Params",
+          "type": "object"
+        },
+        "filters": {
+          "$ref": "#/$defs/FilterSpec",
+          "default": {
+            "where": {},
+            "focus": {}
+          }
+        },
+        "grid": {
+          "$ref": "#/$defs/GridSpec"
+        },
+        "slots": {
+          "items": {
+            "$ref": "#/$defs/SlotSpec"
+          },
+          "minItems": 1,
+          "title": "Slots",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "grid",
+        "slots"
+      ],
+      "title": "PageSpec",
+      "type": "object"
+    },
+    "RepeatSpec": {
+      "additionalProperties": false,
+      "description": "Pages repeated over the values of one parameter.",
+      "properties": {
+        "repeat": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "type": "array"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "$ref": "#/$defs/TopRepeat"
+              }
+            ]
+          },
+          "title": "Repeat",
+          "type": "object"
+        },
+        "when_empty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WhenEmpty"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pages": {
+          "items": {
+            "$ref": "#/$defs/PageSpec"
+          },
+          "minItems": 1,
+          "title": "Pages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "repeat",
+        "pages"
+      ],
+      "title": "RepeatSpec",
+      "type": "object"
+    },
+    "ScheduleSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "cron": {
+          "title": "Cron",
+          "type": "string"
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timezone"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cron"
+      ],
+      "title": "ScheduleSpec",
+      "type": "object"
+    },
+    "SlotSpec": {
+      "additionalProperties": false,
+      "description": "One component on a page. `with` overrides fields of the component (a deep merge),\n`params` binds its parameters, `card: false` leaves out the card with title and hint, and\n`ignore_filters` opts the slot out of the filters of the report and the page.",
+      "properties": {
+        "component": {
+          "type": "string",
+          "enum": [
+            "category_contributive_aov",
+            "full_history_kpis",
+            "lines_export"
+          ],
+          "description": "a component"
+        },
+        "row": {
+          "minimum": 1,
+          "title": "Row",
+          "type": "integer"
+        },
+        "col": {
+          "maximum": 12,
+          "minimum": 1,
+          "title": "Col",
+          "type": "integer"
+        },
+        "span": {
+          "default": 12,
+          "maximum": 12,
+          "minimum": 1,
+          "title": "Span",
+          "type": "integer"
+        },
+        "height": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Height",
+          "type": "integer"
+        },
+        "with": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "With"
+        },
+        "params": {
+          "additionalProperties": true,
+          "default": {},
+          "title": "Params",
+          "type": "object"
+        },
+        "card": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Card"
+        },
+        "ignore_filters": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": false,
+          "title": "Ignore Filters"
+        }
+      },
+      "required": [
+        "component",
+        "row",
+        "col"
+      ],
+      "title": "SlotSpec",
+      "type": "object"
+    },
+    "TelegramDelivery": {
+      "additionalProperties": false,
+      "properties": {
+        "to": {
+          "type": "string",
+          "enum": [
+            "admin",
+            "group"
+          ],
+          "description": "a target of telegram_targets in project.yml"
+        },
+        "photo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Photo"
+        },
+        "document": {
+          "anyOf": [
+            {
+              "enum": [
+                "pdf",
+                "xlsx"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Document"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        }
+      },
+      "required": [
+        "to"
+      ],
+      "title": "TelegramDelivery",
+      "type": "object"
+    },
+    "TextLine": {
+      "additionalProperties": false,
+      "description": "A template line; `drive_url` stays in it until the deliver step.",
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextLine",
+      "type": "object"
+    },
+    "TopRepeat": {
+      "additionalProperties": false,
+      "description": "The top members of a dimension, decided over a window under the `where` of the report.",
+      "properties": {
+        "dimension": {
+          "type": "string",
+          "enum": [
+            "adjusted_category",
+            "adjusted_item",
+            "adjusted_item_variant",
+            "basket_size",
+            "bucket",
+            "category",
+            "category_group_level_1",
+            "category_group_level_2",
+            "discount_code",
+            "discounted",
+            "event_kind",
+            "event_name",
+            "has_consignment",
+            "has_discount",
+            "has_drink",
+            "has_food",
+            "has_modifier",
+            "has_promotion",
+            "has_refund",
+            "hour_of_day",
+            "is_holiday",
+            "is_refund",
+            "item",
+            "item_variant",
+            "modifier_name",
+            "modifier_option_name",
+            "order_line_count",
+            "payment_type",
+            "sale_date",
+            "sale_hour",
+            "sale_iso_week",
+            "sale_month",
+            "sale_quarter",
+            "sale_week",
+            "sale_year",
+            "variant",
+            "weekday"
+          ],
+          "description": "a dimension of dimensions.yml"
+        },
+        "top": {
+          "minimum": 1,
+          "title": "Top",
+          "type": "integer"
+        },
+        "by": {
+          "type": "string",
+          "enum": [
+            "aov",
+            "avg_item_price",
+            "category_aov",
+            "contributive_aov",
+            "discount_rate",
+            "discounts",
+            "drink_attach_rate",
+            "drink_orders",
+            "first_sale_ts",
+            "food_and_drink_orders",
+            "food_attach_rate",
+            "food_orders",
+            "gross_sales",
+            "items_per_order",
+            "items_sold",
+            "last_sale_ts",
+            "net_sales",
+            "net_sales_per_trading_day",
+            "orders",
+            "penetration",
+            "refunds",
+            "share"
+          ],
+          "description": "a metric"
+        },
+        "window": {
+          "title": "Window",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        }
+      },
+      "required": [
+        "dimension",
+        "top",
+        "by",
+        "window"
+      ],
+      "title": "TopRepeat",
+      "type": "object"
+    },
+    "WhenEmpty": {
+      "additionalProperties": false,
+      "description": "What replaces a repeated group whose window has no sales: one page with a message.",
+      "properties": {
+        "title": {
+          "default": "Overview",
+          "title": "Title",
+          "type": "string"
+        },
+        "message": {
+          "default": "No sales in this period",
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "title": "WhenEmpty",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "title": "Id",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "kicker": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Kicker"
+    },
+    "footer": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Footer"
+    },
+    "params": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        ]
+      },
+      "default": {},
+      "title": "Params",
+      "type": "object"
+    },
+    "filters": {
+      "$ref": "#/$defs/FilterSpec",
+      "default": {
+        "where": {},
+        "focus": {}
+      }
+    },
+    "schedule": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ScheduleSpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "outputs": {
+      "$ref": "#/$defs/OutputsSpec",
+      "default": {
+        "pdf": false,
+        "png": [],
+        "telegram": [],
+        "xlsx": []
+      }
+    },
+    "text_blocks": {
+      "additionalProperties": {
+        "items": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/TextLine"
+            },
+            {
+              "$ref": "#/$defs/InsightsItem"
+            },
+            {
+              "$ref": "#/$defs/ComponentRef"
+            }
+          ]
+        },
+        "type": "array"
+      },
+      "default": {},
+      "title": "Text Blocks",
+      "type": "object"
+    },
+    "deliver": {
+      "$ref": "#/$defs/DeliverSpec",
+      "default": {
+        "when": [],
+        "drive": null,
+        "telegram": []
+      }
+    },
+    "repeat": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "type": "array"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "$ref": "#/$defs/TopRepeat"
+              }
+            ]
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Repeat"
+    },
+    "pages": {
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/PageSpec"
+          },
+          {
+            "$ref": "#/$defs/RepeatSpec"
+          }
+        ]
+      },
+      "minItems": 1,
+      "title": "Pages",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "pages"
+  ],
+  "title": "Hari Lari report",
+  "type": "object"
+}

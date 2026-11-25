@@ -1,0 +1,246 @@
+---
+description: Authoring guide for the reporting framework (metrics, components, transforms, visuals, reports) with the CLI loop and two tested examples
+globs: src/hari_lari_analytics/reporting/**
+alwaysApply: false
+---
+
+# Reporting framework: authoring guide
+
+The framework turns YAML into reports: models (SQL) → semantic layer (metrics, dimensions, KPI
+tree) → one query compiler → transforms → visuals, insights and grid layouts → PDF, PNG, Telegram
+text, Excel and a JSON bundle. A new component should take under 30 minutes and usually only YAML.
+The design and the reasons are in `docs/components.md`; this file is the working procedure.
+
+**Start from the catalogue.** `src/hari_lari_analytics/reporting/semantic_manifest.json` lists
+every model, metric (label, format, kind, depends on), dimension, KPI-tree identity, window form,
+transform, visual (options, accepted shapes, minimum size), insight rule, component and report.
+Read it before writing anything: the metric or component you need may exist already.
+
+## Rules that hold everywhere
+
+- **No SQL or Python in a component or report.** A new need becomes a metric (`metrics.yml`), a
+  dimension (`dimensions.yml`), a transform, a visual or, for data that is not an SQL aggregate,
+  a registered `@query` source. Components only choose and combine.
+- **YAML is strict.** An unknown key fails and names the file and the field. Start every
+  component with `# yaml-language-server: $schema=../schema/component.schema.json` (reports:
+  `report.schema.json`) so the editor autocompletes and validates.
+- **Visuals draw and never compute.** Options say *what* to show (columns, bars, deltas, rank),
+  never how: no point sizes, colours only as theme tokens (`accent`, `good`, ...). Numbers are
+  formatted in one place, `formats.py` through `present.py`; never format a number in a visual.
+- **Honest numbers.** Orders are counted from receipts, never summed across categories: respect a
+  metric's `additivity`. A row or period below the sample-size rule (`min_n`) is grey with `n=`
+  and no insight speaks about it; a comparison that is not valid shows `n/a`.
+- **Parameters** are `$name` values, bound by the component's `params` defaults, a report
+  (`params`, `repeat`) or the CLI (`--param name=value`).
+- **Generated files are committed and checked in CI.** After changing a metric, dimension,
+  transform, visual, insight rule or component, run both
+
+  ```bash
+  uv run hari-lari-report schema      # JSON Schemas of components, reports and the bundle
+  uv run hari-lari-component manifest # semantic_manifest.json
+  ```
+
+## The loop
+
+```bash
+uv run hari-lari-component new <id> [--from <similar_id>] [--param name=value]
+                                    # a component and the stub of its snapshot
+# edit src/hari_lari_analytics/reporting/components/<id>.yml
+uv run hari-lari-component run <id> --period L6W --sql      # the result, its SQL, the checks
+uv run hari-lari-component run <id> --png --watch           # data/output/preview/<id>.png on every save
+uv run hari-lari-component validate                         # every component, report, schema, manifest
+uv run pytest tests/test_snapshots.py --update-snapshots -k <id>   # then read the snapshot diff
+uv run hari-lari-report build --report <report> --strict    # PDF, PNG, text, XLSX, bundle.json
+uv run hari-lari-report gallery                             # every component, one page each
+uv run pytest && uv run ruff check . && uv run ruff format --check .
+```
+
+`run` reads the latest extraction run in `data/extract` (`--run` for another, `--anchor` for a
+date). A parameter without a default needs a value for the snapshot (`new ... --param
+category=Coffee`). The test fixture (`tests/fixtures`, 9 days of made-up sales) has too little
+history for comparisons; use the real run to judge a component and the fixture for its tests.
+
+## Add a metric (`metrics.yml`)
+
+One kind per metric: `sql` (an aggregate per model: `func(expr)` or `func(distinct expr)`, with an
+optional `filter (where ...)`), `filtered` (a base metric restricted by dimension values),
+`derived` (an expression over other metrics, evaluated after aggregation) or `relative` (like
+derived, plus `total.<metric>`: penetration, share). Give `label`, `description`, `format` (`idr`,
+`idr_compact`, `count`, `decimal`, `pct`, `timestamp`), `up_is_good` (`true`, `false` or `null`
+for neutral) and `additivity` (`full`, `order_grain`, `none`; a ratio is `none`). Set `min_n` only
+when the default rule (30 of the model's `sample_size` count) is wrong for it. The loader checks
+every reference and says which metric and model fail. Add a test with a hand-computed value to
+`tests/test_metrics.py`, and describe a business definition in `METRICS.md`.
+
+A new column a metric needs comes from the SQL of a model in `models/` (`models.yml` has the
+metadata: primary key, time column, whether it is exposed); a new way to group is a dimension
+in `dimensions.yml` (grain, models, labels, bins).
+
+## Add a component
+
+A file in `components/` with `id`, `title`, optional `hint`/`description`, `params`, a `query`
+(`model`, `metrics`, `dimensions`, `window`, `compare`, `where`, `focus`, `totals`, `top`, ...) or
+`source` for a registered Python query, optional `transforms`, `facet` (repeat the visual by
+metric, period or dimension value), a `visual` and `insights` (rules of `insights.yml`). Titles
+and hints are Jinja templates over the parameters and the result's metadata. Pick the visual by
+the result shape (`single`, `rows`, `series`, `matrix`, `decomposition`): the manifest lists what
+each accepts. A component without a `visual` (such as `lines_export`) is for the workbook only.
+The loader checks the query, the transforms and the visual against each other on a fixed
+calendar, without data.
+
+Then: snapshot (`--update-snapshots`), place it in a report slot, and the gallery shows it
+automatically.
+
+## Add a transform (Python)
+
+A pure function `(result, options, ctx) -> Result` in `transforms/` that never queries the
+database, registered with `@transform("name", Options, shapes=..., requires=...)`; its docstring is its
+description. `requires` adds what the query must have (metrics, buckets
+before the window) or fails with a clear message (a missing dimension or comparison). Put it in an
+existing module of `transforms/` or in a new one imported at the bottom of
+`transforms/__init__.py`. Test it by hand on a small result in `tests/test_transforms.py`, then
+refresh the schema and the manifest.
+
+## Add a visual (Python)
+
+A function `(area, result, options, ctx)` in `visuals/` registered with
+`@visual(name, Options, accepts=..., min_size=..., check=..., text=...)`: the options model is
+the YAML contract (renderer-neutral: columns, flags, theme tokens), `check` validates the options
+against the query at load time (`need_metrics`, `need_compare`), `text` is the plain-text form for
+Telegram. Draw from `present(result)` cells (never recompute or reformat), mark small samples
+(`n=`), and never place text outside `area`: the layout test fails on overflow. Import the module
+at the bottom of `visuals/__init__.py`, add a case to `CASES` in `tests/test_visuals.py`, and
+refresh the schema and the manifest. `text_line` in `visuals/kpi.py` is the smallest real example.
+
+## Add a report
+
+A file in `reports/` (`hari-lari-report` finds it by id) with `params`, `filters` (`where`/`focus`
+on every page), `pages` (a 12-column grid, `slots` naming a component with `row`, `col`, `span`,
+`height`; `repeat` over any parameter or the `top` members of a dimension; `when_empty`),
+`outputs` (`pdf`, `png`, `telegram` text blocks, `xlsx` sheets), and optionally `schedule` and
+`deliver`. `hari-lari-report validate` checks it as a build would; `build --strict` fails when
+text runs over its slot. `tests/fixtures/reports/tracer.yml` is a small complete example, and
+`docs/components.md` ("Reports") has the rest.
+
+## Worked example 1: a metric and a component, YAML only
+
+Question: *which payment type are refunds concentrated in?* No metric gives refunds as a share of
+sales, so add one (`metrics.yml`, derived, so it is a ratio with `additivity: none`; refunds are
+bad, so `up_is_good: false`):
+
+```yaml
+refund_rate:
+  label: Refund rate
+  description: Refunds as a share of gross sales
+  format: pct
+  up_is_good: false
+  additivity: none
+  derived: refunds / nullif(gross_sales, 0)
+```
+
+Then the component (`components/refund_rate_by_payment_type.yml`):
+
+```yaml
+# yaml-language-server: $schema=../schema/component.schema.json
+id: refund_rate_by_payment_type
+title: Refund rate by payment type
+hint: Refunds as a share of gross sales
+params: { period: L6W }
+query:
+  model: fct_sales_lines
+  dimensions: [payment_type]
+  metrics: [gross_sales, refunds, refund_rate]
+  window: $period
+  compare: prior
+  totals: true
+visual: { type: table, bars: [refund_rate], deltas: { refund_rate: delta } }
+```
+
+The loop: `hari-lari-component run refund_rate_by_payment_type --sql` prints the result (one row
+per payment type and the total) and the SQL; `--png --watch` draws it. A component made with
+`new` has its snapshot stub already; otherwise create `tests/snapshots/<id>.yml` with `component`
+and `params`. Run `--update-snapshots -k refund_rate_by_payment_type`, read the snapshot and commit
+it. In a report slot of a 12-column page:
+
+```yaml
+      - { component: refund_rate_by_payment_type, row: 2, col: 1, span: 6 }
+```
+
+Finish with `hari-lari-report schema` and `hari-lari-component manifest`, because the new metric
+and component are part of the catalogue. `tests/test_authoring_examples.py` runs this example
+on the fixture.
+
+## Worked example 2: a transform in Python
+
+Question: *hide the items too small to matter on this table.* `sort_limit` keeps a number of rows,
+not a size, and `suppress_small_n` greys rows out instead. A transform that keeps the rows whose
+metric reaches a value, in `transforms/shape.py`:
+
+```python
+class MinValueOptions(Options):
+    metric: str  # a metric of the query
+    at_least: float
+
+
+def _requires(options: MinValueOptions, registry: Registry) -> Requirements:
+    return Requirements(metrics=(options.metric,))  # add the metric to the query if it lacks it
+
+
+@transform("min_value", MinValueOptions, shapes=("rows",), requires=_requires)
+def min_value(result: Result, options: MinValueOptions, ctx: TransformContext) -> Result:
+    """Keep the rows whose metric reaches a value; the Other and total rows stay."""
+    need_columns(result, "min_value", options.metric)
+    regular, _, _ = row_masks(result.df)
+    keep = ~regular | (result.df[options.metric] >= options.at_least)
+    return result.replace(result.df[keep].reset_index(drop=True))
+```
+
+It keeps the Other and total rows as they are, so a table still shows the whole total. Use it in a
+component like any transform, by name with options:
+
+```yaml
+id: sizeable_items
+title: Items with at least 40,000 IDR net sales
+params: { period: full }
+query:
+  model: fct_sales_lines
+  dimensions: [adjusted_item]
+  metrics: [net_sales]
+  window: $period
+transforms:
+  - min_value: { metric: net_sales, at_least: 40000 }
+visual: { type: table, bars: [net_sales] }
+```
+
+And test it by hand, on the fixture, in `tests/test_transforms.py`:
+
+```python
+def test_min_value_keeps_the_big_rows_and_the_total(ctx):
+    query = Query(
+        model="fct_sales_lines",
+        dimensions=["adjusted_item"],
+        metrics=["net_sales"],
+        window="full",
+        totals=True,
+    )
+    result = run_query(ctx.con, query, ctx.registry, ctx.calendar)
+    options = {"metric": "net_sales", "at_least": 40000}
+    kept = apply("min_value", options, result, TransformContext(ctx.registry))
+    items = kept.df[~kept.df["is_total"]]
+    assert 0 < len(items) < (~result.df["is_total"]).sum()
+    assert (items["net_sales"] >= 40000).all()
+    assert kept.df["is_total"].sum() == 1  # the total row is kept as it was
+```
+
+Then refresh the schema and the manifest (both list transforms). The component loader names a
+transform it does not know, so a typo fails at once. `tests/test_authoring_examples.py` runs this
+example against a copy of the registry, so the real one is not changed.
+
+## Before you finish
+
+- `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .` pass.
+- `hari-lari-component validate` and `hari-lari-report validate` pass (they also check that the
+  schemas and the manifest are current).
+- A new component has its snapshot, and its page in `hari-lari-report gallery` looks right
+  (no overflow, small samples grey, `n/a` where the comparison is not valid).
+- The design note `docs/components.md` changes only when a rule or contract changes.

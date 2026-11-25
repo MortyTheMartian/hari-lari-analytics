@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=../../../src/hari_lari_analytics/reporting/schema/report.schema.json
+id: tracer
+title: Tracer report
+description: "The two tracer components on one page, the exit of phase 8"
+kicker: Test café
+footer: Test café · fixture data
+params: { period: L14D }
+outputs:
+  pdf: true
+  png: [overview]
+  telegram: [summary]
+  xlsx: [category_contributive_aov, lines_export]
+text_blocks:
+  summary:
+    - text: "Tracer report, week {{ anchor_iso_week }}"
+    - component: full_history_kpis
+    - insights: { top: 3 }
+    - text: "PDF and Excel lines: {{ drive_url }}"
+deliver:
+  drive: { folder: "{{ anchor }} (week {{ anchor_iso_week }})", files: [pdf, xlsx] }
+  telegram:
+    - { to: group, photo: overview, document: pdf, text: summary }
+pages:
+  - id: overview
+    title: Overview
+    grid: { columns: 12, rows: [1, 4] }
+    slots:
+      - { component: full_history_kpis, row: 1, col: 1, span: 12 }
+      - { component: category_contributive_aov, row: 2, col: 1, span: 12 }

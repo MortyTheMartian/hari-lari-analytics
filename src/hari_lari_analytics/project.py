@@ -9,6 +9,7 @@ the file name and the key. Tests that need other settings use `use_project`.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
@@ -113,6 +114,22 @@ class Project(_Strict):
     min_n: int = Field(ge=1)
     anchor: Literal["yesterday", "today"]
     reference_date: date
+    # the Telegram chats a report may deliver to: a name per chat, and the Secret Manager secret
+    # that holds its chat id (never the id: this file is public). `admin` is required.
+    telegram_targets: dict[str, str]
+
+    @field_validator("telegram_targets")
+    @classmethod
+    def _targets(cls, targets: dict[str, str]) -> dict[str, str]:
+        bad = [n for n in targets if not re.fullmatch(r"[a-z][a-z0-9_]*", n)]
+        if bad:
+            raise ValueError(f"{', '.join(bad)}: a target name is snake_case")
+        secrets = [s for s in targets.values() if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", s)]
+        if secrets:
+            raise ValueError(f"{', '.join(secrets)}: not a Secret Manager secret name")
+        if "admin" not in targets:
+            raise ValueError("admin is required: failure alerts and notices go to that chat")
+        return targets
 
     @field_validator("timezone")
     @classmethod
@@ -137,11 +154,20 @@ class Project(_Strict):
     def now(self) -> datetime:
         return datetime.now(self.tz)
 
-    def default_anchor(self, now: datetime | None = None) -> date:
-        """The last day of a report when none is given (`anchor` in project.yml)."""
+    def today(self, now: datetime | None = None) -> date:
+        """The local date; `now` (default: the current time) without a time zone is local."""
         now = now or self.now()
         local = now.astimezone(self.tz) if now.tzinfo else now.replace(tzinfo=self.tz)
-        return local.date() - timedelta(days=1 if self.anchor == "yesterday" else 0)
+        return local.date()
+
+    def default_anchor(self, now: datetime | None = None) -> date:
+        """The last day of a report when none is given (`anchor` in project.yml)."""
+        return self.today(now) - timedelta(days=1 if self.anchor == "yesterday" else 0)
+
+    def telegram_env(self, target: str) -> str:
+        """The environment variable that holds a target's chat id in the job: its secret's name
+        in upper case with `_` for `-` (`telegram-chat-id` is `TELEGRAM_CHAT_ID`)."""
+        return self.telegram_targets[target].upper().replace("-", "_")
 
     def week_start(self, day: date) -> date:
         """The first day of the week that holds `day`."""

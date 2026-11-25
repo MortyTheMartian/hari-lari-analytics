@@ -1,96 +1,49 @@
 """PDF report: a cover page plus three pages per period (L14D, L6W, L3M), drawn with matplotlib.
 
-All colours come from a `Palette`; pass another one to `PdfReport` to re-theme the report.
+All colours come from a `Palette`; pass another one to `PdfReport` to re-theme the report. The
+palette, the number formats and the drawing building blocks live in `reporting/formats.py` and
+`reporting/visuals/` (plan 8.1), which the component report uses too.
 """
 
 from __future__ import annotations
 
 import textwrap
-from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
 import matplotlib
 import numpy as np
 import pandas as pd
-from matplotlib import font_manager
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
-from matplotlib.patches import FancyBboxPatch
-from matplotlib.text import Annotation, Text
+from matplotlib.text import Text
 from matplotlib.ticker import FuncFormatter
 from plottable import ColumnDefinition, Table
-from plottable.plots import bar
 
 from hari_lari_analytics.metrics import compute_metrics
 from hari_lari_analytics.periods import Period
 from hari_lari_analytics.project import project
 from hari_lari_analytics.report_data import GRAIN_NAME, GROWTH_NAME, Section, build_section
-
-FONTS = Path(__file__).parent / "fonts"
-for _font in FONTS.glob("*.ttf"):
-    font_manager.fontManager.addfont(str(_font))
-
-W, H = 11.69, 8.27  # A4 landscape, inches
-MAX_PAYMENT_TYPES = 4
-COVER_PNG_DPI = 150  # 1753 x 1240 px: sharp on a phone, far below Telegram's photo limits
-
-
-@dataclass(frozen=True)
-class Palette:
-    bg: str
-    card: str
-    edge: str
-    text: str
-    muted: str
-    primary: str  # bars and increases
-    secondary: str  # prior period, highlights
-    negative: str  # decreases
-    grid: str
-    series: tuple[str, ...]  # payment types
-
-
-DAYLIGHT = Palette(
-    bg="#f3f5f8",
-    card="#ffffff",
-    edge="#e3e7ed",
-    text="#0f172a",
-    muted="#64748b",
-    primary="#0e7c7b",
-    secondary="#ff6b4a",
-    negative="#d9480f",
-    grid="#e9edf2",
-    series=("#0e7c7b", "#ff6b4a", "#f2b84b", "#7c8db5"),
+from hari_lari_analytics.reporting.formats import (  # noqa: F401  (imported from here too)
+    change_text,
+    compact,
+    headline,
+    idr,
+    pct,
+    stamp,
+)
+from hari_lari_analytics.reporting.visuals import base
+from hari_lari_analytics.reporting.visuals.theme import (  # noqa: F401
+    DAYLIGHT,
+    FONTS,
+    H,
+    Palette,
+    Theme,
+    W,
 )
 
-
-def idr(value: float) -> str:
-    return project().numbers.number(value, project().currency.decimals)
-
-
-def pct(value: float, digits: int = 1) -> str:
-    return project().numbers.percent(value, digits)
-
-
-def compact(value: float) -> str:
-    return project().numbers.compact_number(value)
-
-
-def headline(value: float, is_idr: bool) -> str:
-    """Big KPI number: millions for large amounts, otherwise the full figure."""
-    decimals = project().currency.decimals if is_idr else 0
-    return project().numbers.headline(value, decimals, short=is_idr)
-
-
-def stamp(value) -> str:
-    return "–" if pd.isna(value) else f"{value:%d %b %H:%M}"
-
-
-def change_text(value: float, digits: int = 1) -> str:
-    if pd.isna(value):
-        return "n/a"
-    text = ">+999%" if value > 9.99 else project().numbers.percent(value, digits, signed=True)
-    return ("▲ " if value >= 0 else "▼ ") + text
+MAX_PAYMENT_TYPES = 4
+COVER_PNG_DPI = 150  # 1753 x 1240 px: sharp on a phone, far below Telegram's photo limits
 
 
 class PdfReport:
@@ -127,83 +80,16 @@ class PdfReport:
     # Building blocks
 
     def _rc(self) -> dict:
-        p = self.p
-        return {
-            "font.family": "Inter",
-            "text.color": p.text,
-            "axes.labelcolor": p.muted,
-            "xtick.color": p.muted,
-            "ytick.color": p.muted,
-            "axes.facecolor": "none",
-            "axes.edgecolor": p.grid,
-            "figure.facecolor": p.bg,
-            "savefig.facecolor": p.bg,
-            "axes.spines.top": False,
-            "axes.spines.right": False,
-            "axes.spines.left": False,
-            "xtick.major.size": 0,
-            "ytick.major.size": 0,
-            "xtick.labelsize": 8,
-            "ytick.labelsize": 8,
-            "pdf.fonttype": 42,
-        }
+        return Theme(palette=self.p).rc()
 
     def _color(self, value: float, up_is_good: bool = True) -> str:
-        if pd.isna(value):
-            return self.p.muted
-        return self.p.primary if (value >= 0) == up_is_good else self.p.negative
+        return base.change_color(self.p, value, up_is_good)
 
     def _card(self, fig: Figure, x, y, w, h, title: str = "", hint: str = "") -> None:
-        fig.patches.append(
-            FancyBboxPatch(
-                (x, y),
-                w,
-                h,
-                boxstyle="round,pad=0,rounding_size=0.008",
-                mutation_aspect=W / H,
-                transform=fig.transFigure,
-                facecolor=self.p.card,
-                edgecolor=self.p.edge,
-                linewidth=0.8,
-                zorder=-10,
-            )
-        )
-        if title:
-            fig.text(x + 0.014, y + h - 0.032, title, fontsize=10, fontweight="semibold")
-        if hint:
-            fig.text(x + 0.014, y + h - 0.055, hint, fontsize=7.5, color=self.p.muted)
+        base.card(fig, self.p, x, y, w, h, title, hint)
 
     def _chips(self, fig: Figure, chips: list[tuple[str, str]]) -> None:
-        """Pill-shaped labels, right-aligned in the header; style is "fill", "line" or "muted"."""
-        size, pad = 8, 0.75
-        anchor = None
-        for text, style in reversed(chips):
-            color = {"fill": self.p.card, "line": self.p.text, "muted": self.p.muted}[style]
-            kw = {
-                "fontsize": size,
-                "color": color,
-                "fontweight": "semibold" if style == "fill" else "medium",
-                "ha": "right",
-                "va": "center",
-                "bbox": {
-                    "boxstyle": f"round,pad={pad},rounding_size={pad + 0.5}",
-                    "facecolor": self.p.primary if style == "fill" else self.p.card,
-                    "edgecolor": self.p.primary if style == "fill" else self.p.edge,
-                    "linewidth": 0.8,
-                },
-            }
-            if anchor is None:
-                anchor = fig.text(0.965, 0.912, text, **kw)
-            else:
-                anchor = Annotation(
-                    text,
-                    xy=(0, 0.5),
-                    xycoords=anchor,
-                    xytext=(-(2 * pad * size + 8), 0),
-                    textcoords="offset points",
-                    **kw,
-                )
-                fig.add_artist(anchor)
+        base.chips(fig, self.p, chips)
 
     def _page(self, kicker: str, title: str, chips: list[tuple[str, str]], note="") -> Figure:
         fig = Figure(figsize=(W, H))
@@ -234,68 +120,16 @@ class PdfReport:
         return self._page("Hari Lari Cafe", title, [*chips, ("no comparison", "muted")], note)
 
     def _after(self, fig: Figure, anchor: Text, text: str, gap: float = 4, **kw) -> None:
-        """Place `text` right after `anchor`, using its rendered extent."""
-        fig.add_artist(
-            Annotation(
-                text,
-                xy=(1, 0),
-                xycoords=anchor,
-                xytext=(gap, 0),
-                textcoords="offset points",
-                va="bottom",
-                **kw,
-            )
-        )
+        base.after(fig, anchor, text, gap, **kw)
 
     def _sparkline(self, fig: Figure, rect, values: np.ndarray) -> None:
-        ax = fig.add_axes(rect)
-        ax.fill_between(
-            range(len(values)), values, values.min() * 0.9, color=self.p.primary, alpha=0.14, lw=0
-        )
-        ax.plot(values, color=self.p.primary, lw=1.2 if len(values) > 31 else 1.4)
-        ax.scatter([len(values) - 1], [values[-1]], s=12, color=self.p.secondary, zorder=3)
-        ax.axis("off")
+        base.sparkline(fig, self.p, rect, values)
 
     def _table(self, ax, df: pd.DataFrame, defs: list[ColumnDefinition], index: str, size=8.0):
-        ax.set_axis_off()
-        table = Table(
-            df,
-            ax=ax,
-            index_col=index,
-            column_definitions=defs,
-            textprops={"fontsize": size, "color": self.p.text, "fontfamily": "Inter"},
-            row_dividers=True,
-            row_divider_kw={"linewidth": 0.5, "color": self.p.grid},
-            col_label_divider_kw={"linewidth": 0.8, "color": self.p.muted},
-            col_label_cell_kw={"facecolor": self.p.card},
-            cell_kw={"facecolor": self.p.card, "edgecolor": "none"},
-        )
-        for cell in table.col_label_row.cells:
-            cell.text.set_color(self.p.muted)
-            cell.text.set_fontsize(6.8)
-            cell.text.set_fontweight("semibold")
-        for cell in getattr(table, "col_group_cells", {}).values():
-            cell.text.set_color(self.p.text)
-            cell.text.set_fontsize(7)
-            cell.text.set_fontweight("semibold")
-        return table
+        return base.table(ax, self.p, df, defs, index, size)
 
     def _bar_column(self, name: str, title: str, vmax: float, width: float) -> ColumnDefinition:
-        return ColumnDefinition(
-            name,
-            title=title,
-            width=width,
-            plot_fn=bar,
-            plot_kw={
-                "xlim": (0, (vmax if vmax > 0 else 1) * 2.1),
-                "color": self.p.primary,
-                "annotate": True,
-                "height": 0.42,
-                "lw": 0,
-                "formatter": pct,
-                "textprops": {"fontsize": 7.5, "color": self.p.text},
-            },
-        )
+        return base.bar_column(self.p, name, title, vmax, width)
 
     # Pages
 

@@ -3,16 +3,21 @@
 ```text
 hari-lari-component run <id> [--period L6W] [--param name=value] [--anchor YYYY-MM-DD]
                              [--run data/extract] [--sql] [--csv]
+                             [--png [FILE] [--watch] [--span 12] [--height 3]]
 hari-lari-component validate
 hari-lari-component new <id> [--from <id>] [--param name=value]
+hari-lari-component manifest [--out FILE] [--check]
 hari-lari-component schema [--check]
 ```
 
 `run` builds the models of an extraction run (the latest in `--run`), runs the component with its
 facets and transforms, and prints each facet's result; `--sql` adds the SQL with its parameters,
-`--csv` prints CSV instead of a table. `validate` loads every component as strictly as a report
-would and checks the JSON Schema; `new` copies a component (or a minimal one) and writes the stub
-of its snapshot; `schema` writes the JSON Schema of the component files.
+`--csv` prints CSV instead of a table. `--png` draws the component into a PNG at its default slot
+size, as a report page would (plan 8.6), and `--watch` draws it again on every save. `validate`
+loads every component and report as strictly as a build would and checks the JSON Schemas; `new`
+copies a component (or a minimal one) and writes the stub of its snapshot; `manifest` writes the
+catalogue of the semantic layer, `semantic_manifest.json` (plan 8.10); `schema` writes the
+JSON Schemas of the component and report files.
 """
 
 from __future__ import annotations
@@ -21,7 +26,7 @@ import argparse
 import difflib
 import re
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import date
 from pathlib import Path
 from typing import Any, TextIO
@@ -31,6 +36,8 @@ import pandas as pd
 import yaml
 
 from hari_lari_analytics.load import InputError
+from hari_lari_analytics.reporting import components, manifest, preview, report_cli
+from hari_lari_analytics.reporting import reports as reports_module
 from hari_lari_analytics.reporting.components import (
     NAME,
     SCHEMA_REF,
@@ -38,15 +45,15 @@ from hari_lari_analytics.reporting.components import (
     ComponentError,
     components_dir,
     load_component,
-    schema_path,
-    schema_text,
-    write_schema,
 )
 from hari_lari_analytics.reporting.db import open_run
 from hari_lari_analytics.reporting.facets import Facet, run_facets
 from hari_lari_analytics.reporting.queries import QueryContext
+from hari_lari_analytics.reporting.reports import ReportError, load_report, reports_dir
 from hari_lari_analytics.reporting.result import Result
 from hari_lari_analytics.reporting.snapshots import snapshot_text
+
+PREVIEW_DIR = Path("data/output/preview")
 
 TEMPLATE = """{schema_ref}
 id: {id}
@@ -60,7 +67,6 @@ query:
 visual: {{ type: kpi_card }}
 """
 _ID_LINE = re.compile(r"^id:.*$", re.MULTILINE)
-_TEXT = jinja2.Environment(undefined=jinja2.StrictUndefined)
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -93,6 +99,29 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     run.add_argument("--config", type=Path, default=Path("config"), help="the config CSV folder")
     run.add_argument("--sql", action="store_true", help="also print the SQL and its parameters")
     run.add_argument("--csv", action="store_true", help="print CSV instead of a table")
+    run.add_argument(
+        "--png",
+        nargs="?",
+        const="",
+        metavar="FILE",
+        help=f"draw the component into a PNG (default: {PREVIEW_DIR}/<id>.png) instead of "
+        "printing its result",
+    )
+    run.add_argument(
+        "--watch", action="store_true", help="with --png: draw again whenever the file changes"
+    )
+    run.add_argument(
+        "--span",
+        type=int,
+        default=preview.DEFAULT_SPAN,
+        help="with --png: the columns of the slot, 1 to 12 (default 12)",
+    )
+    run.add_argument(
+        "--height",
+        type=int,
+        default=preview.DEFAULT_HEIGHT,
+        help="with --png: the height of the slot in sixths of the page body (default 3)",
+    )
 
     commands.add_parser("validate", help="check every component and the JSON Schema")
 
@@ -105,6 +134,18 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         type=Path,
         default=Path("tests/snapshots"),
         help="the folder of the snapshot files",
+    )
+
+    manifest = commands.add_parser(
+        "manifest", help="write semantic_manifest.json, the catalogue of the semantic layer"
+    )
+    manifest.add_argument(
+        "--out",
+        type=Path,
+        help="the file to write or check (default: the packaged semantic_manifest.json)",
+    )
+    manifest.add_argument(
+        "--check", action="store_true", help="only check that the file is up to date"
     )
 
     schema = commands.add_parser("schema", help="write the JSON Schema of the component files")
@@ -150,9 +191,7 @@ def find_component(directory: Path, component_id: str) -> Component:
 
 def render_text(template: str | None, params: Mapping, result: Result, facet: Facet) -> str:
     """A title or hint as the builder will render it; an undefined name is an error."""
-    if not template:
-        return ""
-    return _TEXT.from_string(template).render(**params, meta=result.meta, facet=facet)
+    return components.render_text(template, params, result.meta, facet)
 
 
 def _number(value: float) -> str:
@@ -241,6 +280,8 @@ def cmd_run(args: argparse.Namespace, directory: Path, out: TextIO, err: TextIO)
         names = ", ".join(f"${p}" for p in ignored)
         print(f"Note: {component.id} does not use {names}", file=err)
     component.bind(params)  # fail on a parameter before building the models
+    if args.watch and args.png is None:
+        raise ComponentError("--watch draws a PNG: add --png")
     db = open_run(args.run, args.config, args.anchor)
     ctx = QueryContext.create(db.con, run=db.run, checks=db.checks)
     print(
@@ -248,11 +289,40 @@ def cmd_run(args: argparse.Namespace, directory: Path, out: TextIO, err: TextIO)
         f"{len(db.checks.warnings)} data-check warning(s)",
         file=err,
     )
+    if args.png is not None:
+        return cmd_preview(args, directory, ctx, params, out, err)
     facets = run_facets(component, ctx, params)
     if not facets:
         print("No sales in the component's window: nothing to show", file=err)
         return 0
     print_facets(component, params, facets, sql=args.sql, csv=args.csv, out=out, err=err)
+    return 0
+
+
+def cmd_preview(
+    args: argparse.Namespace,
+    directory: Path,
+    ctx: QueryContext,
+    params: dict[str, Any],
+    out: TextIO,
+    err: TextIO,
+    watch: Callable[..., None] = preview.watch,
+) -> int:
+    """`run --png`: draw the component into its slot (again on every save with `--watch`)."""
+    path = Path(args.png) if args.png else PREVIEW_DIR / f"{args.id}.png"
+
+    def draw() -> None:
+        component = find_component(directory, args.id)  # read again: the file may have changed
+        overflows = preview.render_preview(component, ctx, params, path, args.span, args.height)
+        for found in overflows:
+            print(f"Warning: {found.describe()}", file=err)
+        print(f"Wrote {path}", file=out)
+
+    if args.watch:
+        print(f"Watching {directory / (args.id + '.yml')}, Ctrl-C to stop", file=err)
+        watch(directory / f"{args.id}.yml", draw, err)
+    else:
+        draw()
     return 0
 
 
@@ -262,6 +332,7 @@ def cmd_run(args: argparse.Namespace, directory: Path, out: TextIO, err: TextIO)
 def cmd_validate(directory: Path, out: TextIO) -> int:
     paths = sorted(directory.glob("*.yml"))
     problems = 0
+    loaded: dict[str, Component] = {}
     for path in paths:
         try:
             component = load_component(path)
@@ -269,6 +340,7 @@ def cmd_validate(directory: Path, out: TextIO) -> int:
             problems += 1
             print(f"FAIL {error}", file=out)
             continue
+        loaded[component.id] = component
         notes = []
         if not path.read_text().startswith(SCHEMA_REF):
             notes.append(f"the first line should be `{SCHEMA_REF}`")
@@ -276,12 +348,30 @@ def cmd_validate(directory: Path, out: TextIO) -> int:
             names = ", ".join(f"${p}" for p in sorted(component.unbound))
             notes.append(f"checked without {names}, which a report binds")
         print(f"ok   {component.id}" + (f" ({'; '.join(notes)})" if notes else ""), file=out)
-    if schema_path().read_text() != schema_text():
-        problems += 1
-        print("FAIL schema/component.schema.json is out of date: run hari-lari-component schema",
-              file=out)  # fmt: skip
-    reports = "no reports yet (the report loader comes with plan 8.5)"
-    print(f"{len(paths)} component(s), {problems} problem(s); {reports}", file=out)
+    for _, path, text in report_cli.schema_checks():
+        if not path.exists() or path.read_text() != text:
+            problems += 1
+            print(f"FAIL schema/{path.name} is out of date: run hari-lari-component schema",
+                  file=out)  # fmt: skip
+    if directory == components_dir() and len(loaded) == len(paths):
+        path = manifest.manifest_path()
+        text = manifest.manifest_text(loaded, load_reports_of(loaded))
+        if not path.exists() or path.read_text() != text:
+            problems += 1
+            print(f"FAIL {path.name} is out of date: run hari-lari-component manifest", file=out)
+    report_paths = sorted(reports_dir().glob("*.yml")) if reports_dir().is_dir() else []
+    for path in report_paths:
+        try:
+            report = load_report(path, loaded)
+        except ReportError as error:
+            problems += 1
+            print(f"FAIL {error}", file=out)
+        else:
+            print(f"ok   report {report.id}", file=out)
+    print(
+        f"{len(paths)} component(s), {len(report_paths)} report(s), {problems} problem(s)",
+        file=out,
+    )
     return 1 if problems else 0
 
 
@@ -344,13 +434,40 @@ def cmd_new(args: argparse.Namespace, directory: Path, out: TextIO) -> int:
 
 
 def cmd_schema(check: bool, out: TextIO) -> int:
-    path = schema_path()
+    """Write (or with `check` compare) the JSON Schemas of the component and report files."""
+    checks = report_cli.schema_checks()
     if check:
-        current = path.exists() and path.read_text() == schema_text()
-        print(f"{path} is {'up to date' if current else 'out of date'}", file=out)
-        return 0 if current else 1
-    print(f"Wrote {write_schema(path)}", file=out)
+        stale = [p for _, p, text in checks if not p.exists() or p.read_text() != text]
+        for _, path, _ in checks:
+            print(f"{path} is {'out of date' if path in stale else 'up to date'}", file=out)
+        return 1 if stale else 0
+    for _, path, text in checks:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        print(f"Wrote {path}", file=out)
     return 0
+
+
+# --- manifest -------------------------------------------------------------------------------------
+
+
+def cmd_manifest(args: argparse.Namespace, directory: Path, out: TextIO) -> int:
+    """Write (or with `--check` compare) the semantic manifest of the components in
+    `directory` (default: the packaged ones)."""
+    loaded = components.load_components(directory)
+    text = manifest.manifest_text(loaded, load_reports_of(loaded))
+    path = args.out or manifest.manifest_path()
+    if args.check:
+        stale = not path.exists() or path.read_text() != text
+        print(f"{path} is {'out of date' if stale else 'up to date'}", file=out)
+        return 1 if stale else 0
+    manifest.write_manifest(path, text)
+    print(f"Wrote {path}", file=out)
+    return 0
+
+
+def load_reports_of(loaded: Mapping[str, Component]) -> dict:
+    return reports_module.load_reports(loaded)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -364,6 +481,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_validate(directory, out)
         if args.command == "new":
             return cmd_new(args, directory, out)
+        if args.command == "manifest":
+            return cmd_manifest(args, directory, out)
         return cmd_schema(args.check, out)
     except (ValueError, InputError) as error:
         print(f"Error: {error}", file=err)

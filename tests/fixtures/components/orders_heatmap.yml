@@ -11,4 +11,4 @@ query:
 transforms:
   - per_trading_day
   - pivot: { rows: weekday, columns: hour_of_day }
-visual: { type: heatmap, format: decimal }
+visual: { type: heatmap }

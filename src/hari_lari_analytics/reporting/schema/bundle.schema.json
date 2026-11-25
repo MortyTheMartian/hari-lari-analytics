@@ -1,0 +1,1194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hari-lari.example/schema/bundle.schema.json",
+  "$defs": {
+    "BucketInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "ordinal": {
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "start": {
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "title": "End",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ordinal",
+        "start",
+        "end"
+      ],
+      "title": "BucketInfo",
+      "type": "object"
+    },
+    "Cell": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "the raw value, to draw with; null when missing",
+          "title": "Value"
+        },
+        "text": {
+          "description": "the display string: IDR, compact, percent, `n/a` or `\u2013`",
+          "title": "Text",
+          "type": "string"
+        },
+        "compact": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "the short form, when it differs",
+          "title": "Compact"
+        },
+        "tone": {
+          "anyOf": [
+            {
+              "enum": [
+                "good",
+                "bad",
+                "neutral"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "the tone of a change, delta or growth; absent for a value",
+          "title": "Tone"
+        },
+        "small": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "below the sample-size rule: draw it grey, never as a signal",
+          "title": "Small"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "the count of the rule, for `n=12`",
+          "title": "N"
+        }
+      },
+      "required": [
+        "value",
+        "text"
+      ],
+      "title": "Cell",
+      "type": "object"
+    },
+    "Chip": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "style": {
+          "enum": [
+            "fill",
+            "line",
+            "muted"
+          ],
+          "title": "Style",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "style"
+      ],
+      "title": "Chip",
+      "type": "object"
+    },
+    "Column": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "dimension",
+            "value",
+            "prior",
+            "change",
+            "delta",
+            "growth",
+            "n",
+            "other"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "metric": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metric"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "enum": [
+                "idr",
+                "idr_compact",
+                "count",
+                "decimal",
+                "pct",
+                "timestamp"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "label"
+      ],
+      "title": "Column",
+      "type": "object"
+    },
+    "DecompositionInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "identity": {
+          "title": "Identity",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "kpi": {
+          "title": "Kpi",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identity",
+        "kind",
+        "kpi"
+      ],
+      "title": "DecompositionInfo",
+      "type": "object"
+    },
+    "Event": {
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "title": "Date",
+          "type": "string"
+        },
+        "kind": {
+          "description": "holiday, closure or promotion",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "date",
+        "kind",
+        "name"
+      ],
+      "title": "Event",
+      "type": "object"
+    },
+    "FacetRef": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Key"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label"
+        },
+        "metric": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Metric"
+        },
+        "result": {
+          "description": "the index in the slot's `results`",
+          "title": "Result",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "metric",
+        "result"
+      ],
+      "title": "FacetRef",
+      "type": "object"
+    },
+    "Filter": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "where",
+            "focus"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "dimension": {
+          "title": "Dimension",
+          "type": "string"
+        },
+        "origin": {
+          "enum": [
+            "report",
+            "page"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value"
+        }
+      },
+      "required": [
+        "kind",
+        "dimension",
+        "origin",
+        "value"
+      ],
+      "title": "Filter",
+      "type": "object"
+    },
+    "Grid": {
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "const": 12,
+          "title": "Columns",
+          "type": "integer"
+        },
+        "rows": {
+          "description": "the row heights, in parts",
+          "items": {
+            "type": "number"
+          },
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "columns",
+        "rows"
+      ],
+      "title": "Grid",
+      "type": "object"
+    },
+    "Insight": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "tone": {
+          "enum": [
+            "good",
+            "bad",
+            "neutral"
+          ],
+          "title": "Tone",
+          "type": "string"
+        },
+        "rule": {
+          "title": "Rule",
+          "type": "string"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "component": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Component"
+        },
+        "facet": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Facet"
+        }
+      },
+      "required": [
+        "text",
+        "tone",
+        "rule",
+        "score"
+      ],
+      "title": "Insight",
+      "type": "object"
+    },
+    "MetricInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "idr",
+            "idr_compact",
+            "count",
+            "decimal",
+            "pct",
+            "timestamp"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "up_is_good": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null: neutral, the change is not coloured",
+          "title": "Up Is Good"
+        }
+      },
+      "required": [
+        "label",
+        "description",
+        "format",
+        "unit",
+        "up_is_good"
+      ],
+      "title": "MetricInfo",
+      "type": "object"
+    },
+    "Page": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "base": {
+          "description": "the page's id in the YAML; a repeat has a longer `id`",
+          "title": "Base",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        },
+        "period": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Period"
+        },
+        "chips": {
+          "items": {
+            "$ref": "#/$defs/Chip"
+          },
+          "title": "Chips",
+          "type": "array"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        },
+        "empty_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "the `when_empty` message: the page has no slots and shows only this",
+          "title": "Empty Message"
+        },
+        "grid": {
+          "$ref": "#/$defs/Grid"
+        },
+        "slots": {
+          "items": {
+            "$ref": "#/$defs/Slot"
+          },
+          "title": "Slots",
+          "type": "array"
+        },
+        "insights": {
+          "items": {
+            "$ref": "#/$defs/Insight"
+          },
+          "title": "Insights",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "base",
+        "title",
+        "params",
+        "period",
+        "chips",
+        "note",
+        "empty_message",
+        "grid",
+        "slots",
+        "insights"
+      ],
+      "title": "Page",
+      "type": "object"
+    },
+    "Position": {
+      "additionalProperties": false,
+      "properties": {
+        "row": {
+          "title": "Row",
+          "type": "integer"
+        },
+        "col": {
+          "title": "Col",
+          "type": "integer"
+        },
+        "span": {
+          "title": "Span",
+          "type": "integer"
+        },
+        "height": {
+          "title": "Height",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "row",
+        "col",
+        "span",
+        "height"
+      ],
+      "title": "Position",
+      "type": "object"
+    },
+    "ReportInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "kicker": {
+          "title": "Kicker",
+          "type": "string"
+        },
+        "footer": {
+          "title": "Footer",
+          "type": "string"
+        },
+        "anchor": {
+          "description": "the last day of the report, ISO date",
+          "title": "Anchor",
+          "type": "string"
+        },
+        "generated": {
+          "description": "when it was built, ISO date and time, local clock",
+          "title": "Generated",
+          "type": "string"
+        },
+        "run": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "the extraction run it was built from",
+          "title": "Run"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "kicker",
+        "footer",
+        "anchor",
+        "generated",
+        "run",
+        "params"
+      ],
+      "title": "ReportInfo",
+      "type": "object"
+    },
+    "Result": {
+      "additionalProperties": false,
+      "properties": {
+        "shape": {
+          "enum": [
+            "single",
+            "rows",
+            "series",
+            "matrix",
+            "decomposition"
+          ],
+          "title": "Shape",
+          "type": "string"
+        },
+        "empty": {
+          "title": "Empty",
+          "type": "boolean"
+        },
+        "window": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResultWindow"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "absent for a result of a Python source"
+        },
+        "trading_days": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trading Days"
+        },
+        "prior_trading_days": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prior Trading Days"
+        },
+        "grain": {
+          "anyOf": [
+            {
+              "enum": [
+                "day",
+                "week",
+                "month",
+                "block_7d"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grain"
+        },
+        "dimensions": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "id to label",
+          "title": "Dimensions"
+        },
+        "metrics": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/MetricInfo"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metrics"
+        },
+        "events": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Event"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Events"
+        },
+        "buckets": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/BucketInfo"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Buckets"
+        },
+        "decomposition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecompositionInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/Column"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/Row"
+          },
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "shape",
+        "empty",
+        "columns",
+        "rows"
+      ],
+      "title": "Result",
+      "type": "object"
+    },
+    "ResultWindow": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "description": "the window as written: L14D, WTD, full, ...",
+          "title": "Key",
+          "type": "string"
+        },
+        "current": {
+          "$ref": "#/$defs/WindowRange"
+        },
+        "compare": {
+          "enum": [
+            "prior",
+            "last_year",
+            "none"
+          ],
+          "title": "Compare",
+          "type": "string"
+        },
+        "compare_ok": {
+          "description": "false: the comparison is not valid; show `n/a`",
+          "title": "Compare Ok",
+          "type": "boolean"
+        },
+        "compare_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Compare Label"
+        },
+        "comparison": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WindowRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "key",
+        "current",
+        "compare",
+        "compare_ok"
+      ],
+      "title": "ResultWindow",
+      "type": "object"
+    },
+    "Row": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "row",
+            "total",
+            "other"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "small": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Small"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "cells": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Cell"
+          },
+          "description": "by column id",
+          "title": "Cells",
+          "type": "object"
+        }
+      },
+      "required": [
+        "label",
+        "kind",
+        "cells"
+      ],
+      "title": "Row",
+      "type": "object"
+    },
+    "Slot": {
+      "additionalProperties": false,
+      "properties": {
+        "component": {
+          "title": "Component",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "hint": {
+          "title": "Hint",
+          "type": "string"
+        },
+        "visual": {
+          "$ref": "#/$defs/VisualInfo"
+        },
+        "layout": {
+          "description": "how the facets are laid out: row, column or grid(RxC)",
+          "title": "Layout",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Position"
+        },
+        "card": {
+          "description": "false: the visual draws its own card",
+          "title": "Card",
+          "type": "boolean"
+        },
+        "filters": {
+          "items": {
+            "$ref": "#/$defs/Filter"
+          },
+          "title": "Filters",
+          "type": "array"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/$defs/Result"
+          },
+          "title": "Results",
+          "type": "array"
+        },
+        "facets": {
+          "items": {
+            "$ref": "#/$defs/FacetRef"
+          },
+          "title": "Facets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "component",
+        "title",
+        "hint",
+        "visual",
+        "layout",
+        "position",
+        "card",
+        "filters",
+        "results",
+        "facets"
+      ],
+      "title": "Slot",
+      "type": "object"
+    },
+    "ThemeInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "font": {
+          "title": "Font",
+          "type": "string"
+        },
+        "colors": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "every colour token as #rrggbb",
+          "propertyNames": {
+            "enum": [
+              "bg",
+              "card",
+              "edge",
+              "grid",
+              "text",
+              "muted",
+              "accent",
+              "highlight",
+              "prior",
+              "good",
+              "bad",
+              "holiday",
+              "closure",
+              "promotion"
+            ]
+          },
+          "title": "Colors",
+          "type": "object"
+        },
+        "series": {
+          "description": "the colours of the series, such as payment types",
+          "items": {
+            "type": "string"
+          },
+          "title": "Series",
+          "type": "array"
+        }
+      },
+      "required": [
+        "font",
+        "colors",
+        "series"
+      ],
+      "title": "ThemeInfo",
+      "type": "object"
+    },
+    "VisualInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "options": {
+          "additionalProperties": true,
+          "description": "what to show, as in the component's YAML",
+          "title": "Options",
+          "type": "object"
+        }
+      },
+      "required": [
+        "type",
+        "options"
+      ],
+      "title": "VisualInfo",
+      "type": "object"
+    },
+    "WindowRange": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "description": "first day, ISO date",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "description": "last day, ISO date, inclusive",
+          "title": "End",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "days": {
+          "title": "Days",
+          "type": "integer"
+        },
+        "trading_days": {
+          "title": "Trading Days",
+          "type": "integer"
+        },
+        "grain": {
+          "enum": [
+            "day",
+            "week",
+            "month",
+            "block_7d"
+          ],
+          "title": "Grain",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "title",
+        "label",
+        "days",
+        "trading_days",
+        "grain"
+      ],
+      "title": "WindowRange",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "format_version": {
+      "const": 1,
+      "title": "Format Version",
+      "type": "integer"
+    },
+    "report": {
+      "$ref": "#/$defs/ReportInfo"
+    },
+    "theme": {
+      "$ref": "#/$defs/ThemeInfo"
+    },
+    "pages": {
+      "items": {
+        "$ref": "#/$defs/Page"
+      },
+      "minItems": 1,
+      "title": "Pages",
+      "type": "array"
+    },
+    "texts": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Texts",
+      "type": "object"
+    }
+  },
+  "required": [
+    "format_version",
+    "report",
+    "theme",
+    "pages",
+    "texts"
+  ],
+  "title": "Hari Lari report bundle (bundle.json)",
+  "type": "object",
+  "description": "The schema of `bundle.json` (plan 8.9): the contract between a report build and any renderer."
+}
