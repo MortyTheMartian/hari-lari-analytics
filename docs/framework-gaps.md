@@ -125,3 +125,22 @@ Differences that are improvements, not gaps: today's cleaning notes (unmatched i
 categories) are data-check warnings now, worded by the checks; small samples are drawn pale
 (hours with few orders, categories in few orders); the line "Metric definitions: see
 METRICS.md" is not repeated on every cover.
+
+## The weekly report (9.4, 25 Nov 2026)
+
+`reports/weekly.yml` has today's ten pages in today's order (the cover, then overview,
+categories and details for L14D, L6W and L3M, an empty period as one "Overview" page) and the
+caption `weekly_caption`. `tests/test_port.py` checks the page titles, chips, notes, footer, the
+empty page and the caption against `report_pdf.py` and `deliver/caption.py`, on the fixture and
+the real run. What it needed:
+
+| Gap | Status | How |
+| --- | --- | --- |
+| W1. The comparison chip said "vs prior 14 days" where today's names the days | closed | The chip shows the comparison window's days ("vs 26 Oct 2026 – 08 Nov 2026"). |
+| W2. A text line could not write the caption's week ("Week 47 · 16–22 Nov 2026", and the week before) | closed | `anchor_week` in the template context and the filter `days_ending(n, before=0)`; `date_range` moved from `deliver/caption.py` to `formats.py`. |
+| W3. The details page does not fit today's layout (hours, payments and discounts stacked on the right) with the visuals' minimum sizes | accepted | Two rows: top items and hours, then discounts and payments. |
+| W4. The categories page loses today's paragraph on reading a change in contributive AOV: a page cannot hold a static text | open | A `text` slot (a template, no component) would carry it; the formula is in the card's hint. |
+
+The caption has today's numbers; its form is the framework's: "Net Sales: 13,752,000 IDR
+(+3.9% vs prior 7 days)" for "Net sales: IDR 13,752,000 (▲ 3.9%)", a blank line between its
+parts, and under the sample-size rule (fewer than 30 orders in the week) no change but "(n=…)".

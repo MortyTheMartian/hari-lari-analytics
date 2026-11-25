@@ -1,0 +1,20 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: week_kpis
+params: {}
+facets:
+- key: net_sales
+  label: Net Sales
+  metric: net_sales
+  shape: single
+  csv: |
+    is_total,net_sales,orders,aov,prior_net_sales,net_sales_change,net_sales_delta,prior_orders,orders_change,orders_delta,prior_aov,aov_change,aov_delta,n_orders,prior_n_orders
+    True,115000,2,57500,,,,,,,,,,2,
+- key: orders
+  label: Orders
+  metric: orders
+  same_result_as: net_sales
+- key: aov
+  label: Avg Order Value
+  metric: aov
+  same_result_as: net_sales

@@ -9,16 +9,9 @@ import pandas as pd
 from hari_lari_analytics.metrics import compute_metrics
 from hari_lari_analytics.project import project
 from hari_lari_analytics.report_data import ratio_change
+from hari_lari_analytics.reporting.formats import date_range
 
 UP, DOWN = "▲", "▼"
-
-
-def date_range(start: date, end: date) -> str:
-    if start.year != end.year:
-        return f"{start:%-d %b %Y} – {end:%-d %b %Y}"
-    if start.month != end.month:
-        return f"{start:%-d %b} – {end:%-d %b %Y}"
-    return f"{start.day}–{end:%-d %b %Y}"
 
 
 def _idr(value: float) -> str:

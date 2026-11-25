@@ -6,9 +6,9 @@ text blocks) followed by `write_outputs` (the PDF, the PNG pages, the Telegram t
 workbook and the JSON bundle, each in `outputs/`). Delivering the files is a separate step, so
 building never sends anything.
 
-The page chrome comes from the report context: the header chips show the page's window and its
-comparison (and the filters in force), and the note says when the comparison starts before the
-first sale.
+The page chrome comes from the report context: the header chips show the page's window and the
+days of its comparison (and the filters in force), and the note says when the comparison starts
+before the first sale.
 """
 
 from __future__ import annotations
@@ -180,7 +180,7 @@ def page_chrome(ctx: QueryContext, page: ReportPage) -> tuple[list[Chip], str]:
         chips += [(window.current.title, "fill"), (window.current.label, "line")]
         if window.compare != "none":
             if window.compare_ok:
-                chips.append((f"vs {window.compare_label}", "muted"))
+                chips.append((f"vs {window.comparison.label}", "muted"))
             else:
                 chips.append(("no comparison", "muted"))
                 first = ctx.calendar.first_sale

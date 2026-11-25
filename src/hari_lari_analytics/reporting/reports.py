@@ -49,6 +49,7 @@ from hari_lari_analytics.reporting.components import (
     ComponentError,
     deep_merge,
 )
+from hari_lari_analytics.reporting.formats import days_ending
 from hari_lari_analytics.reporting.layouts import GridSpec, LayoutError, Rect, SlotSpec
 from hari_lari_analytics.reporting.registry import Registry, RegistryError, default_registry
 from hari_lari_analytics.reporting.windows import parse_window
@@ -59,7 +60,7 @@ TELEGRAM_MESSAGE_LIMIT = 4096
 DRIVE_PLACEHOLDER = "{{ drive_url }}"  # in a text block until the deliver step knows the link
 DRIVE_URL_LENGTH = 100  # what a Drive link counts as when a text block is measured
 PLACEHOLDER = "§"  # the value a repeat over `top` gets in a check without data
-REPORT_VARIABLES = ("anchor", "anchor_iso_week", "report")  # besides the parameters
+REPORT_VARIABLES = ("anchor", "anchor_iso_week", "anchor_week", "report")  # besides the parameters
 
 ParamValue = bool | int | float | str | list[bool | int | float | str]
 FilterValue = bool | int | float | str | None | list[bool | int | float | str | None]
@@ -531,6 +532,7 @@ def slug(value: Any) -> str:
 
 
 _TEMPLATES = jinja2.Environment(undefined=jinja2.StrictUndefined)
+_TEMPLATES.filters["days_ending"] = days_ending  # {{ anchor | days_ending(7) }}: 16–22 Nov 2026
 
 
 def context(report: Report, anchor: date, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -540,6 +542,7 @@ def context(report: Report, anchor: date, params: Mapping[str, Any]) -> dict[str
         **params,
         "anchor": anchor,
         "anchor_iso_week": f"{iso.year}-W{iso.week:02d}",
+        "anchor_week": iso.week,
         "report": report.spec.title,
     }
 

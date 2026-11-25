@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=../schema/report.schema.json
+id: weekly
+title: Sales report
+description: >-
+  The weekly sales report of today's job, as components: the cover with the full history and
+  the three periods, then per period (14 days, 6 weeks, 3 months) the overview, the categories
+  and the items, hours and payments. The schedule is added at the cut-over (plan 9.7).
+kicker: Hari Lari Cafe
+footer: Hari Lari Cafe · Moka POS sales
+outputs:
+  pdf: true
+  png: [cover]
+  telegram: [weekly_caption]
+  xlsx: [lines_export]
+text_blocks:
+  weekly_caption:
+    - text: "Hari Lari weekly sales report\nWeek {{ anchor_week }} · {{ anchor | days_ending(7) }}"
+    - component: week_kpis
+    - text: "Change vs previous week ({{ anchor | days_ending(7, before=7) }})"
+    - component: last_sale
+    - text: "PDF and Excel lines: {{ drive_url }}"
+deliver:
+  drive: { folder: "{{ anchor }} (week {{ anchor_iso_week }})", files: [pdf, xlsx] }
+  telegram:
+    - { to: group, photo: cover, document: pdf, text: weekly_caption }
+pages:
+  - id: cover
+    title: Sales report
+    params: { period: full }
+    grid: { columns: 12, rows: [4, 1, 10, 6] }
+    slots:
+      - { component: full_history_kpis, row: 1, col: 1, span: 12 }
+      - { component: full_history_amounts, row: 2, col: 1, span: 8, card: false }
+      - { component: last_sale, row: 2, col: 9, span: 4, card: false }
+      - { component: period_summaries, row: 3, col: 1, span: 12 }
+      - { component: data_notes, row: 4, col: 1, span: 12 }
+  - repeat: { period: [L14D, L6W, L3M] }
+    when_empty: { title: Overview, message: No sales in this period }
+    pages:
+      - id: overview
+        title: Overview
+        grid: { columns: 12, rows: [1, 4] }
+        slots:
+          - { component: period_kpis, row: 1, col: 1, span: 12 }
+          - { component: sales_trend, row: 2, col: 1, span: 8 }
+          - { component: key_figures, row: 2, col: 9, span: 4 }
+      - id: categories
+        title: Categories
+        grid: { columns: 12, rows: [1] }
+        slots:
+          - { component: category_contributive_aov, row: 1, col: 1, span: 12 }
+      - id: details
+        title: Items, hours & payments
+        grid: { columns: 12, rows: [7, 4] }
+        slots:
+          - { component: top_items, row: 1, col: 1, span: 7 }
+          - { component: orders_by_hour, row: 1, col: 8, span: 5 }
+          - { component: discount_codes, row: 2, col: 1, span: 7 }
+          - { component: payment_types, row: 2, col: 8, span: 5 }

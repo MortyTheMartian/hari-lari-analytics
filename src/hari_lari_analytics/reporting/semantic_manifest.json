@@ -2680,6 +2680,31 @@
       "facet": null,
       "visual": "table",
       "insights": []
+    },
+    {
+      "id": "week_kpis",
+      "title": "The week",
+      "description": "Net sales, orders and average order value of the 7 days ending on the anchor (the week, when the anchor is a Sunday) against the 7 days before: the lines of the weekly caption.",
+      "hint": null,
+      "params": {},
+      "unbound": [],
+      "query": {
+        "model": "fct_sales_lines",
+        "metrics": [
+          "net_sales",
+          "orders",
+          "aov"
+        ],
+        "window": "L7D",
+        "compare": "prior"
+      },
+      "transforms": [],
+      "facet": {
+        "by": "metric",
+        "layout": "row"
+      },
+      "visual": "kpi_card",
+      "insights": []
     }
   ],
   "reports": [
@@ -2707,6 +2732,64 @@
             "stock_alert",
             "stock_by_status",
             "stock_counted_at"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "weekly",
+      "title": "Sales report",
+      "description": "The weekly sales report of today's job, as components: the cover with the full history and the three periods, then per period (14 days, 6 weeks, 3 months) the overview, the categories and the items, hours and payments. The schedule is added at the cut-over (plan 9.7).",
+      "params": {},
+      "schedule": null,
+      "outputs": {
+        "pdf": true,
+        "png": [
+          "cover"
+        ],
+        "telegram": [
+          "weekly_caption"
+        ],
+        "xlsx": [
+          "lines_export"
+        ]
+      },
+      "pages": [
+        {
+          "id": "cover",
+          "title": "Sales report",
+          "components": [
+            "data_notes",
+            "full_history_amounts",
+            "full_history_kpis",
+            "last_sale",
+            "period_summaries"
+          ]
+        },
+        {
+          "id": "overview",
+          "title": "Overview",
+          "components": [
+            "key_figures",
+            "period_kpis",
+            "sales_trend"
+          ]
+        },
+        {
+          "id": "categories",
+          "title": "Categories",
+          "components": [
+            "category_contributive_aov"
+          ]
+        },
+        {
+          "id": "details",
+          "title": "Items, hours & payments",
+          "components": [
+            "discount_codes",
+            "orders_by_hour",
+            "payment_types",
+            "top_items"
           ]
         }
       ]

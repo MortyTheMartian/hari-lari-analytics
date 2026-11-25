@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: week_kpis
+title: The week
+description: >-
+  Net sales, orders and average order value of the 7 days ending on the anchor (the week, when
+  the anchor is a Sunday) against the 7 days before: the lines of the weekly caption.
+query:
+  model: fct_sales_lines
+  metrics: [net_sales, orders, aov]
+  window: L7D
+  compare: prior
+facet: { by: metric, layout: row }
+visual: { type: kpi_card, style: full }

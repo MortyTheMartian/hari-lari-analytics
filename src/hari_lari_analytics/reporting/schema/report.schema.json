@@ -28,7 +28,8 @@
             "stock_alert",
             "stock_by_status",
             "stock_counted_at",
-            "top_items"
+            "top_items",
+            "week_kpis"
           ],
           "description": "a component"
         },
@@ -120,7 +121,8 @@
                 "stock_alert",
                 "stock_by_status",
                 "stock_counted_at",
-                "top_items"
+                "top_items",
+                "week_kpis"
               ],
               "description": "a component"
             },
@@ -734,7 +736,8 @@
             "stock_alert",
             "stock_by_status",
             "stock_counted_at",
-            "top_items"
+            "top_items",
+            "week_kpis"
           ],
           "description": "a component"
         },

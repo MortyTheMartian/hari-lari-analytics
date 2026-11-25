@@ -1,5 +1,6 @@
 """The port of today's report (plan 9.3): every packaged component that replaces a piece of
-`report_pdf.py` gives the numbers of `report_data.Section` (or of the cover's own figures).
+`report_pdf.py` gives the numbers of `report_data.Section` (or of the cover's own figures), and
+`reports/weekly.yml` (9.4) has today's pages, chips, footer and caption.
 
 The drawing may differ, so only the results are compared. Each test runs on the fixture run and,
 when it is present, on the real run of 2026-11-22; on the fixture, L14D has no comparison and
@@ -8,24 +9,28 @@ L3M has no sales, so the empty and the comparison-less cases are covered too.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from hari_lari_analytics.deliver.caption import build_caption
 from hari_lari_analytics.load_api import ApiRun
 from hari_lari_analytics.metrics import compute_metrics
 from hari_lari_analytics.periods import report_periods
 from hari_lari_analytics.report_data import Section, build_section
 from hari_lari_analytics.report_pdf import MAX_PAYMENT_TYPES
+from hari_lari_analytics.reporting.builder import run_report
 from hari_lari_analytics.reporting.checks import check
 from hari_lari_analytics.reporting.components import load_components
 from hari_lari_analytics.reporting.db import connect, open_run
 from hari_lari_analytics.reporting.facets import run_facets
 from hari_lari_analytics.reporting.queries import QueryContext
+from hari_lari_analytics.reporting.reports import load_reports
 from hari_lari_analytics.reporting.result import Result
 
 from .api_fixture import api_tables
@@ -272,3 +277,80 @@ def test_the_lines_export_has_the_lines_of_the_excel_file(port):
     pd.testing.assert_frame_equal(
         _comparable(df, columns), _comparable(port.lines, columns), check_dtype=False
     )
+
+
+# --- the weekly report (9.4): pages, chrome and caption ---------------------------------------
+
+
+@pytest.fixture(scope="module")
+def weekly(port):
+    report = load_reports(COMPONENTS)["weekly"]
+    return run_report(report, port.ctx, generated=GENERATED)
+
+
+GENERATED = datetime(2026, 11, 25, 15, 0)
+
+
+def _today_pages(port: Port) -> list[tuple[str, list[tuple[str, str]], str]]:
+    """The title, chips and note of each page of today's PDF (`report_pdf.py`)."""
+    first, anchor = port.lines["sale_ts"].min().date(), port.ctx.calendar.anchor
+    pages = [("Sales report", [("Full history", "fill"),
+                               (f"{first:%d %b %Y} – {anchor:%d %b %Y}", "line")], "")]  # fmt: skip
+    for key in PERIODS:
+        s = port.sections[key]
+        chips = [(s.period.title, "fill"), (s.period.label(), "line")]
+        if s.prior_ok:
+            chips.append((f"vs {s.period.prior_label()}", "muted"))
+            note = ""
+        else:
+            chips.append(("no comparison", "muted"))
+            note = f"The prior period starts before the first sale ({first:%d %b %Y})."
+        titles = ["Overview"] if s.empty else ["Overview", "Categories", "Items, hours & payments"]
+        pages += [(title, chips, note) for title in titles]
+    return pages
+
+
+def test_the_weekly_pages_are_todays_in_todays_order_with_todays_chips(port, weekly):
+    ours = [(p.page.title, p.chips, p.note) for p in weekly.pages]
+    assert ours == _today_pages(port)
+
+
+def test_an_empty_period_is_one_page_with_todays_message(port, weekly):
+    empty = [p.page for p in weekly.pages if p.page.empty_message]
+    expected = [k for k in PERIODS if port.sections[k].empty]
+    assert [p.period for p in empty] == expected
+    for page in empty:
+        assert (page.title, page.empty_message) == ("Overview", "No sales in this period")
+
+
+def test_the_footer_is_todays(port, weekly):
+    anchor = port.ctx.calendar.anchor
+    assert weekly.footer == (
+        f"Hari Lari Cafe · Moka POS sales · data through {anchor:%d %b %Y} · "
+        f"generated {GENERATED:%d %b %Y %H:%M}"
+    )
+
+
+def test_the_caption_has_the_content_of_todays(port, weekly):
+    anchor = port.ctx.calendar.anchor
+    theirs = build_caption(port.lines, anchor, "{{ drive_url }}").splitlines()
+    ours = weekly.texts["weekly_caption"]
+    lines = ours.splitlines()
+    assert lines[:2] == theirs[:2]  # the title, the week and its days
+    change = next(t for t in theirs if t.startswith("Change vs previous week"))
+    assert change in lines
+    for label, ours_label in [("Net sales", "Net Sales"), ("Orders", "Orders"),
+                              ("Avg order value", "Avg Order Value")]:  # fmt: skip
+        old = next(t for t in theirs if t.startswith(f"{label}: "))
+        new = next(t for t in lines if t.startswith(f"{ours_label}: "))
+        value, rest = re.match(r"[^:]+: (?:IDR )?([\d,]+) \((.*)\)", old).groups()
+        assert value in new, (old, new)
+        if rest == "no prior week" or "(n=" in new:  # under the sample-size rule: no change
+            assert "vs" not in new
+        elif rest != "unchanged":
+            sign = "+" if rest.startswith("▲") else "-"
+            assert f"({sign}{rest[2:]} vs prior 7 days)" in new, (old, new)
+    last = port.lines["sale_ts"].max()
+    assert f"Last sale {last:%d %b %H:%M}" in lines
+    assert lines[-1] == theirs[-1] == "PDF and Excel lines: {{ drive_url }}"
+    assert len(ours) <= 1024

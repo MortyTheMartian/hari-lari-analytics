@@ -1251,9 +1251,14 @@ extents).
   gives 33% × 10%: give it more columns or rows".
 - *Chrome.* A report has optional `kicker` (default: the title) and `footer` (default: the
   kicker). Each page header shows the kicker, the page title (a template over the parameters,
-  `anchor` and `anchor_iso_week`), chips for the page's window, its comparison ("vs prior 14
-  days", or "no comparison" with the note "The prior period starts before the first sale") and
-  the filters in force. The footer is `<footer> · data through <anchor> · generated <time>`.
+  `anchor`, `anchor_iso_week` and `anchor_week`), chips for the page's window, the days of its
+  comparison ("vs 26 Oct 2026 – 08 Nov 2026", or "no comparison" with the note "The prior
+  period starts before the first sale") and the filters in force, as on today's pages.
+- *Templates.* Titles, folder names and text lines are Jinja templates over the parameters,
+  `anchor` (a date), `anchor_iso_week` (`2026-W47`), `anchor_week` (47) and `report`; the filter
+  `days_ending(n, before=0)` writes the `n` days ending on a date as a short range, so the weekly
+  caption's "Week {{ anchor_week }} · {{ anchor | days_ending(7) }}" reads "Week 47 · 16–22 Nov
+  2026" and `days_ending(7, before=7)` gives the week before. The footer is `<footer> · data through <anchor> · generated <time>`.
 - *Overflow.* The builder records the text artists before and after each slot draws, renders the
   page once and compares every text's extent with its slot rectangle (tolerance 0.3% of the
   page). `build` prints each overflow as a warning and `--strict` makes it an error; the test of
@@ -1276,7 +1281,7 @@ outputs:
   xlsx: [lines_export]
 text_blocks:
   weekly_caption:                    # at most 1,024 characters under the cover photo
-    - component: week_kpis_text      # net sales, orders and AOV against the prior week
+    - component: week_kpis           # net sales, orders and AOV against the prior week
     - insights: { top: 3 }
     - text: "PDF and Excel lines: {{ drive_url }}"   # filled in by the deliver step
 deliver:
@@ -1291,7 +1296,7 @@ pages:
     slots:
       - { component: full_history_kpis,    row: 1, col: 1, span: 12 }
       - { component: full_history_amounts, row: 2, col: 1, span: 12, card: false }
-      - { component: period_summary_cards, row: 3, col: 1, span: 12 }
+      - { component: period_summaries,     row: 3, col: 1, span: 12 }
       - { component: data_notes,           row: 4, col: 1, span: 12 }
   - repeat: { period: [L14D, L6W, L3M] }
     when_empty: { title: Overview, message: "No sales in {{ period }}" }  # one page instead of the group
@@ -1305,6 +1310,13 @@ pages:
       - id: details
         ...
 ```
+
+The packaged `reports/weekly.yml` (plan 9.4) is this report with today's pages in today's
+order and today's caption (the week, net sales, orders and AOV against the week before, the last
+sale, the Drive link), without insights in the caption, which today's has not, and without the
+schedule, which the cut-over adds (9.7) so that nothing runs it before then.
+`tests/test_port.py` checks its pages, chips, footer, empty page and caption against
+`report_pdf.py` and `deliver/caption.py`.
 
 **Repeats as built (8.5, `reports.py`).** `repeat` takes one parameter and either a list of
 values or `{ dimension, top, by, window, model }`: the `top` members of a dimension by a metric
