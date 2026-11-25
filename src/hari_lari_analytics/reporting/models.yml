@@ -29,6 +29,10 @@ stg_transaction_refunds:
 stg_items:
   description: One item of today's catalog, deleted items included
 
+stg_item_variants:
+  description: One variant of today's catalog with its stock settings and level at extraction
+  primary_key: variant_id
+
 int_item_resolution:
   description: The adjusted item and category of a sold item, by id or by the alias file
 
@@ -71,6 +75,12 @@ fct_sales_lines:
   time: sale_date
   calendar: true
   sample_size: orders
+  exposed: true
+
+fct_stock:
+  description: One stock-tracked item-variant with its stock level at extraction time
+  primary_key: variant_id
+  time: stock_date
   exposed: true
 
 fct_orders:

@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: aov_basket_bridge
+title: Why the average order value moved
+description: >-
+  The change of the AOV against the prior period, split exactly into the effect of the items per
+  order and of the average net price per item (AOV = items per order × avg item price, LMDI).
+hint: >-
+  {{ meta.window.current.label }}{% if meta.compare_ok %} vs {{ meta.window.compare_label }}{% endif %}
+  · AOV = items per order × avg net price per item
+params: { period: L6W }
+query:
+  model: fct_orders
+  metrics: [aov]
+  window: $period
+  compare: prior
+transforms:
+  - decompose: { identity: aov_basket }
+visual: { type: waterfall }
+insights: [top_drivers]

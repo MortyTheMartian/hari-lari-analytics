@@ -178,14 +178,14 @@ adjusted_category:
   label: Category
   description: Category according to today's set of categories (METRICS.md)
   grain: item
-  models: [fct_sales_lines]
+  models: [fct_sales_lines, fct_stock]
   sort: { by: net_sales, desc: true }
 
 category_group_level_1:
   label: Category group
   description: food, drink, consignment or unmapped (config/category_group.csv)
   grain: item
-  models: [fct_sales_lines]
+  models: [fct_sales_lines, fct_stock]
   sort: { by: net_sales, desc: true }
 
 category_group_level_2:
@@ -199,14 +199,14 @@ adjusted_item:
   label: Item
   description: Today's name of the item (METRICS.md)
   grain: item
-  models: [fct_sales_lines]
+  models: [fct_sales_lines, fct_stock]
   sort: { by: net_sales, desc: true }
 
 adjusted_item_variant:
   label: Item-variant
   description: Adjusted item and variant, or just the item when there is no variant
   grain: item
-  models: [fct_sales_lines]
+  models: [fct_sales_lines, fct_stock]
   sort: { by: net_sales, desc: true }
 
 category:
@@ -269,3 +269,22 @@ modifier_option_name:
   models: [fct_sales_lines]
   sort: { by: net_sales, desc: true }
   null_label: No modifier
+
+# Stock attributes (fct_stock)
+stock_item_variant:
+  label: Item-variant
+  grain: item
+  models: [fct_stock]
+  column: adjusted_item_variant
+  sort: { by: value }
+
+stock_status:
+  label: Stock status
+  description: >-
+    negative (more sold than counted in: the count needs fixing), out (0), low (1 up to the
+    alert-at quantity) or ok
+  grain: item
+  models: [fct_stock]
+  domain: all
+  values: [negative, out, low, ok]
+  labels: { negative: Negative, out: Out of stock, low: Low, ok: OK }

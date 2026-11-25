@@ -409,9 +409,10 @@ def test_strict_fails_on_an_overflow(capsys, run_dir, tmp_path):
 def test_validate_lists_the_reports(capsys):
     code, out, _ = cli(capsys, "validate")
     assert code == 0, out
+    count = len(load_components())
     assert (
         out.startswith("ok   tracer (1 page(s)")
-        and "1 report(s), 3 component(s), 0 problem(s)" in out
+        and f"1 report(s), {count} component(s), 0 problem(s)" in out
     )
 
 

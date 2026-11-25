@@ -1,0 +1,75 @@
+# Framework gaps
+
+What the extensibility trial (plan 9.1) and the later tasks found where a component or report
+needed more than YAML, or where YAML needed a workaround. Each gap is closed in the framework
+(plan 9.2) rather than worked around in a component; the status says how.
+
+## Trial 1 (9.1, 25 Nov 2026)
+
+Rules: each component time-boxed to 30 minutes, YAML only; every point where Python was needed is
+written down. Measured on the run of 22 Nov 2026 with `hari-lari-component run` and `--png`.
+
+| Component | Time | YAML only | Notes |
+| --- | --- | --- | --- |
+| `orders_by_weekday_hour`: orders per trading day by weekday and hour (`fct_orders`, `per_trading_day`, `pivot`, `heatmap`) | 4 min | yes | First run right. |
+| `aov_basket_bridge`: AOV split into items per order and avg item price (`decompose`, `waterfall`) | 3 min | yes | Reproduces the worked example of `docs/components.md` exactly (+3,812 and +3,549). |
+| `attach_rate_trend`: food and drink attach rates per week (filtered metrics on `fct_orders`, `bar_trend`, facet by metric) | 2 min | yes | One loader error (`movers` reads rows, not a series) named the fix. |
+| `stock_alert` (added by you): the stock-tracked item-variants at or below their alert-at quantity, with the stock level and status, plus the report `stock_alert` | 4 min | **no** | Python twice (G1), three workarounds (G2, G3, G4). |
+
+All four took about 13 minutes together, far inside the 30 minutes each. Two caveats on the
+measure. First, the heatmap and the AOV bridge existed already as test fixtures
+(`tests/fixtures/components/`), written in phase 7 to test the transforms, so those two mostly
+measured that the packaged registries hold what the fixtures assumed. Second, the stock alert was
+the only component on data the framework had never modelled, and it is the one that found the
+gaps: the framework is complete for new views of the sales, not yet for a new kind of data.
+
+### Where Python was needed
+
+- **G1. A new Moka table needs Python in two places.** The stock levels are in the run's
+  `item_variants` table (`in_stock`, `stock_alert`, `track_stock`, `alert`), which no model read.
+  A model reading `raw_item_variants` needed (a) an entry with column types in `RAW_SOURCES` of
+  `reporting/db.py` and (b) the table name in `OPTIONAL_TABLES` of `load_api.py`, which decides
+  what `load_run` reads. Without (a), every component failed with a bare DuckDB traceback
+  ("Table with name raw_item_variants does not exist"), not only the new one; with (a) but not
+  (b), the optional table was silently empty and the component showed "no rows".
+
+### Workarounds in YAML or SQL
+
+- **G2. A snapshot model cannot be queried** (structural). Every query needs a `window` on the
+  model's `time` column, and a model without one is refused ("has no time column in models.yml,
+  so no window applies to it"). Stock is a snapshot without dates. Workaround: `fct_stock` got
+  a fake `stock_date` equal to the anchor, `time: stock_date` and the query `window: full`, so
+  the result carries a meaningless window (23 Jul to the anchor).
+- **G3. A dimension's sort metric must exist on every model of the dimension.**
+  `adjusted_item_variant` sorts by `net_sales`, which `fct_stock` does not have, and a query cannot
+  sort otherwise. The error ("metric net_sales is not on fct_stock") did not say that it came
+  from the dimension's sort, and the registry let the dimension onto the model without
+  complaint. Workaround: a second dimension `stock_item_variant` on the same column, sorted by
+  value.
+- **G4. `table` has no text form**, so a table cannot be a line of a Telegram text block.
+  Workaround: the text block reuses the component with `with: { visual: notes_card ... }`.
+
+### Smaller findings
+
+- **G5. A snapshot cannot say when it was taken.** The stock is Moka's count at extraction time,
+  but no template can show that time: the report's chrome says "data through <anchor>", and the
+  anchor defaults to yesterday while the extraction may be older (the report of 25 Nov showed the
+  stock of 22 Nov as "data of 2026-11-24").
+- **G6. `sort: { by: value }` sorts the text**, not in the order of the dimension's `values`, so
+  the stock statuses sort as low, negative, out instead of negative, out, low.
+- **G7. A status is not coloured.** The table cannot shade a dimension value (Negative, Low) with a
+  tone; only changes carry tones.
+- **G8. The growth labels of a rate are ratios.** `growth_vs_previous` divides, so the attach rate
+  from 32.1% to 37.0% reads "+15.3%", where "+4.9 pp" is what a reader expects (the `_delta` of a
+  rate is already in pp).
+- **G9. In `bar_trend` the value labels collide with the prior-period ticks** when the prior value
+  is just above the bar (the food attach rate in W42 and W44).
+- **G10. In `waterfall` the "Prior" bar is drawn in the secondary colour** (coral), which on the
+  daylight theme can read as "bad".
+- **Not a framework gap:** the live job extracts once a week, so a stock alert from it is a weekly
+  snapshot. A real alert needs its own schedule and an extraction before it (`hari-lari-report run`
+  with `schedule` and `deliver.when: rows`, plan 9.7 and 10.17).
+
+## Status (9.2)
+
+To be filled in by plan 9.2.

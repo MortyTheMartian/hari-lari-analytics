@@ -113,7 +113,7 @@ def test_a_report_needs_pages():
 
 def test_an_unknown_component_names_the_known_ones():
     refuse(
-        r"slot 1 \(nope\): no component 'nope' \(known: category_contributive_aov, ",
+        r"slot 1 \(nope\): no component 'nope' \(known: [a-z_, ]*category_contributive_aov, ",
         pages=[page(slots=[{**KPIS, "component": "nope"}])],
     )
 

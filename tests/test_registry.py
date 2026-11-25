@@ -62,13 +62,15 @@ def test_every_metric_has_its_attributes():
         assert metric.label and metric.description, metric.id
         assert metric.format and metric.additivity, metric.id
         for model in metric.models:  # the sales models have orders as their sample size
-            assert REG.min_n(metric.id, model), (metric.id, model)
+            has_orders = REG.model(model).sample_size is not None
+            assert bool(REG.min_n(metric.id, model)) == has_orders, (metric.id, model)
 
 
 @pytest.mark.parametrize("model", MODELS)
 def test_every_metric_runs_on_every_model_it_is_on(con, model):
     metrics = REG.metrics_on(model)
-    assert set(metrics) == set(REG.metrics)  # today every metric is on both models
+    stock = set(REG.metrics_on("fct_stock"))
+    assert set(metrics) == set(REG.metrics) - stock  # every sales metric is on both models
     by_payment = evaluate(con, REG, model, metrics, by="payment_type", trading_days=3)
     assert len(by_payment) == 4  # BCA, Cash, Gopay and the total
 

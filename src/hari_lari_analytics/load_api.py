@@ -27,6 +27,7 @@ OPTIONAL_TABLES = [
     "transaction_line_discounts",
     "transaction_line_modifiers",
     "transaction_refunds",
+    "item_variants",
 ]
 
 

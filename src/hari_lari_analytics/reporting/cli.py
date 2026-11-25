@@ -359,7 +359,8 @@ def cmd_validate(directory: Path, out: TextIO) -> int:
         if not path.exists() or path.read_text() != text:
             problems += 1
             print(f"FAIL {path.name} is out of date: run hari-lari-component manifest", file=out)
-    report_paths = sorted(reports_dir().glob("*.yml")) if reports_dir().is_dir() else []
+    packaged = directory == components_dir() and reports_dir().is_dir()
+    report_paths = sorted(reports_dir().glob("*.yml")) if packaged else []
     for path in report_paths:
         try:
             report = load_report(path, loaded)

@@ -46,6 +46,8 @@
                     "sale_quarter",
                     "sale_week",
                     "sale_year",
+                    "stock_item_variant",
+                    "stock_status",
                     "variant",
                     "weekday"
                   ],
@@ -155,7 +157,8 @@
               "type": "string",
               "enum": [
                 "fct_orders",
-                "fct_sales_lines"
+                "fct_sales_lines",
+                "fct_stock"
               ],
               "description": "the model to query"
             },
@@ -174,6 +177,7 @@
                   {
                     "type": "string",
                     "enum": [
+                      "alert_at",
                       "aov",
                       "avg_item_price",
                       "category_aov",
@@ -195,7 +199,8 @@
                       "orders",
                       "penetration",
                       "refunds",
-                      "share"
+                      "share",
+                      "stock_level"
                     ],
                     "description": "a metric of metrics.yml"
                   },
@@ -261,6 +266,8 @@
                       "sale_quarter",
                       "sale_week",
                       "sale_year",
+                      "stock_item_variant",
+                      "stock_status",
                       "variant",
                       "weekday"
                     ],
@@ -406,6 +413,8 @@
                   "sale_quarter",
                   "sale_week",
                   "sale_year",
+                  "stock_item_variant",
+                  "stock_status",
                   "variant",
                   "weekday"
                 ],
@@ -509,6 +518,8 @@
                   "sale_quarter",
                   "sale_week",
                   "sale_year",
+                  "stock_item_variant",
+                  "stock_status",
                   "variant",
                   "weekday"
                 ],
@@ -654,6 +665,8 @@
                   "sale_quarter",
                   "sale_week",
                   "sale_year",
+                  "stock_item_variant",
+                  "stock_status",
                   "variant",
                   "weekday"
                 ],
@@ -755,6 +768,7 @@
             {
               "type": "string",
               "enum": [
+                "alert_at",
                 "aov",
                 "avg_item_price",
                 "category_aov",
@@ -776,7 +790,8 @@
                 "orders",
                 "penetration",
                 "refunds",
-                "share"
+                "share",
+                "stock_level"
               ],
               "description": "a metric of metrics.yml"
             },
@@ -831,6 +846,7 @@
             {
               "type": "string",
               "enum": [
+                "alert_at",
                 "aov",
                 "avg_item_price",
                 "category_aov",
@@ -852,7 +868,8 @@
                 "orders",
                 "penetration",
                 "refunds",
-                "share"
+                "share",
+                "stock_level"
               ],
               "description": "a metric of metrics.yml"
             },

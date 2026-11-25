@@ -1,0 +1,13 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: orders_by_weekday_hour
+params: {}
+facets:
+- key: null
+  label: null
+  metric: null
+  shape: matrix
+  csv: |
+    weekday,7,8,9
+    1,1,1,
+    2,,,

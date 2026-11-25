@@ -82,6 +82,19 @@
       "dimensions": []
     },
     {
+      "id": "stg_item_variants",
+      "description": "One variant of today's catalog with its stock settings and level at extraction",
+      "primary_key": [
+        "variant_id"
+      ],
+      "time": null,
+      "calendar": false,
+      "sample_size": null,
+      "exposed": false,
+      "metrics": [],
+      "dimensions": []
+    },
+    {
       "id": "int_item_resolution",
       "description": "The adjusted item and category of a sold item, by id or by the alias file",
       "primary_key": [],
@@ -269,6 +282,29 @@
         "is_refund",
         "modifier_name",
         "modifier_option_name"
+      ]
+    },
+    {
+      "id": "fct_stock",
+      "description": "One stock-tracked item-variant with its stock level at extraction time",
+      "primary_key": [
+        "variant_id"
+      ],
+      "time": "stock_date",
+      "calendar": false,
+      "sample_size": null,
+      "exposed": true,
+      "metrics": [
+        "stock_level",
+        "alert_at"
+      ],
+      "dimensions": [
+        "adjusted_category",
+        "category_group_level_1",
+        "adjusted_item",
+        "adjusted_item_variant",
+        "stock_item_variant",
+        "stock_status"
       ]
     },
     {
@@ -779,6 +815,42 @@
         "food_orders"
       ],
       "expression": "food_and_drink_orders / nullif(food_orders, 0)"
+    },
+    {
+      "id": "stock_level",
+      "kind": "sql",
+      "label": "In stock",
+      "description": "Units in stock at extraction time, as Moka counts them; negative when more was sold than was counted in",
+      "format": "count",
+      "unit": "",
+      "up_is_good": true,
+      "additivity": "full",
+      "min_n": null,
+      "models": [
+        "fct_stock"
+      ],
+      "depends_on": [],
+      "aggregates": {
+        "fct_stock": "sum(in_stock)"
+      }
+    },
+    {
+      "id": "alert_at",
+      "kind": "sql",
+      "label": "Alert at",
+      "description": "The stock level at or below which Moka's stock alert fires; 0 without an alert",
+      "format": "count",
+      "unit": "",
+      "up_is_good": null,
+      "additivity": "full",
+      "min_n": null,
+      "models": [
+        "fct_stock"
+      ],
+      "depends_on": [],
+      "aggregates": {
+        "fct_stock": "sum(alert_at)"
+      }
     }
   ],
   "default_min_n": 30,
@@ -1209,7 +1281,8 @@
       "description": "Category according to today's set of categories (METRICS.md)",
       "grain": "item",
       "models": [
-        "fct_sales_lines"
+        "fct_sales_lines",
+        "fct_stock"
       ],
       "domain": "none",
       "sort": {
@@ -1223,7 +1296,8 @@
       "description": "food, drink, consignment or unmapped (config/category_group.csv)",
       "grain": "item",
       "models": [
-        "fct_sales_lines"
+        "fct_sales_lines",
+        "fct_stock"
       ],
       "domain": "none",
       "sort": {
@@ -1252,7 +1326,8 @@
       "description": "Today's name of the item (METRICS.md)",
       "grain": "item",
       "models": [
-        "fct_sales_lines"
+        "fct_sales_lines",
+        "fct_stock"
       ],
       "domain": "none",
       "sort": {
@@ -1266,7 +1341,8 @@
       "description": "Adjusted item and variant, or just the item when there is no variant",
       "grain": "item",
       "models": [
-        "fct_sales_lines"
+        "fct_sales_lines",
+        "fct_stock"
       ],
       "domain": "none",
       "sort": {
@@ -1411,6 +1487,46 @@
         "desc": true
       },
       "null_label": "No modifier"
+    },
+    {
+      "id": "stock_item_variant",
+      "label": "Item-variant",
+      "description": null,
+      "grain": "item",
+      "models": [
+        "fct_stock"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      }
+    },
+    {
+      "id": "stock_status",
+      "label": "Stock status",
+      "description": "negative (more sold than counted in: the count needs fixing), out (0), low (1 up to the alert-at quantity) or ok",
+      "grain": "item",
+      "models": [
+        "fct_stock"
+      ],
+      "domain": "all",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "values": [
+        "negative",
+        "out",
+        "low",
+        "ok"
+      ],
+      "labels": {
+        "negative": "Negative",
+        "out": "Out of stock",
+        "low": "Low",
+        "ok": "OK"
+      }
     }
   ],
   "kpi_tree": [
@@ -1960,6 +2076,65 @@
   ],
   "components": [
     {
+      "id": "aov_basket_bridge",
+      "title": "Why the average order value moved",
+      "description": "The change of the AOV against the prior period, split exactly into the effect of the items per order and of the average net price per item (AOV = items per order × avg item price, LMDI).",
+      "hint": "{{ meta.window.current.label }}{% if meta.compare_ok %} vs {{ meta.window.compare_label }}{% endif %} · AOV = items per order × avg net price per item",
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_orders",
+        "metrics": [
+          "aov"
+        ],
+        "window": "$period",
+        "compare": "prior"
+      },
+      "transforms": [
+        "decompose"
+      ],
+      "facet": null,
+      "visual": "waterfall",
+      "insights": [
+        "top_drivers"
+      ]
+    },
+    {
+      "id": "attach_rate_trend",
+      "title": "Food and drink attach rates",
+      "description": "Per time bucket: the share of the orders with a drink that also have food, and the share of the orders with food that also have a drink, with the prior period as ticks.",
+      "hint": "Food attach = orders with a drink and food ÷ orders with a drink · drink attach the other way round{% if meta.compare_ok %} · ticks = prior period{% endif %}",
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_orders",
+        "dimensions": [
+          "bucket"
+        ],
+        "metrics": [
+          "food_attach_rate",
+          "drink_attach_rate"
+        ],
+        "window": "$period",
+        "compare": "prior"
+      },
+      "transforms": [
+        "growth_vs_previous"
+      ],
+      "facet": {
+        "by": "metric",
+        "layout": "row"
+      },
+      "visual": "bar_trend",
+      "insights": [
+        "best_bucket"
+      ]
+    },
+    {
       "id": "category_contributive_aov",
       "title": "Adjusted categories & contributive AOV",
       "description": "One row per adjusted category with its share of net sales, penetration, category AOV and contributive AOV, the categories sold only in the prior period, and the total, whose contributive AOV is the AOV.",
@@ -2034,7 +2209,93 @@
       "facet": null,
       "visual": null,
       "insights": []
+    },
+    {
+      "id": "orders_by_weekday_hour",
+      "title": "Orders per trading day by weekday and hour",
+      "description": "The average number of orders per trading day in each hour of each weekday: when the café is busy, for staffing. A weekday is divided by its own trading days in the window.",
+      "hint": "Average orders per trading day · {{ meta.window.current.label }}",
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_orders",
+        "dimensions": [
+          "weekday",
+          "hour_of_day"
+        ],
+        "metrics": [
+          "orders"
+        ],
+        "window": "$period"
+      },
+      "transforms": [
+        "per_trading_day",
+        "pivot"
+      ],
+      "facet": null,
+      "visual": "heatmap",
+      "insights": []
+    },
+    {
+      "id": "stock_alert",
+      "title": "Stock alert",
+      "description": "The stock-tracked item-variants at or below their alert-at quantity, with their stock level and status, as Moka counted them at extraction time.",
+      "hint": "Stock at or below the alert-at quantity · Moka's count at extraction",
+      "params": {},
+      "unbound": [],
+      "query": {
+        "model": "fct_stock",
+        "dimensions": [
+          "stock_item_variant",
+          "stock_status"
+        ],
+        "metrics": [
+          "stock_level",
+          "alert_at"
+        ],
+        "window": "full",
+        "where": {
+          "stock_status": [
+            "negative",
+            "out",
+            "low"
+          ]
+        }
+      },
+      "transforms": [],
+      "facet": null,
+      "visual": "table",
+      "insights": []
     }
   ],
-  "reports": []
+  "reports": [
+    {
+      "id": "stock_alert",
+      "title": "Stock alert",
+      "description": "The stock-tracked item-variants at or below their alert-at quantity, as Moka counted them when the data was extracted.",
+      "params": {},
+      "schedule": null,
+      "outputs": {
+        "pdf": true,
+        "png": [
+          "stock"
+        ],
+        "telegram": [
+          "stock_text"
+        ],
+        "xlsx": []
+      },
+      "pages": [
+        {
+          "id": "stock",
+          "title": "Stock alert",
+          "components": [
+            "stock_alert"
+          ]
+        }
+      ]
+    }
+  ]
 }

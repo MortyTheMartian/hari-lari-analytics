@@ -76,6 +76,19 @@ RAW_SOURCES = {
     "items": Source(
         {"id": "bigint", "name": "varchar", "category.name": "varchar", "is_deleted": "boolean"}
     ),
+    "item_variants": Source(
+        {
+            "id": "bigint",
+            "item_id": "bigint",
+            "name": "varchar",
+            "in_stock": "bigint",
+            "stock_alert": "bigint",
+            "track_stock": "boolean",
+            "alert": "boolean",
+            "is_deleted": "boolean",
+        },
+        required=False,
+    ),
     "transaction_line_discounts": Source(
         {"payment_id": "varchar", "line_uuid": "varchar", "discount_name": "varchar"},
         required=False,

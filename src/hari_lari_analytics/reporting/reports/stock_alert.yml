@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=../schema/report.schema.json
+id: stock_alert
+title: Stock alert
+description: >-
+  The stock-tracked item-variants at or below their alert-at quantity, as Moka counted them when
+  the data was extracted.
+kicker: Hari Lari Cafe
+footer: Hari Lari Cafe · Moka POS stock at extraction
+outputs:
+  pdf: true
+  png: [stock]
+  telegram: [stock_text]
+text_blocks:
+  stock_text:
+    - text: "Stock alert, data of {{ anchor }}"
+    - component: stock_alert
+      with:
+        visual:
+          type: notes_card
+          column: stock_item_variant
+          before: stock_status
+          after: stock_level
+          max_items: 20
+          empty: Nothing at or below its alert-at quantity
+pages:
+  - id: stock
+    title: Stock alert
+    grid: { columns: 12, rows: [1] }
+    slots:
+      - { component: stock_alert, row: 1, col: 1, span: 12 }

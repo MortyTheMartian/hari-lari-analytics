@@ -1,0 +1,14 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: aov_basket_bridge
+params: {}
+facets:
+- key: null
+  label: null
+  metric: null
+  shape: decomposition
+  csv: |
+    level,metric,label,sign,status,prior,current,delta,change,effect,share_of_change,is_total,n_orders,prior_n_orders
+    1,items_per_order,Items per order,1,,,1.5,,,,,False,2,
+    1,avg_item_price,Avg net price per item,1,,,32666.66667,,,,,False,2,
+    0,aov,Avg Order Value,1,,,49000,,,,,True,2,
