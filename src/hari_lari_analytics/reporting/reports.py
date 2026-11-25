@@ -48,6 +48,7 @@ from hari_lari_analytics.reporting.components import (
     Component,
     ComponentError,
     deep_merge,
+    substitute,
 )
 from hari_lari_analytics.reporting.formats import days_ending
 from hari_lari_analytics.reporting.layouts import GridSpec, LayoutError, Rect, SlotSpec
@@ -689,15 +690,18 @@ def _bind_slot(
     return BoundSlot(placement.slot, placement.rect, ref, visual_spec.type, card)
 
 
-def filters_in_force(report: Report, page: PageSpec | None) -> tuple[AppliedFilter, ...]:
-    """The filters of the report and the page, for the chips of a page header."""
+def filters_in_force(
+    report: Report, page: PageSpec | None, params: Mapping[str, Any] | None = None
+) -> tuple[AppliedFilter, ...]:
+    """The filters of the report and the page, for the chips of a page header, with the
+    parameters in scope (a repeat's value) bound."""
     found = []
     for origin, spec in (("report", report.spec.filters), ("page", page.filters if page else None)):
         if spec is None:
             continue
         for kind in ("where", "focus"):
             found += [
-                AppliedFilter(kind, dimension, origin, value)
+                AppliedFilter(kind, dimension, origin, substitute(value, params or {}))
                 for dimension, value in getattr(spec, kind).items()
             ]
     return tuple(found)
@@ -722,7 +726,7 @@ def _bind_page(
         title=title,
         params=params,
         period=str(params["period"]) if "period" in params else None,
-        filters=filters_in_force(report, page),
+        filters=filters_in_force(report, page, params),
         grid=page.grid,
         slots=slots,
         base=page.id,

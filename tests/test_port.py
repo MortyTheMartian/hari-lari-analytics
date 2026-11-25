@@ -380,6 +380,9 @@ def test_the_deep_dive_has_a_page_for_each_of_the_top_5_categories(port, deep_di
     expected = sold["adjusted_category"].head(5).tolist()
     assert [p.page.title for p in deep_dive.pages] == expected
     assert [p.page.params["category"] for p in deep_dive.pages] == expected
+    assert [p.chips[-1] for p in deep_dive.pages] == [
+        (f"Category: {c} (focus)", "line") for c in expected
+    ]
 
 
 def test_the_deep_dive_top_items_are_the_categorys(port, deep_dive):
