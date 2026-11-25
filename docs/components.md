@@ -151,10 +151,17 @@ src/hari_lari_analytics/reporting/
   components.py       # pydantic schemas, loader, parameters, overrides
   facets.py           # facet engine
   snapshots.py        # the golden result of a component, tests/snapshots/<id>.yml
+  gallery.py          # every component on a run, one page each (8.7)
+  manifest.py         # the semantic manifest, semantic_manifest.json (8.10)
   insights.py         # insight engine and rule types
-  layouts.py          # grid layout engine
-  builder.py          # report builder
-  outputs/
+  layouts.py          # grid layout engine: geometry, sizes, page chrome, overflow check (8.4)
+  reports.py          # report YAML schema, loader, repeats, filters, checks, JSON Schema (8.5)
+  builder.py          # runs a report on a run: pages, text blocks, sheets (8.5)
+  preview.py          # one component in its default slot as a PNG, with --watch (8.6)
+  outputs/            # write_outputs(run, dir): one renderer per output
+    pages.py          # draws a page: chrome, slots, empty page, the overflow check
+    bundle.py         # the JSON bundle (format_version 1)
+    bundle_schema.py  # its contract: pydantic models, and the JSON Schema generated from them
     pdf.py
     png.py
     telegram.py
@@ -172,6 +179,8 @@ src/hari_lari_analytics/reporting/
   schema/             # written by `hari-lari-component schema`
     component.schema.json
     report.schema.json
+    bundle.schema.json
+  semantic_manifest.json  # written by `hari-lari-component manifest`
   models/
     stg_transactions.sql
     stg_transaction_lines.sql
@@ -237,12 +246,12 @@ key fails with the file name and the key) and `project()` hands the settings to 
 | `min_n` | the default sample-size rule | the registry (`Registry.default_min_n`) |
 | `anchor` | the last day of a report when none is given: `yesterday` or `today` | `hari-lari-report`, `hari-lari-weekly` |
 | `reference_date` | the date on which the loader compiles components without data | `check_calendar()` in `components.py` |
-| `telegram_targets` | the Telegram chats a report may deliver to: a name per chat, mapped to the Secret Manager secret that holds its chat id (never the id itself); `admin` is required, because failure alerts go there (planned, 8.5) | `deliver` of a report, `deploy/setup.sh` |
+| `telegram_targets` | the Telegram chats a report may deliver to: a name per chat, mapped to the Secret Manager secret that holds its chat id (never the id itself); `admin` is required, because failure alerts go there; `project.py` validates the names and the secret names, and the report loader checks every `deliver` target against it | `deliver` of a report, `deploy/setup.sh` |
 
 ISO week labels (`sale_iso_week`, "week 47" in a Drive folder name) and the ISO weekday
 (`weekday`, Monday = 1) stay ISO whatever the first weekday is. The Excel lines export keeps
 `IDR` in its column titles, because owners build pivot tables on them; the XLSX output of the
-report builder (8.5) will read the currency.
+report builder (8.5) reads the currency from `project.yml` for the column titles of its sheets.
 
 Tests that need other settings use `use_project(settings)`; the registry is cached, so a test
 with another `min_n` calls `load_registry(settings=...)`.
@@ -1211,6 +1220,30 @@ The engine checks every slot against its visual's `min_size`, and a test renders
 on the fixture and fails when any text overflows its slot (measured with matplotlib's text
 extents).
 
+**As built (8.4, `layouts.py`).**
+
+- *Geometry.* The usable area is x 3.5%–96.5% and y 7%–85.5% of the page; columns are equal with
+  a gap of 1.33% of the width, rows share the height in the given parts with a gap of 2%. A slot
+  has `row`, `col`, `span` (default 12) and `height` (default 1, in rows). The loader refuses a
+  slot past the last column or row and two slots that overlap, naming the page and the slots.
+- *Slot fields.* Besides `component`, the position and `with:` (a deep merge into the component),
+  a slot has `params` (binds parameters for this slot only), `card` (default: a card with title
+  and hint, except for a visual that draws its own, such as `kpi_card`) and `ignore_filters`
+  (`true`, or a list of dimensions).
+- *Sizes.* `check_size` compares each facet cell (the slot minus the card's padding and head,
+  split by the facet layout) with the visual's `min_size`. A slot too small is an error of the
+  report, with the numbers: "the visual table needs at least 40% × 22% of the page but the slot
+  gives 33% × 10%: give it more columns or rows".
+- *Chrome.* A report has optional `kicker` (default: the title) and `footer` (default: the
+  kicker). Each page header shows the kicker, the page title (a template over the parameters,
+  `anchor` and `anchor_iso_week`), chips for the page's window, its comparison ("vs prior 14
+  days", or "no comparison" with the note "The prior period starts before the first sale") and
+  the filters in force. The footer is `<footer> · data through <anchor> · generated <time>`.
+- *Overflow.* The builder records the text artists before and after each slot draws, renders the
+  page once and compares every text's extent with its slot rectangle (tolerance 0.3% of the
+  page). `build` prints each overflow as a warning and `--strict` makes it an error; the test of
+  the phase-8 exit asserts that the tracer page has none.
+
 ## Reports
 
 ```yaml
@@ -1246,7 +1279,7 @@ pages:
       - { component: period_summary_cards, row: 3, col: 1, span: 12 }
       - { component: data_notes,           row: 4, col: 1, span: 12 }
   - repeat: { period: [L14D, L6W, L3M] }
-    when_empty: { page: empty_period }  # one page instead of the group
+    when_empty: { title: Overview, message: "No sales in {{ period }}" }  # one page instead of the group
     pages:
       - id: overview
         ...
@@ -1257,6 +1290,17 @@ pages:
       - id: details
         ...
 ```
+
+**Repeats as built (8.5, `reports.py`).** `repeat` takes one parameter and either a list of
+values or `{ dimension, top, by, window, model }`: the `top` members of a dimension by a metric
+over a window (`window: $period` reads the parameter), decided under the report's `where` (the
+model defaults to the first exposed model that has the dimension and the metric). A page of a
+repeat gets the id `<id>_<value>` (`overview_l6w`, `cat_coffee`), and `outputs.png` and
+`insights.pages` name the base id, which covers all its repeats. A `repeat` may also stand at the
+top of the report, to repeat every page. `when_empty` is `{ title, message }` (both templates)
+and works for a repeat over `period`: when the window has no net sales, the group becomes one
+page with the message, which is not written as PNG. A report with no page at all is an error.
+`validate` expands a `top` repeat with one placeholder value, so it needs no data.
 
 Any parameter can be repeated, not only the period. The category deep dive (plan 9.5):
 
@@ -1309,8 +1353,8 @@ filters:
   `ignore_filters: [payment_type]`: the full-history KPIs on the cover of a filtered report, say.
 - **Where a filter does not apply.** A slot whose model lacks the dimension, a slot that opts
   out, and a `@query` source (the data notes, the lines export) run unfiltered. Its card hint
-  says so ("all payment types"), and the page header shows the filters that are in force as
-  chips, so a printed page never looks filtered where it is not.
+  says so ("… · not filtered by Payment type"), and the page header shows the filters that are
+  in force as chips, so a printed page never looks filtered where it is not.
 - **Values** are bound parameters, so `$category` from a repeat works; a list means any of the
   values, `null` the empty value.
 - **Repeats and facets.** The values of a repeat (`top: 5`) and of a facet (`top`, `all`) are
@@ -1396,10 +1440,26 @@ One command runs any report, locally and in Cloud Run:
 ```text
 hari-lari-report run --report weekly [--anchor YYYY-MM-DD] [--dry-run] [--to admin] [--force] [--run <run>]
 hari-lari-report run --scheduled --dry-run    # every report with a schedule, on one extraction
-hari-lari-report build --report weekly --run <run> [--anchor ...]   # outputs only (8.5)
+hari-lari-report build --report weekly --run <run> [--anchor ...] [--out DIR] [--strict]  # 8.5
 hari-lari-report validate                     # every report and component, the JSON Schemas
 hari-lari-report schedules [--json]           # the schedules, as deploy/ reads them
+hari-lari-report schema [--check]             # the JSON Schemas of reports and components
 ```
+
+`build`, `validate`, `schedules` and `schema` exist since 8.5; `run` and `--scheduled` come with
+the cut-over (9.7), together with `delivery.py` and the scheduler sync.
+
+`build` never sends anything. It opens the latest run in `--run` (default `data/extract`) up to
+the anchor (`--anchor`, else the report's `params.anchor`, else the rule of `project.yml`),
+builds the models and checks, runs the report and writes the outputs to
+`data/output/reports/<report>/<anchor>/` (`--out` changes the folder): `<id>_<anchor>.pdf`,
+`<id>_<anchor>_<page>.png` for each page of `outputs.png`, `<block>.txt` for each text block,
+`<id>_<anchor>.xlsx` and `bundle.json`, and prints their paths. A text that overflows its slot
+is a warning on stderr, an error with `--strict`. CI does not build with `--strict` (the tests
+assert zero overflows on the fixture), and the live job never does, so a long label cannot block a
+delivery; use it locally and on the dry run. `--report` takes an id from `reports/` or the
+path of a YAML file. `--reports <folder>` and `--components <folder>`, before the command, point
+at other folders (the tests use `tests/fixtures/reports/`).
 
 `run` does what `hari-lari-weekly` does today, for any report: check the sent-marker, extract
 (unless `--run` names an existing run), the Moka token reminder, build the models and run the
@@ -1438,6 +1498,73 @@ per-job roles) and `iam.serviceAccountUser` on the scheduler's account.
   Values known only at delivery, such as the Drive link, are filled in by the deliver step.
 - **XLSX**: one formatted sheet per listed component (its result in the output convention), and
   the lines export without personal data and without the line note.
+- **JSON bundle**: always written, `bundle.json` with `format_version: 1`: the report (with the
+  extraction run it was built from), the theme colours, the pages with their slots, the results
+  and display cells of every facet, the insights and the text blocks. See "The bundle" below.
+
+**As built (8.5).** `outputs/__init__.py` renders every page once and feeds the PDF and the PNGs
+from that one drawing (PNG at 150 dpi). A text block is a list of `text` lines (templates over
+the report's parameters, `anchor`, `anchor_iso_week` and `drive_url`), `component` references
+(the visual's text form, one or more lines per facet) and `insights: { top: N, pages: [...] }`
+(the best sentences across pages, ranked, one bullet each). The length is checked when the
+report runs: the limit is the strictest of the deliveries that send the block (1,024 for a
+caption under a photo or document, 4,096 for a message alone, 1,024 when no delivery names the
+block), and `{{ drive_url }}` counts as 100 characters while it stays in the text as a
+placeholder. `fill_drive_url` is what the deliver step calls; without a link it drops the lines
+that carry it, so no message shows a bare placeholder. A sheet is a component in `outputs.xlsx`
+(by id or as a reference with `with`/`params`), runs under the report's filters, and the lines
+export is the component `lines_export`, whose source is the cleaned lines; it has no visual and
+cannot be placed on a page. Sheet names are made valid and unique (31 characters, none of
+`[]:*?/\`).
+
+The checks of `parse_report` also cover delivery: each `deliver.telegram` target must exist in
+`telegram_targets`, its photo be a page listed in `outputs.png`, its document an output of the
+report and its text a block of `outputs.telegram`; `deliver.drive.files` must be outputs, and
+`deliver.when` must name an existing insight rule, component or `checks: warn`. `schedule.cron`
+is a five-field cron expression and `timezone` an IANA name (default: `project.yml`).
+
+### The bundle (8.9)
+
+`outputs/bundle_schema.py` describes `bundle.json` as strict pydantic models (an unknown key is an
+error); `schema/bundle.schema.json` is generated from them like the other two schemas;
+`hari-lari-report schema --check` and CI fail when it is out of date, and `tests/test_bundle.py`
+validates every bundle the builder writes, among them the gallery of all components, a repeated
+report and an empty page, against it. The contract for a renderer:
+
+- `report`: `id`, `title`, `kicker`, `footer`, `anchor` (the last day, ISO), `generated`, `run`
+  (the extraction run) and `params`. `theme`: `font`, the hex colour of every token and the
+  `series` colours, so a renderer draws the tokens of a visual's options as the PDF does.
+- `pages[]`: `id` (a repeat has a longer one than its `base`), `title`, `period`, `chips`, `note`,
+  the `grid` and `slots[]`, the page's ranked `insights`, and `empty_message` for a `when_empty`
+  page (then it has no slots).
+- `slots[]`: `component`, the rendered `title` and `hint`, `visual {type, options}`, the facet
+  `layout`, `position`, `card`, the `filters` in force, `results[]` and `facets[]`, which point at
+  a result by index (facets by metric share one result).
+- `results[]`: `shape`, `empty`, the `window` with its comparison (`compare_ok` false means show
+  `n/a`), the metrics (label, description, format, unit, `up_is_good`), the calendar `events`,
+  and `columns` and `rows` of **cells** `{value, text, compact?, tone?, small?, n?}`. A renderer
+  shows `text`, uses `value` only to draw, colours a change by `tone` unless `small`, and never
+  formats a number or applies a rule itself. Column ids are text (the hours of a matrix too).
+- Not in it: SQL, the free-text fields of the lines (customer, note) and anything of a Python
+  source that is not on a page; a result of a Python source has columns and rows and no window.
+
+Reviewing it against what a frontend needs turned up three gaps, all closed: the theme colours,
+the run name, and a `when_empty` message that was written to the PDF and the bundle as its
+template (`No sales in {{ period }}`) instead of its text.
+
+### The manifest (8.10)
+
+`hari-lari-component manifest [--out FILE] [--check]` writes `semantic_manifest.json`, the
+catalogue of the semantic layer, like dbt's manifest: the models (with the metrics and dimensions
+on each), the metrics (label, description, format, unit, kind, additivity, sample-size rule,
+what they depend on, their SQL aggregate or expression), the dimensions (grain, models, labels,
+bins), the KPI tree, the window forms, the transforms, visuals and insight rules with their
+option names, and the components and reports. It holds no data and no business identifier, only
+the packaged definitions and the four project settings that decide how a number is written
+(currency, time zone, first weekday, default `min_n`). `hari-lari-component validate` and a CI
+step fail when the file is out of date, and `tests/test_manifest.py` checks that it lists
+everything the registries hold and refers only to what exists. The frontend reads labels and
+descriptions from it, and the Cursor rule points an LLM at it.
 
 ## Developer workflow
 
@@ -1458,28 +1585,56 @@ Adding a component, with the developer CLI `hari-lari-component` (`reporting/cli
    to stderr). `--param name=value` binds any parameter, the value read as YAML (`n=5`,
    `codes=[Cash, BCA]`); a parameter the component does not use is reported and ignored. The
    parameters are checked before the models are built, and an undefined name in the title or
-   hint is an error. Facets by metric share one result, printed once. Later (plan 8.6):
-   `--png --watch`.
+   hint is an error. Facets by metric share one result, printed once. `--png [FILE]` draws
+   the component instead (below).
 4. `hari-lari-component validate` loads every component as strictly as a report would and
    lists every broken one, notes a missing schema line and the parameters only a report binds,
-   and checks that the JSON Schema is current; it exits non-zero on any problem. Reports join
-   the check with plan 8.5.
+   and checks that the three JSON Schemas are current; it also loads every packaged report and exits
+   non-zero on any problem. `hari-lari-report validate` does the same for reports first and
+   lists the slots a report filter does not reach; both run in CI.
 5. `uv run pytest tests/test_snapshots.py --update-snapshots -k orders_heatmap` fills in the
    snapshot from the test fixture; read it and commit it. Without it the snapshot test fails.
 6. Place the component in a report slot.
 
-`hari-lari-component schema` rewrites the JSON Schema (`--check` only compares). `--components
+**Preview (8.6).** `hari-lari-component run <id> --png [FILE]` draws the component into a slot
+the way a report page would (same card, title, hint and visual code) and crops the image to the
+slot. The default slot spans all 12 columns and 3 of 6 equal row parts of the page body, so
+half of it; `--span N` (1 to 12 columns) and `--height N` (1 to 6 parts) change it. The default
+file is `data/output/preview/<id>.png`. A slot below the visual's `min_size` is refused with the
+same message as in a report, and a text that runs over the slot is a warning. `--watch` draws it
+again whenever the component's YAML is saved, reading the file afresh each time and reusing the
+models of the run; an error (a typo in the YAML) is printed and the loop goes on; Ctrl-C ends it.
+Parameters work as for `run` (`--period`, `--param`, `--anchor`).
+
+`hari-lari-component schema` rewrites the JSON Schemas of components, reports and the bundle
+(`--check` only compares; `hari-lari-report schema` is the same command), and
+`hari-lari-component manifest` rewrites the semantic manifest (see "The manifest"). `--components
 <folder>`, before the command, points every command at another folder of components.
 
-**Snapshots.** `tests/test_snapshots.py` runs every packaged component on the test fixture with
-the parameters of its snapshot and compares the result, per facet, as CSV (floats to 10
-significant digits) with `tests/snapshots/<id>.yml`, so a change to the compiler, a transform
-or a metric shows in the diff exactly which components it moves; a snapshot without a component
-fails too. Plan 8.7 builds the gallery on the same files.
+**Snapshots (8.7).** `tests/test_snapshots.py` runs every component of the tests, the packaged
+ones and those of `tests/fixtures/components/`, on the test fixture with the parameters of its
+snapshot and compares the result, per facet, as CSV (floats to 10 significant digits) with
+`tests/snapshots/<id>.yml`, so a change to the compiler, a transform or a metric shows in the
+diff exactly which components it moves; a snapshot without a component fails too. A parameter
+without a default is given in the snapshot (`category_trend` has `category: Coffee`).
 
-The gallery (plan 8.7) renders every component on the test fixture, so it is both the catalogue
-and a visual check. The Cursor rule `.cursor/rules/reporting-components.mdc` (plan 8.8) explains
-this loop to an LLM, with two worked examples.
+**The gallery (8.7).** `hari-lari-report gallery [--run] [--anchor] [--out] [--no-png]` builds a
+report from the components instead of a file: one page per component that has a visual, its
+slot as wide as the page and as high as the visual's `min_size` asks (at least the 3 of 6 parts
+of a preview), with PDF and a PNG per page in `data/output/gallery/`. It is the catalogue of what
+the framework draws and the visual check after a change to a visual, a transform or the theme. A
+component without a visual, or with a parameter that has no default, is listed as skipped with
+the reason on stderr. The date defaults to the day of the last payment, as for
+`hari-lari-component run`. `tests/test_gallery.py` builds it on the test fixture from all
+components with the snapshots' parameters, and fails on text overflow.
+
+**Authoring guide (8.8).** The Cursor rule `.cursor/rules/reporting-components.mdc` (it applies to
+`src/hari_lari_analytics/reporting/**`) is the working procedure for an LLM and for you: the
+rules that hold everywhere, this loop, how to add a metric, dimension, component, transform,
+visual and report, and two worked examples: a refund-rate metric with a component in YAML only,
+and a `min_value` transform in Python. `tests/test_authoring_examples.py` checks that the rule
+quotes both examples verbatim and runs them, so the guide cannot drift from the code. The
+README has a shorter section.
 
 ## Worked example: why the AOV moved in the last 6 weeks
 
@@ -1563,7 +1718,23 @@ No step needed Python beyond what the framework provides. With `facet: { by: per
   cover's full-history KPIs, and the categories table with its total and hint in L14D, L6W and
   L3M; the CLI prints the same numbers.
 - **Visuals and layouts** (8.2, 8.4): every visual renders on the fixture; no text overflows.
-- **Snapshots** (8.7): a golden result per component.
+  `tests/test_layouts.py` covers the geometry, bounds, overlap, minimum sizes, the chrome and the
+  overflow detector.
+- **Reports and builder** (8.5, the exit of phase 8): `tests/test_reports.py` (loader errors,
+  repeats, `when_empty`, filter precedence, opt-out and conflicts, delivery checks, cron, anchor,
+  JSON Schema) and `tests/test_report_build.py`: the tracer report (`tests/fixtures/reports/
+  tracer.yml`) renders to PDF, PNG, Telegram text and XLSX without text overflow and writes a
+  bundle; empty windows, the Telegram limits, a repeat over the top categories, and the CLI.
+- **Previews** (8.6): `--png`, `--span`, `--height`, the limits, and the watch loop with an
+  injected clock.
+- **Snapshots and gallery** (8.7): a golden result per component, packaged and fixture, and the
+  gallery of all of them without text overflow (`tests/test_snapshots.py`,
+  `tests/test_gallery.py`).
+- **Bundle** (8.9): `tests/test_bundle.py` validates the bundles of the tracer, the gallery, a
+  repeated report and an empty page against the schema, checks the strictness of the contract,
+  what a frontend needs and what must not be in it (line notes, SQL).
+- **Manifest** (8.10): `tests/test_manifest.py`.
+- **Authoring examples** (8.8): `tests/test_authoring_examples.py`.
 - **Ported components** (9.3): parity of the numbers with `report_data.Section`.
 
 ## Migration
@@ -1577,9 +1748,10 @@ both paths share them until `report_pdf.py` is deleted. For two Mondays before t
 job also builds the component report under `dry-run/` (9.6). There is no pixel diff: the numbers
 must match, the drawing may improve.
 
-The command name: until 8.5, `hari-lari-report` is the old local CLI that writes the PDF and
-Excel from the CSV export or an API run. Plan 8.5 renames that one to `hari-lari-report-legacy`
-and gives the name to the new subcommands; 9.7 deletes the legacy command. At the cut-over (9.7):
+The command name: `hari-lari-report` was the old local CLI that writes the PDF and Excel from
+the CSV export or an API run. Since 8.5 that one is `hari-lari-report-legacy` and the name
+belongs to the new subcommands (the live job runs `hari-lari-weekly`, so nothing changed for
+it); 9.7 deletes the legacy command. At the cut-over (9.7):
 
 - The image's entry point becomes `hari-lari-report`, and `hari-lari-weekly` becomes
   `hari-lari-report run --report weekly` (`reports/weekly.yml` carries the Monday 04:00 schedule

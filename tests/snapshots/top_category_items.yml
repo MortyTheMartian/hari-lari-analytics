@@ -1,0 +1,22 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: top_category_items
+params: {}
+facets:
+- key: Coffee
+  label: Coffee
+  metric: null
+  shape: rows
+  csv: |
+    adjusted_item,is_total,net_sales,orders,n_orders,trading_days
+    Latte,False,70000,2,2,3
+    Cappucino,False,0,0,0,3
+    ,True,70000,2,2,3
+- key: Mains
+  label: Mains
+  metric: null
+  shape: rows
+  csv: |
+    adjusted_item,is_total,net_sales,orders,n_orders,trading_days
+    Nasi Campur,False,70000,1,1,3
+    ,True,70000,1,1,3

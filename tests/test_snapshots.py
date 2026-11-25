@@ -1,8 +1,10 @@
-"""Every packaged component against its golden result on the test fixture.
+"""Every component, packaged and of the test fixtures, against its golden result on the test
+fixture run (plan 8.7).
 
 `tests/snapshots/<id>.yml` names the parameters and holds the result of each facet. A change to
 the compiler, a transform, a metric or a component shows here as a diff; after checking it,
-refresh with `uv run pytest tests/test_snapshots.py --update-snapshots`.
+refresh with `uv run pytest tests/test_snapshots.py --update-snapshots`. The gallery
+(`tests/test_gallery.py`) draws the same components with the same parameters.
 """
 
 from __future__ import annotations
@@ -11,17 +13,17 @@ from pathlib import Path
 
 import pytest
 
-from hari_lari_analytics.reporting.components import components_dir, load_components
 from hari_lari_analytics.reporting.db import connect
 from hari_lari_analytics.reporting.facets import run_facets
 from hari_lari_analytics.reporting.queries import QueryContext
 from hari_lari_analytics.reporting.snapshots import read_snapshot, snapshot_text
 
 from .api_fixture import api_tables
+from .components_fixture import all_components
 from .test_models import LAST_SALE, SEEDS
 
 SNAPSHOTS = Path(__file__).parent / "snapshots"
-COMPONENTS = sorted(p.stem for p in components_dir().glob("*.yml"))
+COMPONENTS = sorted(all_components())
 
 
 @pytest.fixture(scope="module")
@@ -31,7 +33,7 @@ def ctx():
 
 @pytest.fixture(scope="module")
 def components():
-    return load_components()
+    return all_components()
 
 
 @pytest.mark.parametrize("component_id", COMPONENTS)

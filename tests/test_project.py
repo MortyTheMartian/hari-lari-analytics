@@ -299,3 +299,27 @@ def test_components_are_checked_on_the_reference_date():
     assert check_calendar().anchor == date(2026, 11, 22)
     with use_project(make(reference_date=date(2027, 3, 1))):
         assert check_calendar().anchor == date(2027, 3, 1)
+
+
+# ---- the Telegram targets of the reports (plan 8.5) --------------------------------
+def test_the_telegram_targets_name_secrets_not_chat_ids():
+    p = project()
+    assert p.telegram_targets == {
+        "group": "telegram-chat-id",
+        "admin": "telegram-admin-chat-id",
+    }
+    assert p.telegram_env("group") == "TELEGRAM_CHAT_ID"
+    assert p.telegram_env("admin") == "TELEGRAM_ADMIN_CHAT_ID"
+
+
+@pytest.mark.parametrize(
+    ("targets", "message"),
+    [
+        ({"group": "telegram-chat-id"}, "admin is required"),
+        ({"Group": "a", "admin": "b"}, "Group: a target name is snake_case"),
+        ({"admin": "-1001234"}, "-1001234: not a Secret Manager secret name"),
+    ],
+)
+def test_bad_telegram_targets_are_refused(targets, message):
+    with pytest.raises(ProjectError, match=message):
+        make(telegram_targets=targets)

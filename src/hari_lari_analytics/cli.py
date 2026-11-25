@@ -1,4 +1,8 @@
-"""Command line entry point: `uv run hari-lari-report`."""
+"""Command line entry point of the legacy report: `uv run hari-lari-report-legacy`.
+
+It writes today's PDF and Excel from a CSV export or an API run. Plan 8.5 gave the name
+`hari-lari-report` to the component report builder (`reporting/report_cli.py`); plan 9.7
+deletes this command."""
 
 from __future__ import annotations
 
@@ -30,7 +34,7 @@ from hari_lari_analytics.report_pdf import write_pdf
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="hari-lari-report",
+        prog="hari-lari-report-legacy",
         description="Clean the Moka POS data and write the PDF and Excel sales reports.",
     )
     parser.add_argument(
@@ -47,9 +51,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--output-dir", type=Path, default=Path("data/output"))
     parser.add_argument("--aliases", type=Path, default=Path("config/item_aliases.csv"))
-    parser.add_argument(
-        "--category-groups", type=Path, default=Path("config/category_group.csv")
-    )
+    parser.add_argument("--category-groups", type=Path, default=Path("config/category_group.csv"))
     parser.add_argument(
         "--anchor",
         type=date.fromisoformat,
@@ -129,9 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         result, sources = load_lines(args)
-        lines, anchor = prepare_lines(
-            result, args.category_groups, args.anchor, source=args.source
-        )
+        lines, anchor = prepare_lines(result, args.category_groups, args.anchor, source=args.source)
     except InputError as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1

@@ -1,0 +1,2040 @@
+{
+  "format_version": 1,
+  "project": {
+    "currency": {
+      "code": "IDR",
+      "decimals": 0
+    },
+    "timezone": "Asia/Makassar",
+    "first_weekday": "monday",
+    "min_n": 30
+  },
+  "models": [
+    {
+      "id": "stg_transactions",
+      "description": "One payment of the API, a sale or a refund, with its receipt and payment type",
+      "primary_key": [
+        "payment_id"
+      ],
+      "time": null,
+      "calendar": false,
+      "sample_size": null,
+      "exposed": false,
+      "metrics": [],
+      "dimensions": []
+    },
+    {
+      "id": "stg_transaction_lines",
+      "description": "One line of a payment as the API returns it",
+      "primary_key": [
+        "payment_id",
+        "line_uuid"
+      ],
+      "time": null,
+      "calendar": false,
+      "sample_size": null,
+      "exposed": false,
+      "metrics": [],
+      "dimensions": []
+    },
+    {
+      "id": "stg_transaction_line_discounts",
+      "description": "One discount on a line; a line can have several",
+      "primary_key": [],
+      "time": null,
+      "calendar": false,
+      "sample_size": null,
+      "exposed": false,
+      "metrics": [],
+      "dimensions": []
+    },
+    {
+      "id": "stg_transaction_line_modifiers",
+      "description": "One modifier option on a line",
+      "primary_key": [],
+      "time": null,
+      "calendar": false,
+      "sample_size": null,
+      "exposed": false,
+      "metrics": [],
+      "dimensions": []
+    },
+    {
+      "id": "stg_transaction_refunds",
+      "description": "The reason of a refund payment",
+      "primary_key": [],
+      "time": null,
+      "calendar": false,
+      "sample_size": null,
+      "exposed": false,
+      "metrics": [],
+      "dimensions": []
+    },
+    {
+      "id": "stg_items",
+      "description": "One item of today's catalog, deleted items included",
+      "primary_key": [],
+      "time": null,
+      "calendar": false,
+      "sample_size": null,
+      "exposed": false,
+      "metrics": [],
+      "dimensions": []
+    },
+    {
+      "id": "int_item_resolution",
+      "description": "The adjusted item and category of a sold item, by id or by the alias file",
+      "primary_key": [],
+      "time": null,
+      "calendar": false,
+      "sample_size": null,
+      "exposed": false,
+      "metrics": [],
+      "dimensions": []
+    },
+    {
+      "id": "int_signed_lines",
+      "description": "One line with refund payments turned into negative lines",
+      "primary_key": [
+        "payment_id",
+        "line_uuid"
+      ],
+      "time": null,
+      "calendar": false,
+      "sample_size": null,
+      "exposed": false,
+      "metrics": [],
+      "dimensions": []
+    },
+    {
+      "id": "int_sales_lines",
+      "description": "One cleaned line with its dimensions and category groups, up to the anchor",
+      "primary_key": [
+        "payment_id",
+        "line_uuid"
+      ],
+      "time": null,
+      "calendar": false,
+      "sample_size": null,
+      "exposed": false,
+      "metrics": [],
+      "dimensions": []
+    },
+    {
+      "id": "int_order_attributes",
+      "description": "One receipt with its items, lines and has_food, has_drink and the other flags",
+      "primary_key": [
+        "receipt_nr"
+      ],
+      "time": null,
+      "calendar": false,
+      "sample_size": null,
+      "exposed": false,
+      "metrics": [],
+      "dimensions": []
+    },
+    {
+      "id": "int_item_lifecycle",
+      "description": "One adjusted item-variant with its first and last sale",
+      "primary_key": [
+        "adjusted_item_variant"
+      ],
+      "time": null,
+      "calendar": false,
+      "sample_size": null,
+      "exposed": false,
+      "metrics": [],
+      "dimensions": []
+    },
+    {
+      "id": "dim_items",
+      "description": "One adjusted item, live or deleted, with its category, groups and sale dates",
+      "primary_key": [
+        "adjusted_item"
+      ],
+      "time": null,
+      "calendar": false,
+      "sample_size": null,
+      "exposed": true,
+      "metrics": [],
+      "dimensions": []
+    },
+    {
+      "id": "dim_categories",
+      "description": "One adjusted category with its category groups and sale dates",
+      "primary_key": [
+        "adjusted_category"
+      ],
+      "time": null,
+      "calendar": false,
+      "sample_size": null,
+      "exposed": true,
+      "metrics": [],
+      "dimensions": []
+    },
+    {
+      "id": "dim_calendar",
+      "description": "One day from the first sale to the anchor, with trading days and events",
+      "primary_key": [
+        "date"
+      ],
+      "time": "date",
+      "calendar": true,
+      "sample_size": null,
+      "exposed": true,
+      "metrics": [],
+      "dimensions": [
+        "sale_date",
+        "sale_week",
+        "sale_iso_week",
+        "sale_month",
+        "sale_quarter",
+        "sale_year",
+        "weekday",
+        "event_kind",
+        "event_name",
+        "is_holiday",
+        "has_promotion"
+      ]
+    },
+    {
+      "id": "fct_sales_lines",
+      "description": "One sold or refunded line, with the attributes of its receipt",
+      "primary_key": [
+        "payment_id",
+        "line_uuid"
+      ],
+      "time": "sale_date",
+      "calendar": true,
+      "sample_size": "orders",
+      "exposed": true,
+      "metrics": [
+        "gross_sales",
+        "discounts",
+        "refunds",
+        "net_sales",
+        "orders",
+        "items_sold",
+        "first_sale_ts",
+        "last_sale_ts",
+        "aov",
+        "category_aov",
+        "items_per_order",
+        "avg_item_price",
+        "discount_rate",
+        "net_sales_per_trading_day",
+        "share",
+        "penetration",
+        "contributive_aov",
+        "food_orders",
+        "drink_orders",
+        "food_and_drink_orders",
+        "food_attach_rate",
+        "drink_attach_rate"
+      ],
+      "dimensions": [
+        "bucket",
+        "sale_date",
+        "sale_week",
+        "sale_iso_week",
+        "sale_month",
+        "sale_quarter",
+        "sale_year",
+        "weekday",
+        "event_kind",
+        "event_name",
+        "is_holiday",
+        "has_promotion",
+        "sale_hour",
+        "hour_of_day",
+        "payment_type",
+        "has_food",
+        "has_drink",
+        "has_consignment",
+        "has_discount",
+        "has_modifier",
+        "basket_size",
+        "order_line_count",
+        "adjusted_category",
+        "category_group_level_1",
+        "category_group_level_2",
+        "adjusted_item",
+        "adjusted_item_variant",
+        "category",
+        "item",
+        "item_variant",
+        "variant",
+        "discount_code",
+        "discounted",
+        "is_refund",
+        "modifier_name",
+        "modifier_option_name"
+      ]
+    },
+    {
+      "id": "fct_orders",
+      "description": "One receipt, dated at its payment",
+      "primary_key": [
+        "receipt_nr"
+      ],
+      "time": "sale_date",
+      "calendar": true,
+      "sample_size": "orders",
+      "exposed": true,
+      "metrics": [
+        "gross_sales",
+        "discounts",
+        "refunds",
+        "net_sales",
+        "orders",
+        "items_sold",
+        "first_sale_ts",
+        "last_sale_ts",
+        "aov",
+        "category_aov",
+        "items_per_order",
+        "avg_item_price",
+        "discount_rate",
+        "net_sales_per_trading_day",
+        "share",
+        "penetration",
+        "contributive_aov",
+        "food_orders",
+        "drink_orders",
+        "food_and_drink_orders",
+        "food_attach_rate",
+        "drink_attach_rate"
+      ],
+      "dimensions": [
+        "bucket",
+        "sale_date",
+        "sale_week",
+        "sale_iso_week",
+        "sale_month",
+        "sale_quarter",
+        "sale_year",
+        "weekday",
+        "event_kind",
+        "event_name",
+        "is_holiday",
+        "has_promotion",
+        "sale_hour",
+        "hour_of_day",
+        "payment_type",
+        "has_food",
+        "has_drink",
+        "has_consignment",
+        "has_discount",
+        "has_modifier",
+        "has_refund",
+        "basket_size",
+        "order_line_count"
+      ]
+    }
+  ],
+  "metrics": [
+    {
+      "id": "gross_sales",
+      "kind": "sql",
+      "label": "Gross Sales",
+      "description": "Sales before discounts and refunds",
+      "format": "idr",
+      "unit": "IDR",
+      "up_is_good": true,
+      "additivity": "full",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [],
+      "aggregates": {
+        "fct_orders": "sum(gross_sales)",
+        "fct_sales_lines": "sum(gross_sales)"
+      }
+    },
+    {
+      "id": "discounts",
+      "kind": "sql",
+      "label": "Discounts",
+      "description": "Discounts given, as a positive amount",
+      "format": "idr",
+      "unit": "IDR",
+      "up_is_good": false,
+      "additivity": "full",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [],
+      "aggregates": {
+        "fct_orders": "sum(discounts)",
+        "fct_sales_lines": "sum(discounts)"
+      }
+    },
+    {
+      "id": "refunds",
+      "kind": "sql",
+      "label": "Refunds",
+      "description": "Refunded amounts, as a positive amount",
+      "format": "idr",
+      "unit": "IDR",
+      "up_is_good": false,
+      "additivity": "full",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [],
+      "aggregates": {
+        "fct_orders": "sum(refunds)",
+        "fct_sales_lines": "sum(refunds)"
+      }
+    },
+    {
+      "id": "net_sales",
+      "kind": "sql",
+      "label": "Net Sales",
+      "description": "Gross sales minus discounts and refunds",
+      "format": "idr",
+      "unit": "IDR",
+      "up_is_good": true,
+      "additivity": "full",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [],
+      "aggregates": {
+        "fct_orders": "sum(net_sales)",
+        "fct_sales_lines": "sum(net_sales)"
+      }
+    },
+    {
+      "id": "orders",
+      "kind": "sql",
+      "label": "Orders",
+      "description": "Distinct receipts, without fully refunded ones",
+      "format": "count",
+      "unit": "",
+      "up_is_good": true,
+      "additivity": "order_grain",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [],
+      "aggregates": {
+        "fct_orders": "count(*) filter (where counts_as_order)",
+        "fct_sales_lines": "count(distinct receipt_nr) filter (where counts_as_order)"
+      }
+    },
+    {
+      "id": "items_sold",
+      "kind": "sql",
+      "label": "Items Sold",
+      "description": "Quantity sold; refunds subtract",
+      "format": "count",
+      "unit": "",
+      "up_is_good": true,
+      "additivity": "full",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [],
+      "aggregates": {
+        "fct_orders": "sum(items)",
+        "fct_sales_lines": "sum(quantity)"
+      }
+    },
+    {
+      "id": "first_sale_ts",
+      "kind": "sql",
+      "label": "First sale",
+      "description": "Earliest payment, without fully refunded receipts",
+      "format": "timestamp",
+      "unit": "",
+      "up_is_good": null,
+      "additivity": "none",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [],
+      "aggregates": {
+        "fct_orders": "min(sale_ts) filter (where counts_as_order)",
+        "fct_sales_lines": "min(sale_ts) filter (where counts_as_order and not is_refund)"
+      }
+    },
+    {
+      "id": "last_sale_ts",
+      "kind": "sql",
+      "label": "Last sale",
+      "description": "Latest payment, without fully refunded receipts",
+      "format": "timestamp",
+      "unit": "",
+      "up_is_good": null,
+      "additivity": "none",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [],
+      "aggregates": {
+        "fct_orders": "max(sale_ts) filter (where counts_as_order)",
+        "fct_sales_lines": "max(sale_ts) filter (where counts_as_order and not is_refund)"
+      }
+    },
+    {
+      "id": "aov",
+      "kind": "derived",
+      "label": "Avg Order Value",
+      "description": "Net sales per order",
+      "format": "idr",
+      "unit": "IDR",
+      "up_is_good": true,
+      "additivity": "none",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [
+        "net_sales",
+        "orders"
+      ],
+      "expression": "net_sales / nullif(orders, 0)"
+    },
+    {
+      "id": "category_aov",
+      "kind": "derived",
+      "label": "Category AOV",
+      "description": "Net sales of the group per order containing it; the AOV of the orders with the category, counting only what they spent on it",
+      "format": "idr",
+      "unit": "IDR",
+      "up_is_good": true,
+      "additivity": "none",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [
+        "net_sales",
+        "orders"
+      ],
+      "expression": "net_sales / nullif(orders, 0)"
+    },
+    {
+      "id": "items_per_order",
+      "kind": "derived",
+      "label": "Items per order",
+      "description": "Items sold per order",
+      "format": "decimal",
+      "unit": "",
+      "up_is_good": true,
+      "additivity": "none",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [
+        "items_sold",
+        "orders"
+      ],
+      "expression": "items_sold / nullif(orders, 0)"
+    },
+    {
+      "id": "avg_item_price",
+      "kind": "derived",
+      "label": "Avg net price per item",
+      "description": "Net sales per item sold",
+      "format": "idr",
+      "unit": "IDR",
+      "up_is_good": true,
+      "additivity": "none",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [
+        "items_sold",
+        "net_sales"
+      ],
+      "expression": "net_sales / nullif(items_sold, 0)"
+    },
+    {
+      "id": "discount_rate",
+      "kind": "derived",
+      "label": "Discount rate",
+      "description": "Discounts as a share of gross sales",
+      "format": "pct",
+      "unit": "",
+      "up_is_good": false,
+      "additivity": "none",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [
+        "discounts",
+        "gross_sales"
+      ],
+      "expression": "discounts / nullif(gross_sales, 0)"
+    },
+    {
+      "id": "net_sales_per_trading_day",
+      "kind": "derived",
+      "label": "Net sales per trading day",
+      "description": "Net sales divided by the days with at least one order in the window",
+      "format": "idr",
+      "unit": "IDR",
+      "up_is_good": true,
+      "additivity": "none",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [
+        "net_sales"
+      ],
+      "expression": "net_sales / nullif(trading_days, 0)"
+    },
+    {
+      "id": "share",
+      "kind": "relative",
+      "label": "% of net",
+      "description": "Share of the net sales of the whole filter",
+      "format": "pct",
+      "unit": "",
+      "up_is_good": null,
+      "additivity": "full",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [
+        "net_sales"
+      ],
+      "expression": "net_sales / nullif(total.net_sales, 0)"
+    },
+    {
+      "id": "penetration",
+      "kind": "relative",
+      "label": "Order penetration",
+      "description": "Share of all orders of the filter that contain the group",
+      "format": "pct",
+      "unit": "",
+      "up_is_good": true,
+      "additivity": "none",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [
+        "orders"
+      ],
+      "expression": "orders / nullif(total.orders, 0)"
+    },
+    {
+      "id": "contributive_aov",
+      "kind": "relative",
+      "label": "Contributive AOV",
+      "description": "Net sales of the group per order of the whole filter; penetration × category AOV. The slices add up to the AOV.",
+      "format": "idr",
+      "unit": "IDR",
+      "up_is_good": true,
+      "additivity": "full",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [
+        "net_sales",
+        "orders"
+      ],
+      "expression": "net_sales / nullif(total.orders, 0)"
+    },
+    {
+      "id": "food_orders",
+      "kind": "filtered",
+      "label": "Orders with food",
+      "description": "Orders with at least one line in the category group food",
+      "format": "count",
+      "unit": "",
+      "up_is_good": true,
+      "additivity": "order_grain",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [
+        "orders"
+      ],
+      "aggregates": {
+        "fct_orders": "count(*) filter (where (counts_as_order) and (has_food = true))",
+        "fct_sales_lines": "count(distinct receipt_nr) filter (where (counts_as_order) and (has_food = true))"
+      }
+    },
+    {
+      "id": "drink_orders",
+      "kind": "filtered",
+      "label": "Orders with a drink",
+      "description": "Orders with at least one line in the category group drink",
+      "format": "count",
+      "unit": "",
+      "up_is_good": true,
+      "additivity": "order_grain",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [
+        "orders"
+      ],
+      "aggregates": {
+        "fct_orders": "count(*) filter (where (counts_as_order) and (has_drink = true))",
+        "fct_sales_lines": "count(distinct receipt_nr) filter (where (counts_as_order) and (has_drink = true))"
+      }
+    },
+    {
+      "id": "food_and_drink_orders",
+      "kind": "filtered",
+      "label": "Orders with food and a drink",
+      "description": "Orders with at least one food line and at least one drink line",
+      "format": "count",
+      "unit": "",
+      "up_is_good": true,
+      "additivity": "order_grain",
+      "min_n": null,
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [
+        "orders"
+      ],
+      "aggregates": {
+        "fct_orders": "count(*) filter (where (counts_as_order) and (has_food = true and has_drink = true))",
+        "fct_sales_lines": "count(distinct receipt_nr) filter (where (counts_as_order) and (has_food = true and has_drink = true))"
+      }
+    },
+    {
+      "id": "food_attach_rate",
+      "kind": "derived",
+      "label": "Food attach rate",
+      "description": "Share of the orders with a drink that also have food",
+      "format": "pct",
+      "unit": "",
+      "up_is_good": true,
+      "additivity": "none",
+      "min_n": {
+        "drink_orders": 30
+      },
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [
+        "drink_orders",
+        "food_and_drink_orders"
+      ],
+      "expression": "food_and_drink_orders / nullif(drink_orders, 0)"
+    },
+    {
+      "id": "drink_attach_rate",
+      "kind": "derived",
+      "label": "Drink attach rate",
+      "description": "Share of the orders with food that also have a drink",
+      "format": "pct",
+      "unit": "",
+      "up_is_good": true,
+      "additivity": "none",
+      "min_n": {
+        "food_orders": 30
+      },
+      "models": [
+        "fct_orders",
+        "fct_sales_lines"
+      ],
+      "depends_on": [
+        "food_and_drink_orders",
+        "food_orders"
+      ],
+      "expression": "food_and_drink_orders / nullif(food_orders, 0)"
+    }
+  ],
+  "default_min_n": 30,
+  "dimensions": [
+    {
+      "id": "bucket",
+      "label": "Period",
+      "description": "The time bucket in the query's grain, as its first day; computed by the compiler, so it cannot be used in a filter",
+      "grain": "day",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders"
+      ],
+      "domain": "calendar",
+      "sort": {
+        "by": "value",
+        "desc": false
+      }
+    },
+    {
+      "id": "sale_date",
+      "label": "Date",
+      "description": null,
+      "grain": "day",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders",
+        "dim_calendar"
+      ],
+      "domain": "calendar",
+      "sort": {
+        "by": "value",
+        "desc": false
+      }
+    },
+    {
+      "id": "sale_week",
+      "label": "Week",
+      "description": "First day of the week (first_weekday in project.yml)",
+      "grain": "day",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders",
+        "dim_calendar"
+      ],
+      "domain": "calendar",
+      "sort": {
+        "by": "value",
+        "desc": false
+      }
+    },
+    {
+      "id": "sale_iso_week",
+      "label": "ISO week",
+      "description": "ISO week label such as 2026-W44",
+      "grain": "day",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders",
+        "dim_calendar"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      }
+    },
+    {
+      "id": "sale_month",
+      "label": "Month",
+      "description": null,
+      "grain": "day",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders",
+        "dim_calendar"
+      ],
+      "domain": "calendar",
+      "sort": {
+        "by": "value",
+        "desc": false
+      }
+    },
+    {
+      "id": "sale_quarter",
+      "label": "Quarter",
+      "description": null,
+      "grain": "day",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders",
+        "dim_calendar"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      }
+    },
+    {
+      "id": "sale_year",
+      "label": "Year",
+      "description": null,
+      "grain": "day",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders",
+        "dim_calendar"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      }
+    },
+    {
+      "id": "weekday",
+      "label": "Weekday",
+      "description": "ISO weekday, Monday = 1",
+      "grain": "day",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders",
+        "dim_calendar"
+      ],
+      "domain": "all",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "values": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "labels": {
+        "1": "Mon",
+        "2": "Tue",
+        "3": "Wed",
+        "4": "Thu",
+        "5": "Fri",
+        "6": "Sat",
+        "7": "Sun"
+      }
+    },
+    {
+      "id": "event_kind",
+      "label": "Calendar event",
+      "description": "The most telling event of the day (closure, holiday, promotion, other)",
+      "grain": "day",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders",
+        "dim_calendar"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "null_label": "No event"
+    },
+    {
+      "id": "event_name",
+      "label": "Event",
+      "description": null,
+      "grain": "day",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders",
+        "dim_calendar"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "null_label": "No event"
+    },
+    {
+      "id": "is_holiday",
+      "label": "Holiday",
+      "description": null,
+      "grain": "day",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders",
+        "dim_calendar"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "labels": {
+        "True": "Holiday",
+        "False": "No holiday"
+      }
+    },
+    {
+      "id": "has_promotion",
+      "label": "Promotion day",
+      "description": null,
+      "grain": "day",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders",
+        "dim_calendar"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "labels": {
+        "True": "Promotion",
+        "False": "No promotion"
+      }
+    },
+    {
+      "id": "sale_hour",
+      "label": "Date and hour",
+      "description": null,
+      "grain": "order",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      }
+    },
+    {
+      "id": "hour_of_day",
+      "label": "Hour",
+      "description": null,
+      "grain": "order",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders"
+      ],
+      "domain": "span",
+      "sort": {
+        "by": "value",
+        "desc": false
+      }
+    },
+    {
+      "id": "payment_type",
+      "label": "Payment type",
+      "description": null,
+      "grain": "order",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "net_sales",
+        "desc": true
+      }
+    },
+    {
+      "id": "has_food",
+      "label": "Has food",
+      "description": null,
+      "grain": "order",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "labels": {
+        "True": "With food",
+        "False": "Without food"
+      }
+    },
+    {
+      "id": "has_drink",
+      "label": "Has a drink",
+      "description": null,
+      "grain": "order",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "labels": {
+        "True": "With a drink",
+        "False": "Without a drink"
+      }
+    },
+    {
+      "id": "has_consignment",
+      "label": "Has consignment",
+      "description": null,
+      "grain": "order",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "labels": {
+        "True": "With consignment",
+        "False": "Without consignment"
+      }
+    },
+    {
+      "id": "has_discount",
+      "label": "Has a discount",
+      "description": null,
+      "grain": "order",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "labels": {
+        "True": "Discounted",
+        "False": "Not discounted"
+      }
+    },
+    {
+      "id": "has_modifier",
+      "label": "Has a modifier",
+      "description": null,
+      "grain": "order",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "labels": {
+        "True": "With modifier",
+        "False": "Without modifier"
+      }
+    },
+    {
+      "id": "has_refund",
+      "label": "Has a refund",
+      "description": null,
+      "grain": "order",
+      "models": [
+        "fct_orders"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "labels": {
+        "True": "Refunded",
+        "False": "Not refunded"
+      }
+    },
+    {
+      "id": "basket_size",
+      "label": "Items in the order",
+      "description": null,
+      "grain": "order",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "bins": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5+"
+      ]
+    },
+    {
+      "id": "order_line_count",
+      "label": "Lines in the order",
+      "description": null,
+      "grain": "order",
+      "models": [
+        "fct_sales_lines",
+        "fct_orders"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "bins": [
+        "1",
+        "2",
+        "3",
+        "4+"
+      ]
+    },
+    {
+      "id": "adjusted_category",
+      "label": "Category",
+      "description": "Category according to today's set of categories (METRICS.md)",
+      "grain": "item",
+      "models": [
+        "fct_sales_lines"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "net_sales",
+        "desc": true
+      }
+    },
+    {
+      "id": "category_group_level_1",
+      "label": "Category group",
+      "description": "food, drink, consignment or unmapped (config/category_group.csv)",
+      "grain": "item",
+      "models": [
+        "fct_sales_lines"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "net_sales",
+        "desc": true
+      }
+    },
+    {
+      "id": "category_group_level_2",
+      "label": "Category subgroup",
+      "description": null,
+      "grain": "item",
+      "models": [
+        "fct_sales_lines"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "net_sales",
+        "desc": true
+      },
+      "null_label": "No subgroup"
+    },
+    {
+      "id": "adjusted_item",
+      "label": "Item",
+      "description": "Today's name of the item (METRICS.md)",
+      "grain": "item",
+      "models": [
+        "fct_sales_lines"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "net_sales",
+        "desc": true
+      }
+    },
+    {
+      "id": "adjusted_item_variant",
+      "label": "Item-variant",
+      "description": "Adjusted item and variant, or just the item when there is no variant",
+      "grain": "item",
+      "models": [
+        "fct_sales_lines"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "net_sales",
+        "desc": true
+      }
+    },
+    {
+      "id": "category",
+      "label": "Category at sale",
+      "description": "Category recorded at the time of sale",
+      "grain": "item",
+      "models": [
+        "fct_sales_lines"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "net_sales",
+        "desc": true
+      }
+    },
+    {
+      "id": "item",
+      "label": "Item at sale",
+      "description": "Item name recorded at the time of sale",
+      "grain": "item",
+      "models": [
+        "fct_sales_lines"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "net_sales",
+        "desc": true
+      }
+    },
+    {
+      "id": "item_variant",
+      "label": "Item-variant at sale",
+      "description": null,
+      "grain": "item",
+      "models": [
+        "fct_sales_lines"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "net_sales",
+        "desc": true
+      }
+    },
+    {
+      "id": "variant",
+      "label": "Variant",
+      "description": null,
+      "grain": "item",
+      "models": [
+        "fct_sales_lines"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "net_sales",
+        "desc": true
+      },
+      "null_label": "No variant"
+    },
+    {
+      "id": "discount_code",
+      "label": "Discount code",
+      "description": null,
+      "grain": "line",
+      "models": [
+        "fct_sales_lines"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "gross_sales",
+        "desc": true
+      },
+      "null_label": "No discount"
+    },
+    {
+      "id": "discounted",
+      "label": "Discounted",
+      "description": null,
+      "grain": "line",
+      "models": [
+        "fct_sales_lines"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "labels": {
+        "True": "Discounted",
+        "False": "Not discounted"
+      }
+    },
+    {
+      "id": "is_refund",
+      "label": "Refund line",
+      "description": null,
+      "grain": "line",
+      "models": [
+        "fct_sales_lines"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "value",
+        "desc": false
+      },
+      "labels": {
+        "True": "Refund",
+        "False": "Sale"
+      }
+    },
+    {
+      "id": "modifier_name",
+      "label": "Modifier",
+      "description": null,
+      "grain": "line",
+      "models": [
+        "fct_sales_lines"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "net_sales",
+        "desc": true
+      },
+      "null_label": "No modifier"
+    },
+    {
+      "id": "modifier_option_name",
+      "label": "Modifier option",
+      "description": null,
+      "grain": "line",
+      "models": [
+        "fct_sales_lines"
+      ],
+      "domain": "none",
+      "sort": {
+        "by": "net_sales",
+        "desc": true
+      },
+      "null_label": "No modifier"
+    }
+  ],
+  "kpi_tree": [
+    {
+      "id": "sales_volume_value",
+      "description": "Net sales grow with more orders or a higher order value",
+      "kpi": "net_sales",
+      "kind": "product",
+      "drivers": [
+        "orders",
+        "aov"
+      ]
+    },
+    {
+      "id": "net_from_gross",
+      "description": "Net sales are gross sales minus discounts and refunds",
+      "kpi": "net_sales",
+      "kind": "sum",
+      "drivers": [
+        "gross_sales",
+        "-discounts",
+        "-refunds"
+      ]
+    },
+    {
+      "id": "aov_basket",
+      "description": "The order value grows with more items per order or a higher price per item",
+      "kpi": "aov",
+      "kind": "product",
+      "drivers": [
+        "items_per_order",
+        "avg_item_price"
+      ]
+    },
+    {
+      "id": "aov_by_category",
+      "description": "The AOV is the sum of the contributive AOVs of the categories",
+      "kpi": "aov",
+      "kind": "sum_over",
+      "drivers": [],
+      "dimension": "adjusted_category",
+      "driver": "contributive_aov",
+      "then": "category_slice"
+    },
+    {
+      "id": "aov_by_category_group",
+      "description": "The AOV is the sum of the contributive AOVs of food, drink and consignment",
+      "kpi": "aov",
+      "kind": "sum_over",
+      "drivers": [],
+      "dimension": "category_group_level_1",
+      "driver": "contributive_aov",
+      "then": "category_slice"
+    },
+    {
+      "id": "category_slice",
+      "description": "A category's slice of the AOV grows when it is in more orders (penetration) or when the orders with it spend more on it (category AOV)",
+      "kpi": "contributive_aov",
+      "kind": "product",
+      "drivers": [
+        "penetration",
+        "category_aov"
+      ]
+    },
+    {
+      "id": "net_sales_by_category",
+      "description": "Net sales are the sum of the net sales of the categories",
+      "kpi": "net_sales",
+      "kind": "sum_over",
+      "drivers": [],
+      "dimension": "adjusted_category",
+      "driver": "net_sales"
+    }
+  ],
+  "windows": {
+    "forms": [
+      {
+        "form": "L<n>D",
+        "example": "L14D",
+        "description": "the last n days, ending on the anchor; also last_n_days(n)"
+      },
+      {
+        "form": "L<n>W",
+        "example": "L6W",
+        "description": "the last n complete weeks, ending on the last day of the week of the anchor (the first weekday is a project setting); also last_n_weeks(n)"
+      },
+      {
+        "form": "L<n>M",
+        "example": "L3M",
+        "description": "the last n complete months; also last_n_months(n)"
+      },
+      {
+        "form": "WTD",
+        "example": "WTD",
+        "description": "the week to date"
+      },
+      {
+        "form": "MTD",
+        "example": "MTD",
+        "description": "the month to date"
+      },
+      {
+        "form": "full",
+        "example": "full",
+        "description": "the whole history, from the first sale"
+      }
+    ],
+    "compare": {
+      "prior": "the period of the same length right before the window",
+      "last_year": "the same dates a year earlier",
+      "none": "no comparison"
+    }
+  },
+  "transforms": [
+    {
+      "name": "classify",
+      "description": "Add a class column: thresholds on a column (ABC classes), quadrants of two columns against their medians (menu engineering) or the lifecycle of an item (new, rising, steady, fading).",
+      "options": [
+        "bands",
+        "by",
+        "fading_at",
+        "into",
+        "labels",
+        "min_n",
+        "mode",
+        "otherwise",
+        "rising_at",
+        "x",
+        "x_split",
+        "y",
+        "y_split"
+      ],
+      "shapes": [
+        "rows"
+      ],
+      "produces": null
+    },
+    {
+      "name": "cumulative_share",
+      "description": "Add the running share of a fully additive metric, largest rows first.",
+      "options": [
+        "into",
+        "metric",
+        "sort"
+      ],
+      "shapes": [
+        "rows"
+      ],
+      "produces": null
+    },
+    {
+      "name": "decompose",
+      "description": "Split the change of a KPI over the drivers of one KPI-tree identity, so that the effects add up to the change exactly: log-mean (LMDI) weights for a product, differences for a sum, one row per member for a sum over a dimension (new and gone members whole), and with `depth: 2` each member split once more by the identity's `then`.",
+      "options": [
+        "depth",
+        "identity",
+        "order"
+      ],
+      "shapes": [
+        "single",
+        "rows"
+      ],
+      "produces": "decomposition"
+    },
+    {
+      "name": "fill_domain",
+      "description": "Add the missing values of a dimension's domain (bins, all weekdays, the hours between the first and last) as rows with zeros, in the order of the domain.",
+      "options": [
+        "dimensions",
+        "values"
+      ],
+      "shapes": [
+        "rows"
+      ],
+      "produces": null
+    },
+    {
+      "name": "growth_vs_previous",
+      "description": "Add `<metric>_growth`: each bucket over the one before it, per group, as a ratio.",
+      "options": [
+        "grains",
+        "keep_before",
+        "metrics"
+      ],
+      "shapes": [
+        "series"
+      ],
+      "produces": null
+    },
+    {
+      "name": "per_trading_day",
+      "description": "Divide the summing metrics by the trading days of each row, which the query counted per time bucket, per weekday (or other calendar value) or for the whole window; the prior values by the prior trading days, and the changes are recomputed.",
+      "options": [
+        "metrics"
+      ],
+      "shapes": [
+        "single",
+        "rows",
+        "series"
+      ],
+      "produces": null
+    },
+    {
+      "name": "pivot",
+      "description": "Turn two dimensions into a matrix: one row per value of `rows`, one column per value of `columns`, in the order of the result; columns of numbers or days are sorted (the hours of a weekday × hour matrix). Total rows are dropped.",
+      "options": [
+        "columns",
+        "rows",
+        "value"
+      ],
+      "shapes": [
+        "rows",
+        "series"
+      ],
+      "produces": "matrix"
+    },
+    {
+      "name": "rank",
+      "description": "Add a rank column (1 = best) over the regular rows; Other and total rows get no rank.",
+      "options": [
+        "by",
+        "desc",
+        "into",
+        "method",
+        "within"
+      ],
+      "shapes": [
+        "rows",
+        "series"
+      ],
+      "produces": null
+    },
+    {
+      "name": "sort_limit",
+      "description": "Sort the rows by a column and keep the first n; `Other` and total rows stay at the end.",
+      "options": [
+        "by",
+        "desc",
+        "n"
+      ],
+      "shapes": [
+        "single",
+        "rows"
+      ],
+      "produces": null
+    },
+    {
+      "name": "suppress_small_n",
+      "description": "Blank the metrics of the rows below the sample-size rule, instead of greying them out.",
+      "options": [
+        "metrics"
+      ],
+      "shapes": [
+        "single",
+        "rows",
+        "series"
+      ],
+      "produces": null
+    }
+  ],
+  "visuals": [
+    {
+      "name": "bar_trend",
+      "description": "Bars of one metric along time (or along a dimension), with the prior period as ticks, the change against the previous bucket, an optional second metric as a line and the calendar events marked.",
+      "options": [
+        "color",
+        "events",
+        "growth",
+        "highlight",
+        "labels",
+        "line",
+        "metric",
+        "prior"
+      ],
+      "accepts": [
+        "series",
+        "rows"
+      ],
+      "min_size": [
+        0.3,
+        0.25
+      ]
+    },
+    {
+      "name": "dot_plot",
+      "description": "One dot per row for a metric (a share or a rate), the prior value as a hollow dot and the dot coloured by its change.",
+      "options": [
+        "labels",
+        "metric",
+        "prior"
+      ],
+      "accepts": [
+        "rows"
+      ],
+      "min_size": [
+        0.25,
+        0.2
+      ]
+    },
+    {
+      "name": "hbar",
+      "description": "Horizontal bars of one metric, one per row in the result's order, with the prior value as a tick.",
+      "options": [
+        "highlight",
+        "labels",
+        "metric",
+        "prior"
+      ],
+      "accepts": [
+        "rows"
+      ],
+      "min_size": [
+        0.25,
+        0.2
+      ]
+    },
+    {
+      "name": "heatmap",
+      "description": "A matrix (weekday × hour) as shaded cells: the larger the value, the darker; a change is shaded good or bad by its tone.",
+      "options": [
+        "color",
+        "labels"
+      ],
+      "accepts": [
+        "matrix"
+      ],
+      "min_size": [
+        0.35,
+        0.25
+      ]
+    },
+    {
+      "name": "insights",
+      "description": "The insight sentences of the report or the component, ranked, each with a dot in the colour of its tone.",
+      "options": [
+        "empty",
+        "max_items"
+      ],
+      "accepts": [
+        "single",
+        "rows",
+        "series",
+        "matrix",
+        "decomposition"
+      ],
+      "min_size": [
+        0.25,
+        0.12
+      ]
+    },
+    {
+      "name": "kpi_card",
+      "description": "One metric: its label, the value, the change with the prior value, and a sparkline.",
+      "options": [
+        "card",
+        "metric",
+        "prior",
+        "sparkline",
+        "style"
+      ],
+      "accepts": [
+        "single",
+        "series"
+      ],
+      "min_size": [
+        0.15,
+        0.1
+      ]
+    },
+    {
+      "name": "notes_card",
+      "description": "A short list of notes, one per row (the anomalies, the closures): a column with an optional column before and after it.",
+      "options": [
+        "after",
+        "before",
+        "column",
+        "empty",
+        "max_items"
+      ],
+      "accepts": [
+        "rows",
+        "series"
+      ],
+      "min_size": [
+        0.2,
+        0.12
+      ]
+    },
+    {
+      "name": "scatter_quadrant",
+      "description": "Two metrics as a scatter, split into quadrants where `classify` split them (menu engineering), the points coloured by their class.",
+      "options": [
+        "classes",
+        "labels",
+        "x",
+        "y"
+      ],
+      "accepts": [
+        "rows"
+      ],
+      "min_size": [
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "name": "stacked_share_bar",
+      "description": "One bar split into the shares of the rows (payment types), with a legend of the names, their shares and the detail metrics.",
+      "options": [
+        "details",
+        "metric"
+      ],
+      "accepts": [
+        "rows"
+      ],
+      "min_size": [
+        0.25,
+        0.12
+      ]
+    },
+    {
+      "name": "summary_card",
+      "description": "A period card: the window, its comparison, up to three metrics with their change and a sparkline.",
+      "options": [
+        "card",
+        "metrics",
+        "sparkline"
+      ],
+      "accepts": [
+        "single",
+        "series"
+      ],
+      "min_size": [
+        0.25,
+        0.25
+      ]
+    },
+    {
+      "name": "table",
+      "description": "A table: one row per group with bars, deltas, rank and the total row, or one row per metric with its current and prior value and change.",
+      "options": [
+        "bars",
+        "bold",
+        "columns",
+        "deltas",
+        "orientation",
+        "prior",
+        "rank",
+        "total"
+      ],
+      "accepts": [
+        "rows",
+        "single",
+        "series"
+      ],
+      "min_size": [
+        0.25,
+        0.15
+      ]
+    },
+    {
+      "name": "text_line",
+      "description": "One line of values: Gross 1,234,000 · discounts 12,000 · refunds 0 IDR.",
+      "options": [
+        "labels",
+        "metrics",
+        "style"
+      ],
+      "accepts": [
+        "single"
+      ],
+      "min_size": [
+        0.3,
+        0.03
+      ]
+    },
+    {
+      "name": "waterfall",
+      "description": "A bridge from the KPI's prior value to its current value through the effect of each driver (or member) of the decomposition.",
+      "options": [
+        "labels"
+      ],
+      "accepts": [
+        "decomposition"
+      ],
+      "min_size": [
+        0.3,
+        0.25
+      ]
+    }
+  ],
+  "insight_rules": [
+    {
+      "name": "top_drivers",
+      "type": "drivers",
+      "description": "The largest drivers of a KPI's change, from `decompose`: one sentence per KPI.",
+      "options": {
+        "top": 2,
+        "min_share_of_change": 0.2
+      },
+      "weight": 1.0,
+      "compares": true
+    },
+    {
+      "name": "movers",
+      "type": "movers",
+      "description": "The groups of a breakdown that moved most against the comparison.",
+      "options": {
+        "top": 2,
+        "min_abs_delta": {
+          "pct": 0.05,
+          "idr": 2000,
+          "idr_compact": 2000,
+          "count": 5
+        }
+      },
+      "weight": 1.0,
+      "compares": true
+    },
+    {
+      "name": "best_bucket",
+      "type": "record",
+      "description": "The latest bucket of a trend is the best one (D19): the highest, or the lowest when down is good. A partial last bucket and buckets without trading days do not count.",
+      "options": {},
+      "weight": 0.8,
+      "compares": false
+    },
+    {
+      "name": "discount_rate_high",
+      "type": "threshold",
+      "description": "A value that crossed a threshold since the comparison period.",
+      "options": {
+        "metric": "discount_rate",
+        "above": 0.1
+      },
+      "weight": 1.0,
+      "compares": true
+    },
+    {
+      "name": "data_notes",
+      "type": "notes",
+      "description": "The data notes (source `notes`): extraction errors and warnings, failing checks.",
+      "options": {},
+      "weight": 0.6,
+      "compares": false
+    }
+  ],
+  "components": [
+    {
+      "id": "category_contributive_aov",
+      "title": "Adjusted categories & contributive AOV",
+      "description": "One row per adjusted category with its share of net sales, penetration, category AOV and contributive AOV, the categories sold only in the prior period, and the total, whose contributive AOV is the AOV.",
+      "hint": "Sorted by net sales · AOV = Σ contributive AOV = Σ penetration × category AOV · a category's share of AOV equals its % of net{% if meta.compare_ok %} · Δ vs prior period{% endif %}",
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_sales_lines",
+        "dimensions": [
+          "adjusted_category"
+        ],
+        "metrics": [
+          "net_sales",
+          "share",
+          "items_sold",
+          "orders",
+          "penetration",
+          "category_aov",
+          "contributive_aov"
+        ],
+        "window": "$period",
+        "compare": "prior",
+        "totals": true,
+        "keep_prior_only": true
+      },
+      "transforms": [],
+      "facet": null,
+      "visual": "table",
+      "insights": [
+        "movers"
+      ]
+    },
+    {
+      "id": "full_history_kpis",
+      "title": "Full history",
+      "description": "The four headline cards of the cover: net sales, orders, average order value and items sold from the first sale to the anchor.",
+      "hint": "{{ meta.window.current.label }}",
+      "params": {},
+      "unbound": [],
+      "query": {
+        "model": "fct_sales_lines",
+        "metrics": [
+          "net_sales",
+          "orders",
+          "aov",
+          "items_sold"
+        ],
+        "window": "full",
+        "compare": "none"
+      },
+      "transforms": [],
+      "facet": {
+        "by": "metric",
+        "layout": "grid(1x4)"
+      },
+      "visual": "kpi_card",
+      "insights": []
+    },
+    {
+      "id": "lines_export",
+      "title": "Sales lines",
+      "description": "The cleaned sales lines up to the anchor, one row per line, for the workbook of a report: the columns of the Excel file, without personal data and without the line note. It has no visual, so it belongs in `outputs.xlsx`, not on a page.",
+      "hint": null,
+      "params": {},
+      "unbound": [],
+      "query": {
+        "source": "lines_export"
+      },
+      "transforms": [],
+      "facet": null,
+      "visual": null,
+      "insights": []
+    }
+  ],
+  "reports": []
+}

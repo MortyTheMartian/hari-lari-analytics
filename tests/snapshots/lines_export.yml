@@ -1,0 +1,20 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: lines_export
+params: {}
+facets:
+- key: null
+  label: null
+  metric: null
+  shape: rows
+  csv: |
+    receipt_nr,sale_ts,sale_hour,sale_date,sale_week,sale_iso_week,sale_month,sale_quarter,sale_year,hour_of_day,event_type,refund_reason,counts_as_order,category,adjusted_category,item,adjusted_item,variant,item_variant,adjusted_item_variant,discounted,discount_code,payment_type,modifier_name,modifier_option_name,modifier_price,quantity,gross_sales,discounts,refunds,net_sales
+    R001,2026-10-05 07:00:00,2026-10-05 07:00:00,2026-10-05,2026-10-05,2026-W41,2026-10-01,2026-Q4,2026,7,Payment,,True,Uncategorized,Coffee,Latte,Latte,Hot,Latte-Hot,Latte-Hot,False,,BCA,,,,1,40000,0,0,40000
+    R001,2026-10-05 07:00:00,2026-10-05 07:00:00,2026-10-05,2026-10-05,2026-W41,2026-10-01,2026-Q4,2026,7,Payment,,True,Focaccia,Snacks (Focaccia),Tomato Focaccia,Focaccia Tomato,,Tomato Focaccia,Focaccia Tomato,False,,BCA,Breakfast Add-ons + Egg Preference,Chicken + Poached,20000,1,28000,0,0,28000
+    R002,2026-10-05 08:00:00,2026-10-05 08:00:00,2026-10-05,2026-10-05,2026-W41,2026-10-01,2026-Q4,2026,8,Payment,,True,Coffee,Coffee,Latte,Latte,Cold,Latte-Cold,Latte-Cold,True,FOUNDER25,Cash,,,,1,40000,10000,0,30000
+    R003,2026-10-06 09:00:00,2026-10-06 09:00:00,2026-10-06,2026-10-05,2026-W41,2026-10-01,2026-Q4,2026,9,Payment,,False,Coffee,Coffee,Cappucino,Cappucino,Hot,Cappucino-Hot,Cappucino-Hot,False,,Gopay,,,,1,40000,0,0,40000
+    R003,2026-10-06 09:00:30,2026-10-06 09:00:00,2026-10-06,2026-10-05,2026-W41,2026-10-01,2026-Q4,2026,9,Refund,Accidental Charge,False,Coffee,Coffee,Cappucino,Cappucino,Hot,Cappucino-Hot,Cappucino-Hot,False,,Gopay,,,,-1,0,0,40000,-40000
+    R004,2026-10-12 10:00:00,2026-10-12 10:00:00,2026-10-12,2026-10-12,2026-W42,2026-10-01,2026-Q4,2026,10,Payment,,True,Mains,Mains,Nasi Campur,Nasi Campur,,Nasi Campur,Nasi Campur,False,,BCA,,,,1,35000,0,0,35000
+    R004,2026-10-12 10:00:00,2026-10-12 10:00:00,2026-10-12,2026-10-12,2026-W42,2026-10-01,2026-Q4,2026,10,Payment,,True,Mains,Mains,Nasi Campur,Nasi Campur,,Nasi Campur,Nasi Campur,False,,BCA,,,,1,35000,0,0,35000
+    R004,2026-10-12 10:00:00,2026-10-12 10:00:00,2026-10-12,2026-10-12,2026-W42,2026-10-01,2026-Q4,2026,10,Payment,,True,Cakes,Cakes,Mystery Cake,Mystery Cake,,Mystery Cake,Mystery Cake,False,,BCA,,,,1,30000,0,0,30000
+    R005,2026-10-13 11:00:00,2026-10-13 11:00:00,2026-10-13,2026-10-12,2026-W42,2026-10-01,2026-Q4,2026,11,Payment,,True,Uncategorized,Custom Amount,Custom Amount,Custom Amount,,Custom Amount,Custom Amount,False,,BCA,,,,1,15000,0,0,15000

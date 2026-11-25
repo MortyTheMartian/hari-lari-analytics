@@ -70,8 +70,23 @@ _QUERY_TAGS = ("compiled", "source")
 _JINJA = jinja2.Environment()
 
 
+_STRICT = jinja2.Environment(undefined=jinja2.StrictUndefined)
+
+
 class ComponentError(ValueError):
     """A component is invalid; the message names the file and the field."""
+
+
+def render_text(
+    template: str | None, params: Mapping[str, Any], meta: Any, facet: Any, strict: bool = True
+) -> str:
+    """A component's title or hint as the builder shows it. The parameters, the result's `meta`
+    and the `facet` are available; an undefined name is an error, or with `strict=False` (a slot
+    without data has no `meta`) an empty string."""
+    if not template:
+        return ""
+    env = _STRICT if strict else _JINJA
+    return env.from_string(template).render(**params, meta=meta, facet=facet)
 
 
 # --- the schema -----------------------------------------------------------------------------------

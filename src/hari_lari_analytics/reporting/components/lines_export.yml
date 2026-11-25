@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: lines_export
+title: Sales lines
+description: >-
+  The cleaned sales lines up to the anchor, one row per line, for the workbook of a report:
+  the columns of the Excel file, without personal data and without the line note. It has no
+  visual, so it belongs in `outputs.xlsx`, not on a page.
+query: { source: lines_export }

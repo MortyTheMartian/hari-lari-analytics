@@ -41,3 +41,12 @@ anchor: yesterday
 # The date on which the loader checks components that need no data to be valid: every query is
 # compiled against a calendar that ends here.
 reference_date: 2026-11-22
+
+# The Telegram chats a report may deliver to (`deliver.telegram[].to`). A report names a chat
+# here, never a chat id: each name maps to the Secret Manager secret that holds the id. The job
+# reads it from an environment variable named after the secret, upper case with `_` for `-`
+# (`telegram-chat-id` is TELEGRAM_CHAT_ID). `admin` is required: failure alerts and notices go
+# there. A new chat is a new secret, one line here and a release.
+telegram_targets:
+  group: telegram-chat-id # owners and managers
+  admin: telegram-admin-chat-id

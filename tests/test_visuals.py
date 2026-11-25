@@ -167,7 +167,8 @@ def test_the_fixture_components_draw(path, ctx):
 
 def test_the_packaged_components_draw(ctx):
     for comp in load_components().values():
-        render(comp, ctx)
+        if comp.bind(None).spec.visual is not None:  # `lines_export` is for the workbook
+            render(comp, ctx)
 
 
 # --- what the visuals show ------------------------------------------------------------------

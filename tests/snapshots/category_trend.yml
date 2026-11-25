@@ -1,0 +1,18 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: category_trend
+params:
+  category: Coffee
+facets:
+- key: null
+  label: null
+  metric: null
+  shape: series
+  csv: |
+    bucket,is_total,net_sales,penetration,category_aov,prior_net_sales,net_sales_change,net_sales_delta,prior_penetration,penetration_change,penetration_delta,prior_category_aov,category_aov_change,category_aov_delta,n_orders,prior_n_orders,trading_days,prior_trading_days,net_sales_growth,penetration_growth,category_aov_growth
+    2026-08-31,False,0,,,,,,,,,,,,0,,0,,,,
+    2026-09-07,False,0,,,,,,,,,,,,0,,0,,,,
+    2026-09-14,False,0,,,,,,,,,,,,0,,0,,,,
+    2026-09-21,False,0,,,,,,,,,,,,0,,0,,,,
+    2026-09-28,False,0,,,,,,,,,,,,0,,0,,,,
+    2026-10-05,False,70000,1,35000,,,,,,,,,,2,,1,,,,
