@@ -144,3 +144,18 @@ the real run. What it needed:
 The caption has today's numbers; its form is the framework's: "Net Sales: 13,752,000 IDR
 (+3.9% vs prior 7 days)" for "Net sales: IDR 13,752,000 (▲ 3.9%)", a blank line between its
 parts, and under the sample-size rule (fewer than 30 orders in the week) no change but "(n=…)".
+
+## Category deep dive (9.5, 25 Nov 2026)
+
+`reports/category_deep_dive.yml` is YAML only: one page per category of the top 5 by net sales
+over L6W (`repeat` with `top`), the category as a `focus`, and four packaged components with
+`with:` overrides (`sales_trend` for penetration and category AOV, `top_items`,
+`orders_by_hour`, `category_penetration` for the attach rate). On the run of 22 Nov it builds
+five pages (Coffee, Mains, …, Soft Drinks & Water) with `--strict`. What it found:
+
+| Gap | Status | How |
+| --- | --- | --- |
+| D1. The page chip shows "Category: $category (focus)": the filters in force are not bound to the repeat's value, though the queries are | open | A fix in `reports.filters_in_force` (bind the values with the page's params). |
+| D2. The attach rate with the other group: a `where` on the category keeps only the category's lines, so penetration by category group shows the own group at 100% | workaround | The order-level flags `has_food` and `has_drink` as dimensions, with the category as a `where`: "With food · With a drink 75.5%" of Mains. An order-level filter ("orders that contain the category") would give the attach rate with any dimension; open. |
+| D3. `orders_by_hour` counts on `fct_orders`, which has no category, so the focus would not apply | workaround | The slot overrides the model to `fct_sales_lines` (orders with the category per trading day); the `counts_as_order` filter stays. |
+| D4. The top items table repeats the category on every row and cuts the item names | workaround | The slot overrides the dimensions to `adjusted_item_variant` only, and the grid gives it 5 of 12 columns. |

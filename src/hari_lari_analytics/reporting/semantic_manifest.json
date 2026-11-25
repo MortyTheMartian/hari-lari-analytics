@@ -2709,6 +2709,33 @@
   ],
   "reports": [
     {
+      "id": "category_deep_dive",
+      "title": "Category deep dive",
+      "description": "One page for each of the five categories with the most net sales in the last 6 weeks: its penetration and category AOV per week, its top items, its orders by hour, and the share of its orders that also have food or a drink (the attach rate with the other group). Built from existing components with slot overrides only (plan 9.5).",
+      "params": {
+        "period": "L6W"
+      },
+      "schedule": null,
+      "outputs": {
+        "pdf": true,
+        "png": [],
+        "telegram": [],
+        "xlsx": []
+      },
+      "pages": [
+        {
+          "id": "category",
+          "title": "{{ category }}",
+          "components": [
+            "category_penetration",
+            "orders_by_hour",
+            "sales_trend",
+            "top_items"
+          ]
+        }
+      ]
+    },
+    {
       "id": "stock_alert",
       "title": "Stock alert",
       "description": "The stock-tracked item-variants at or below their alert-at quantity, as Moka counted them when the data was extracted.",

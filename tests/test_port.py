@@ -1,6 +1,7 @@
 """The port of today's report (plan 9.3): every packaged component that replaces a piece of
 `report_pdf.py` gives the numbers of `report_data.Section` (or of the cover's own figures), and
-`reports/weekly.yml` (9.4) has today's pages, chips, footer and caption.
+`reports/weekly.yml` (9.4) has today's pages, chips, footer and caption. The category deep dive
+(9.5) is checked against the same sections.
 
 The drawing may differ, so only the results are compared. Each test runs on the fixture run and,
 when it is present, on the real run of 2026-11-22; on the fixture, L14D has no comparison and
@@ -354,3 +355,58 @@ def test_the_caption_has_the_content_of_todays(port, weekly):
     assert f"Last sale {last:%d %b %H:%M}" in lines
     assert lines[-1] == theirs[-1] == "PDF and Excel lines: {{ drive_url }}"
     assert len(ours) <= 1024
+
+
+# --- the category deep dive (9.5) ----------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def deep_dive(port):
+    report = load_reports(COMPONENTS)["category_deep_dive"]
+    return run_report(report, port.ctx, generated=GENERATED)
+
+
+def _slot(page, component: str) -> pd.DataFrame:
+    (slot,) = [s for s in page.slots if s.slot.spec.component == component]
+    (facet,) = slot.facets
+    return facet.result.rows
+
+
+def test_the_deep_dive_has_a_page_for_each_of_the_top_5_categories(port, deep_dive):
+    cats = port.sections["L6W"].categories
+    sold = cats[cats["net_sales"] > 0].sort_values(
+        ["net_sales", "adjusted_category"], ascending=[False, True]
+    )
+    expected = sold["adjusted_category"].head(5).tolist()
+    assert [p.page.title for p in deep_dive.pages] == expected
+    assert [p.page.params["category"] for p in deep_dive.pages] == expected
+
+
+def test_the_deep_dive_top_items_are_the_categorys(port, deep_dive):
+    lines = port.lines[port.sections["L6W"].period.mask(port.lines["sale_ts"])]
+    for page in deep_dive.pages:
+        ours = _slot(page, "top_items")
+        mine = lines[lines["adjusted_category"] == page.page.title]
+        theirs = (
+            mine.groupby("adjusted_item_variant")["net_sales"].sum().reset_index()
+            .sort_values(["net_sales", "adjusted_item_variant"], ascending=[False, True])
+            .head(8)
+        )  # fmt: skip
+        assert ours["adjusted_item_variant"].tolist() == theirs["adjusted_item_variant"].tolist()
+        assert same(ours["net_sales"], theirs["net_sales"])
+        assert same(ours["share"], theirs["net_sales"] / lines["net_sales"].sum())  # of all
+
+
+def test_the_deep_dive_attach_rate_splits_the_categorys_orders(port, deep_dive):
+    lines = port.lines[port.sections["L6W"].period.mask(port.lines["sale_ts"])]
+    lines = lines[lines["counts_as_order"]]
+    for page in deep_dive.pages:
+        rows = _slot(page, "category_penetration")
+        receipts = lines[lines["adjusted_category"] == page.page.title]
+        flags = receipts.groupby("receipt_nr")[["has_food", "has_drink"]].first()
+        theirs = flags.value_counts(normalize=True)
+        ours = rows.set_index(["has_food", "has_drink"])["penetration"]
+        assert same([ours.sum()], [1.0])
+        assert {tuple(bool(v) for v in k) for k in ours.index} == set(theirs.index)
+        for key, share in theirs.items():
+            assert same([ours.loc[key]], [share]), (page.page.title, key)
