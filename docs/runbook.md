@@ -31,7 +31,8 @@ If the weekly report stops arriving and the admin chat shows that error:
 1. Get the new id: write a message in the group, then run `uv run hari-lari-telegram chat-ids`
    (the group shows up with type `supergroup`).
 2. Store it: `deploy/setup.sh telegram-chat group <new id>`.
-3. Re-send the missed report: `hari-lari-weekly --anchor <the Sunday> --force` (see "The weekly job").
+3. Re-send the missed report: `hari-lari-report run --report weekly --anchor <the Sunday> --force`
+   (see "The report job").
 
 Tip: make the group a supergroup right away (for example by turning "Chat history for new
 members" to visible), then read the id, so the stored id is the final one.
@@ -49,17 +50,25 @@ The bot only sees messages it is allowed to see. In a group, turn privacy mode o
 and write `/start@<botname>` or reply to the bot, or make the bot an admin, so `chat-ids` can
 find the group.
 
-## The weekly job (`hari-lari-weekly`)
+## The report job (`hari-lari-report run`)
 
-One command does everything: extract the Moka API, build the report, store the files, upload to
-Drive, send to Telegram. Cloud Scheduler starts it every Monday at 04:00 WITA.
+One command runs any report of `src/hari_lari_analytics/reporting/reports/`: extract the Moka
+API, build the models and run the data checks, build the report, store the files, upload to
+Drive, send to Telegram and write the sent-marker. All reports share the Cloud Run job
+`hari-lari-weekly`; each report with a `schedule` has a Cloud Scheduler job
+`hari-lari-report-<id>` that starts it with `run --report <id>`. The weekly report's runs every
+Monday at 04:00 WITA. The release path creates, updates and deletes these scheduler jobs from
+the reports' YAML (see "Release path"), so a schedule change goes live with a release.
 
 | Option | Meaning |
 | --- | --- |
-| `--dry-run` | Everything except sending: no Telegram message (also no alert), no Drive upload, no marker. Files go under `dry-run/` in the data root. |
-| `--to admin` | A private run: the report goes to the admin chat. Not marked as sent, so it never blocks the real send. |
+| `--report <id>` | The report to run (`weekly`, `stock_alert`, ...). |
+| `--scheduled` | Every report with a schedule, one after the other on one extraction (the release's dry run). |
+| `--dry-run` | Everything except sending: no Telegram message (also no alert), no Drive upload, no marker. Files go under `dry-run/` in the data root; the log shows what would be sent to whom. |
+| `--to admin` | A private run: every Telegram delivery goes to the admin chat. Not marked as sent, so it never blocks the real send. Still uploads to Drive. |
 | `--anchor YYYY-MM-DD` | Last day of the report (default: yesterday in Bali). |
-| `--force` | Send even if this week was already sent. |
+| `--force` | Send even if this report was already sent for this anchor. |
+| `--run <run>` | Use an existing extraction (a folder or `gs://...`) instead of extracting again. |
 | `--data-root` | Local folder or `gs://bucket`; env `DATA_ROOT`. |
 
 Files in the data root:
@@ -67,19 +76,26 @@ Files in the data root:
 | Path | What |
 | --- | --- |
 | `raw/<run date>/` | The extraction: Parquet tables, `manifest.json`, raw JSON |
-| `reports/<anchor>/` | The PDF, the cover PNG, the Excel lines |
-| `sent/<anchor>.json` | The sent-marker. Its existence means "this week went to the group" |
+| `reports/<report>/<anchor>/` | The PDF, the PNG pages, the Excel workbook, the Telegram texts, `bundle.json` |
+| `sent/<report>/<anchor>.json` | The sent-marker. Its existence means "this report went out for this anchor" |
+| `reports/<anchor>/`, `sent/<anchor>.json` | The same, written by the old `hari-lari-weekly` before the cut-over; the weekly report also respects that old marker |
 | `dry-run/...` | The same layout, written by dry runs |
 
 ### Running it by hand
 
 ```bash
-# locally (reads the token from extraction/moka/.token.json, secrets through gcloud)
-uv run --extra gcp hari-lari-weekly --dry-run --data-root /tmp/hl
+# locally (secrets through gcloud; the Moka token from Secret Manager needs
+# `gcloud auth application-default login` once)
+uv run --extra gcp hari-lari-report run --report weekly --dry-run --data-root data/jobs \
+  --token-store secret --gcp-project hari-lari
+# on an extraction you already have, without calling Moka
+uv run hari-lari-report run --report weekly --dry-run --run data/extract --data-root data/jobs
 # in the cloud
 gcloud run jobs execute hari-lari-weekly --region asia-southeast2 --project hari-lari \
-  --args=--dry-run              # or --args=--to,admin   or --args=--anchor,2026-11-22,--force
+  --args=run,--report,weekly,--dry-run   # or ...,--to,admin   or ...,--anchor,2026-11-29,--force
 ```
+
+The job has no arguments of its own: started without `--args` it only prints the usage and fails.
 
 Logs are JSON lines. In Cloud Logging, filter by step:
 `resource.type="cloud_run_job" jsonPayload.step="deliver"`.
@@ -90,18 +106,37 @@ Logs are JSON lines. In Cloud Logging, filter by step:
   the report a second time.
 * **Cloud Run retried after a failure:** nothing was sent twice. The marker is written only after
   a successful send; a failed run sends the admin alert and leaves no marker.
-* **The send failed but the files are fine:** they are in `reports/<anchor>/`. Re-run with
-  `--anchor <Sunday>`; the extraction is repeated (about 3 minutes), the data is complete up to
-  yesterday.
+* **The send failed but the files are fine:** they are in `reports/<report>/<anchor>/`. Re-run
+  with `--anchor <Sunday>`; the extraction is repeated (about 3 minutes), the data is complete up
+  to yesterday.
 
 ### What the admin chat tells you
 
 | Message | Meaning and action |
 | --- | --- |
-| `Hari Lari weekly report failed at step: X` | Step X (`check`, `extract`, `model`, `report`, `upload`, `deliver`) failed and the run ended with an error. Open the logs link, fix, re-run. Nothing reached the group unless X is after `deliver`. |
+| `Hari Lari report <id> failed at step: X` | Step X (`check`, `extract`, `model`, `report`, `upload`, `deliver`) failed and the run ended with an error. `model` includes the data checks (`checks.yml`): an error-level check fails the run and names the failing rows. Open the logs link, fix, re-run. Nothing reached the group unless X is after `deliver`. |
 | `step drive failed ... without the Drive link` | The Drive upload failed. The group still got the cover and the PDF, just no link. Run `hari-lari-drive whoami`; if it says `invalid_grant`, redo the consent (see Drive below). |
-| `step marker failed ... could not be written` | The report was sent, but the "already sent" marker is missing. A plain re-run would send the report again. Create `sent/<anchor>.json` by hand. |
+| `step marker failed ... could not be written` | The report was sent, but the "already sent" marker is missing. A plain re-run would send the report again. Create `sent/<report>/<anchor>.json` by hand. |
 | `The Moka API token expires on ...` | See below. |
+
+### The cut-over from `hari-lari-weekly` (plan 9.7, once)
+
+The image's entry point is `hari-lari-report` since 9.7; the old command `hari-lari-weekly` ran
+the old report. In this order, with an owner login in `gcloud`:
+
+1. `deploy/setup.sh report-scheduler`: the scheduler's account may start the job with
+   arguments, and the release account may manage the scheduler jobs. Before the merge: without
+   it, the release fails at its last step, after the promotion.
+2. Merge to `main`. The release builds the image, dry-runs `run --scheduled --dry-run`,
+   promotes it and creates the scheduler job `hari-lari-report-weekly`.
+3. Pause the old scheduler job, so no Monday runs twice:
+   `gcloud scheduler jobs pause hari-lari-weekly --location asia-southeast2 --project hari-lari`
+   (the job would fail anyway: the image no longer runs without arguments).
+4. A private run to the admin chat:
+   `gcloud run jobs execute hari-lari-weekly --region asia-southeast2 --project hari-lari --args=run,--report,weekly,--to,admin --wait`.
+
+Until the old report is deleted (9.7b), it can still be sent from the same image:
+`gcloud run jobs execute hari-lari-weekly ... --args=legacy-weekly` (or `legacy-weekly,--to,admin`).
 
 ### Re-authorising the Moka token
 
@@ -146,6 +181,7 @@ cloud dry run succeeded. Do not run `gcloud builds submit` plus `run jobs update
 ```
 merge to main -> build image <commit> -> smoke test -> push -> dry run (hari-lari-weekly-dryrun)
               -> only if it succeeded: point hari-lari-weekly at <commit>
+              -> sync the scheduler jobs hari-lari-report-<id> with the reports of <commit>
 ```
 
 * **Automatic:** `.github/workflows/release.yml` runs the script on every push to `main`. It
@@ -155,12 +191,19 @@ merge to main -> build image <commit> -> smoke test -> push -> dry run (hari-lar
 * **The image tag is the first 12 characters of the commit.** The live job keeps the tag it ran
   before as the label `previous-release`.
 * **The dry run** is the job `hari-lari-weekly-dryrun`: the same configuration as the live job,
-  always started with `--dry-run` (the script sets the argument on every release), so it sends
-  nothing, writes under `dry-run/` and has no scheduler. If it fails, the live job still runs the
-  old image and the workflow fails; read the execution log in Cloud Run.
+  always started with `run --scheduled --dry-run` (the script sets the arguments on every
+  release), so every scheduled report must build, and it sends nothing, writes under `dry-run/`
+  and has no scheduler. If it fails, the live job still runs the old image and the workflow
+  fails; read the execution log in Cloud Run.
+* **The scheduler jobs** follow the reports of the promoted image (`hari-lari-report schedules
+  --json`): one `hari-lari-report-<id>` per report with a schedule, paused when `enabled: false`,
+  deleted when the report loses its schedule. Other scheduler jobs are left alone. By hand:
+  `deploy/release.sh schedules [tag]`.
 * **Rolling back:** Actions > Release > Run workflow > `rollback`, or by hand
   `deploy/release.sh rollback` (previous release) or `deploy/release.sh rollback <tag>`.
-* **By hand:** `deploy/release.sh {build|dryrun|promote|rollback|all|status} [tag]`; without a tag
+* **Do not roll back across the cut-over (9.7):** an image from before it runs `hari-lari-weekly`
+  and does not understand the scheduler's `run --report weekly`.
+* **By hand:** `deploy/release.sh {build|dryrun|promote|rollback|schedules|all|status} [tag]`; without a tag
   it uses the current commit, which must be committed (`ALLOW_DIRTY=1` overrides). `status` shows
   the image of both jobs and the previous release. Needs `docker` and a `gcloud` login.
 * **A release that is promoted but wrong on a Monday:** roll back, then re-run the week with
@@ -180,6 +223,7 @@ deploy/setup.sh apis          # also enables iamcredentials, needed for the toke
 deploy/setup.sh dryrun-job    # the job hari-lari-weekly-dryrun, with the live job's image
 deploy/setup.sh cleanup-policy
 deploy/setup.sh wif           # pool, provider, release service account, roles
+deploy/setup.sh report-scheduler   # 9.7: scheduler jobs per report, run with arguments
 ```
 
 Each step is safe to re-run. `GITHUB_REPO=owner/name` overrides the repository the provider

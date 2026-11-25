@@ -1477,8 +1477,9 @@ hari-lari-report schedules [--json]           # the schedules, as deploy/ reads 
 hari-lari-report schema [--check]             # the JSON Schemas of reports and components
 ```
 
-`build`, `validate`, `schedules` and `schema` exist since 8.5; `run` and `--scheduled` come with
-the cut-over (9.7), together with `delivery.py` and the scheduler sync.
+`build`, `validate`, `schedules` and `schema` exist since 8.5; `run` and `--scheduled` since the
+cut-over (9.7), in `reporting/delivery.py`, with the scheduler sync in `deploy/release.sh
+schedules`. The job itself has no arguments: every start names what to run.
 
 `build` never sends anything. It opens the latest run in `--run` (default `data/extract`) up to
 the anchor (`--anchor`, else the report's `params.anchor`, else the rule of `project.yml`),
@@ -1771,27 +1772,28 @@ No step needed Python beyond what the framework provides. With `facet: { by: per
 
 ## Migration
 
-The old report stays untouched and keeps going out every Monday until the cut-over (plan 9.7).
-The component report reads its sales from API runs only: the back-office CSV export is removed
+The old report stays untouched until the cut-over (plan 9.7), which happens before the first
+live Monday, 30 Nov 2026: nothing is in production before then. The component report reads its sales from API runs only: the back-office CSV export is removed
 after four good Mondays (6.7), and the parity tests compare against the old report built from
 the same API run. The config CSVs are not affected; they are seeds of the models. Plan task 8.1
 moves the drawing helpers out of `report_pdf.py`; the old report imports them from there, so
-both paths share them until `report_pdf.py` is deleted. For two Mondays before the cut-over the
-job also builds the component report under `dry-run/` (9.6). There is no pixel diff: the numbers
-must match, the drawing may improve.
+both paths share them until `report_pdf.py` is deleted. Instead of side-by-side Mondays, the
+component report is checked once before the cut-over (9.6: a fresh extraction with the parity
+tests, the cloud dry run and a real run to the admin chat), and the first live Monday is its
+test. There is no pixel diff: the numbers must match, the drawing may improve.
 
 The command name: `hari-lari-report` was the old local CLI that writes the PDF and Excel from
 the CSV export or an API run. Since 8.5 that one is `hari-lari-report-legacy` and the name
 belongs to the new subcommands (the live job runs `hari-lari-weekly`, so nothing changed for
-it); 9.7 deletes the legacy command. At the cut-over (9.7):
+it); 9.7b deletes the legacy command after a good first live Monday. At the cut-over (9.7):
 
 - The image's entry point becomes `hari-lari-report`, and `hari-lari-weekly` becomes
   `hari-lari-report run --report weekly` (`reports/weekly.yml` carries the Monday 04:00 schedule
   and today's delivery). The release script sets the dry-run job's arguments to
   `run --scheduled --dry-run`.
 - The first release syncs the scheduler job `hari-lari-report-weekly`; the old scheduler job
-  `hari-lari-weekly` is deleted by hand in the same session (runbook), so no Monday runs twice
-  or not at all.
+  `hari-lari-weekly` is paused by hand in the same session (runbook), so no Monday runs twice
+  or not at all. It stays paused as the fallback and is deleted with the old code (9.7b).
 - The weekly report also reads the old marker `sent/<anchor>.json`, so re-running a week sent
   before the cut-over cannot send it again. Earlier outputs stay in `reports/<anchor>/`; new
   ones go to `reports/weekly/<anchor>/`.

@@ -6,6 +6,8 @@
 #   then DRIVE_FOLDER_ID=<folder id> deploy/setup.sh job
 # Phase 7A.8 (not part of `all`; run once, in this order, after `job`):
 #   deploy/setup.sh dryrun-job | cleanup-policy | wif    (see docs/runbook.md, "Release path")
+# Phase 9.7 (not part of `all`; run once after `wif`, before the first release that syncs the
+#   scheduler jobs): deploy/setup.sh report-scheduler
 # Manual (console): billing budget (3.4), notification channel email check.
 set -euo pipefail
 
@@ -14,8 +16,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/deploy/common.sh"   # PROJECT, REGION, BUCKET, REPO, JOB, DRYRUN_JOB, IMAGE_REPO, g
 JOB_SA_NAME="hari-lari-job"
 JOB_SA="${JOB_SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
-INVOKER_SA_NAME="hari-lari-scheduler"
-INVOKER_SA="${INVOKER_SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
+INVOKER_SA_NAME="hari-lari-scheduler"   # INVOKER_SA, in common.sh
 IMAGE="${IMAGE_REPO}:latest"
 ALERT_EMAIL="${ALERT_EMAIL:-harilari.bali@gmail.com}"
 TOKEN_FILE="${TOKEN_FILE:-$ROOT/extraction/moka/.token.json}"
@@ -262,6 +263,21 @@ step_scheduler() { # 3.12
   g scheduler jobs pause "$JOB" --location "$REGION"
 }
 
+# 9.7 One Cloud Scheduler job per scheduled report, synced by the release (deploy/release.sh
+# schedules). Each starts the live job with the report's arguments as a container override, so
+# the scheduler's account needs runWithOverrides on the job. The release account creates and
+# updates those scheduler jobs (Cloud Scheduler has no per-job roles, so on the project) and
+# must be able to act as the scheduler's account.
+step_report_scheduler() {
+  g run jobs add-iam-policy-binding "$JOB" --region "$REGION" \
+    --member "serviceAccount:$INVOKER_SA" --role roles/run.jobsExecutorWithOverrides >/dev/null
+  g projects add-iam-policy-binding "$PROJECT" --condition=None \
+    --member "serviceAccount:$RELEASE_SA" --role roles/cloudscheduler.admin >/dev/null
+  g iam service-accounts add-iam-policy-binding "$INVOKER_SA" \
+    --member "serviceAccount:$RELEASE_SA" --role roles/iam.serviceAccountUser >/dev/null
+  echo "Done: the release can now sync the ${SCHEDULE_PREFIX}* scheduler jobs."
+}
+
 step_alert() { # 3.13
   local ch
   ch="$(g beta monitoring channels list --filter "displayName='Hari Lari admin email'" --format 'value(name)' | head -1)"
@@ -297,8 +313,9 @@ case "${1:-}" in
   dryrun-job) step_dryrun_job ;;
   cleanup-policy) step_cleanup_policy ;;
   wif) step_wif ;;
+  report-scheduler) step_report_scheduler ;;
   telegram-token) step_telegram_token ;;
   telegram-chat) step_telegram_chat "${2:-}" "${3:-}" ;;
   all) for s in apis bucket sa secrets registry build job scheduler alert; do echo "== $s"; "step_$s"; done ;;
-  *) echo "usage: $0 {apis|bucket|sa|secrets|registry|build|job|scheduler|alert|drive-secrets|dryrun-job|cleanup-policy|wif|all|telegram-token|telegram-chat}"; exit 1 ;;
+  *) echo "usage: $0 {apis|bucket|sa|secrets|registry|build|job|scheduler|alert|drive-secrets|dryrun-job|cleanup-policy|wif|report-scheduler|all|telegram-token|telegram-chat}"; exit 1 ;;
 esac

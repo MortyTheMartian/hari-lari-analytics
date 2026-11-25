@@ -10,6 +10,7 @@ L3M has no sales, so the empty and the comparison-less cases are covered too.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -39,8 +40,10 @@ from .test_models import LAST_SALE, REAL_RUN, SEEDS, _comparable
 
 COMPONENTS = load_components()
 PERIODS = ["L14D", "L6W", "L3M"]
-REAL_ANCHOR = date(2026, 11, 22)
-real = pytest.mark.skipif(not REAL_RUN.is_dir(), reason="needs the real extraction run")
+# PORT_RUN and PORT_ANCHOR check the port on another extraction (plan 9.6)
+PORT_RUN = Path(os.environ.get("PORT_RUN", REAL_RUN))
+REAL_ANCHOR = date.fromisoformat(os.environ.get("PORT_ANCHOR", "2026-11-22"))
+real = pytest.mark.skipif(not PORT_RUN.is_dir(), reason="needs the real extraction run")
 
 
 @dataclass
@@ -70,7 +73,7 @@ def port(request) -> Port:
     if request.param == "fixture":
         run = ApiRun("data/extract/2026-10-14", {}, {"warnings": ["last sale is old"]})
         return _port(connect(api_tables(), SEEDS, LAST_SALE), run, LAST_SALE)
-    db = open_run(REAL_RUN, Path("config"), REAL_ANCHOR)
+    db = open_run(PORT_RUN, Path("config"), REAL_ANCHOR)
     return _port(db.con, db.run, REAL_ANCHOR)
 
 

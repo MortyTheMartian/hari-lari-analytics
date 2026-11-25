@@ -19,6 +19,6 @@ RUN uv sync --frozen --no-dev --extra gcp
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Phase 5: the whole weekly job. `hari-lari-extract` and `hari-lari-telegram` are in the
-# image too (override with `gcloud run jobs execute --command`).
-ENTRYPOINT ["hari-lari-weekly"]
+# Phase 9.7: one job for every report. Cloud Scheduler starts it with `run --report <id>`, the
+# release's dry run with `run --scheduled --dry-run` (docs/components.md, "Running a report").
+ENTRYPOINT ["hari-lari-report"]

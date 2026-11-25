@@ -27,6 +27,10 @@ case "$all" in
     cat "$FAKE_DIR/$job.json" ;;
   *"run jobs execute"*) exit "${FAKE_EXECUTE_EXIT:-0}" ;;
   *"artifacts docker images describe"*) [[ -e "$FAKE_DIR/no-image" ]] && exit 1; echo "{}" ;;
+  *"scheduler jobs list"*) cat "$FAKE_DIR/schedulers" 2>/dev/null ;;
+  *"scheduler jobs describe "*)
+    job="${all#*scheduler jobs describe }"; job="${job%% *}"
+    cat "$FAKE_DIR/state-$job" 2>/dev/null || echo ENABLED ;;
 esac
 exit 0
 """
@@ -34,17 +38,25 @@ exit 0
 FAKE_DOCKER = """#!/usr/bin/env bash
 echo "docker $*" >> "$FAKE_LOG"
 [[ "$1" == "${FAKE_DOCKER_FAILS:-}" ]] && exit 1
+[[ "$*" == *"schedules --json"* ]] && cat "$FAKE_DIR/schedules.json"
 exit 0
 """
+
+WEEKLY_SCHEDULE = [{
+    "report": "weekly", "cron": "0 4 * * 1", "timezone": "Asia/Makassar", "enabled": True,
+    "args": ["run", "--report", "weekly"],
+}]  # fmt: skip
 
 
 def knative(image: str, **labels: str) -> str:
     """`gcloud run jobs describe --format json` as older gcloud versions print it."""
     container = {"image": image}
-    return json.dumps({
-        "metadata": {"labels": labels},
-        "spec": {"template": {"spec": {"template": {"spec": {"containers": [container]}}}}},
-    })
+    return json.dumps(
+        {
+            "metadata": {"labels": labels},
+            "spec": {"template": {"spec": {"template": {"spec": {"containers": [container]}}}}},
+        }
+    )
 
 
 def v2(image: str, **labels: str) -> str:
@@ -72,7 +84,10 @@ class Release:
         }
         return subprocess.run(
             ["bash", str(self.repo / "deploy" / "release.sh"), *args],
-            capture_output=True, text=True, env=environment, check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+            check=False,
         )
 
     def calls(self) -> list[str]:
@@ -117,6 +132,7 @@ def release(tmp_path) -> Release:
     result = Release(repo, bin_dir, fake, tmp_path / "calls.log")
     result.job("hari-lari-weekly", knative(f"{IMAGES}:aaa111", release="aaa111"))
     result.job("hari-lari-weekly-dryrun", v2(f"{IMAGES}:aaa111"))
+    (fake / "schedules.json").write_text(json.dumps(WEEKLY_SCHEDULE))
     return result
 
 
@@ -140,7 +156,7 @@ def test_build_tags_the_image_with_the_commit_and_smoke_tests_it_before_the_push
     docker = [c for c in release.log.read_text().splitlines() if c.startswith("docker ")]
     assert docker == [
         f"docker build --platform linux/amd64 --tag {image} {release.repo}",
-        f"docker run --rm --entrypoint hari-lari-component {image} validate",
+        f"docker run --rm {image} validate",
         f"docker push {image}",
     ]
     assert release.calls()[0] == "auth configure-docker asia-southeast2-docker.pkg.dev"
@@ -173,12 +189,12 @@ def test_tags_that_cannot_be_labels_are_refused(release, tag):
     assert not release.log.exists()
 
 
-def test_dryrun_always_passes_the_dry_run_flag_and_waits_for_the_run(release):
+def test_dryrun_runs_every_scheduled_report_as_a_dry_run_and_waits_for_it(release):
     done = release.run("dryrun", "bbb222")
     assert done.returncode == 0, done.stderr
     assert release.calls() == [
         f"run jobs update hari-lari-weekly-dryrun --region asia-southeast2 "
-        f"--image {IMAGES}:bbb222 --args=--dry-run",
+        f"--image {IMAGES}:bbb222 --args=run,--scheduled,--dry-run",
         "run jobs execute hari-lari-weekly-dryrun --region asia-southeast2 --wait",
     ]
 
@@ -229,15 +245,87 @@ def test_the_live_job_is_only_updated_after_a_successful_dry_run(release):
         first("run jobs update hari-lari-weekly-dryrun"),
         first("run jobs execute hari-lari-weekly-dryrun"),
         first("run jobs update hari-lari-weekly --region"),
+        first("scheduler jobs create http hari-lari-report-weekly"),
     ]
     assert steps == sorted(steps)
     assert len(release.live_updates()) == 1
 
 
-def test_a_failed_dry_run_leaves_the_live_job_alone(release):
+def test_a_failed_dry_run_leaves_the_live_job_and_the_schedules_alone(release):
     done = release.run("all", "bbb222", FAKE_EXECUTE_EXIT="1")
     assert done.returncode != 0
     assert release.live_updates() == []
+    assert not any(c.startswith("scheduler ") for c in release.calls())
+
+
+# --- the scheduler jobs (9.7) ---------------------------------------------------------------------
+
+RUN_URI = (
+    "https://run.googleapis.com/v2/projects/hari-lari/locations/asia-southeast2/"
+    "jobs/hari-lari-weekly:run"
+)
+BODY = '{"overrides":{"containerOverrides":[{"args":["run","--report","weekly"]}]}}'
+
+
+def scheduler_calls(release: Release) -> list[str]:
+    return [c for c in release.calls() if c.startswith("scheduler ")]
+
+
+def test_a_new_scheduled_report_gets_a_scheduler_job_that_runs_it(release):
+    done = release.run("schedules", "bbb222")
+    assert done.returncode == 0, done.stderr
+    assert f"docker run --rm {IMAGES}:bbb222 schedules --json" in release.log.read_text()
+    assert scheduler_calls(release) == [
+        "scheduler jobs list --location asia-southeast2 --format value(name)",
+        "scheduler jobs create http hari-lari-report-weekly --location asia-southeast2 "
+        f"--schedule 0 4 * * 1 --time-zone Asia/Makassar --uri {RUN_URI} --http-method POST "
+        "--oauth-service-account-email hari-lari-scheduler@hari-lari.iam.gserviceaccount.com "
+        f"--message-body {BODY} --headers Content-Type=application/json",
+        "scheduler jobs describe hari-lari-report-weekly --location asia-southeast2 "
+        "--format value(state)",
+    ]
+    assert "scheduler job hari-lari-report-weekly: 0 4 * * 1 Asia/Makassar" in done.stdout
+
+
+def test_an_existing_scheduler_job_is_updated_and_a_paused_one_resumed(release):
+    names = "projects/hari-lari/locations/asia-southeast2/jobs/hari-lari-report-weekly\n"
+    (release.fake / "schedulers").write_text(names)
+    (release.fake / "state-hari-lari-report-weekly").write_text("PAUSED\n")
+    assert release.run("schedules", "bbb222").returncode == 0
+    calls = scheduler_calls(release)
+    assert calls[1].startswith("scheduler jobs update http hari-lari-report-weekly ")
+    assert calls[1].endswith("--update-headers Content-Type=application/json")
+    assert calls[-1] == "scheduler jobs resume hari-lari-report-weekly --location asia-southeast2"
+
+
+def test_a_disabled_schedule_is_paused(release):
+    (release.fake / "schedules.json").write_text(json.dumps([{**WEEKLY_SCHEDULE[0],
+                                                              "enabled": False}]))  # fmt: skip
+    done = release.run("schedules", "bbb222")
+    assert done.returncode == 0
+    assert scheduler_calls(release)[-1] == (
+        "scheduler jobs pause hari-lari-report-weekly --location asia-southeast2"
+    )
+    assert "(paused)" in done.stdout
+
+
+def test_a_report_without_a_schedule_loses_its_job_and_other_jobs_stay(release):
+    (release.fake / "schedulers").write_text(
+        "projects/p/locations/r/jobs/hari-lari-report-weekly\n"
+        "projects/p/locations/r/jobs/hari-lari-report-gone\n"
+        "projects/p/locations/r/jobs/hari-lari-weekly\n"
+    )
+    assert release.run("schedules", "bbb222").returncode == 0
+    deletes = [c for c in scheduler_calls(release) if " delete " in c]
+    assert deletes == ["scheduler jobs delete hari-lari-report-gone --location asia-southeast2"]
+
+
+def test_no_schedules_means_no_scheduler_job(release):
+    (release.fake / "schedules.json").write_text("[]")
+    assert release.run("schedules", "bbb222").returncode == 0
+    assert scheduler_calls(release) == [
+        "scheduler jobs list --location asia-southeast2 --format value(name)"
+    ]
 
 
 def test_a_failed_build_leaves_both_jobs_alone(release):
@@ -247,8 +335,10 @@ def test_a_failed_build_leaves_both_jobs_alone(release):
 
 
 def test_rollback_without_a_tag_goes_to_the_previous_release(release):
-    release.job("hari-lari-weekly",
-                knative(f"{IMAGES}:bbb222", release="bbb222", **{"previous-release": "aaa111"}))
+    release.job(
+        "hari-lari-weekly",
+        knative(f"{IMAGES}:bbb222", release="bbb222", **{"previous-release": "aaa111"}),
+    )
     done = release.run("rollback")
     assert done.returncode == 0, done.stderr
     assert release.live_updates() == [
@@ -271,8 +361,10 @@ def test_rollback_without_a_recorded_release_asks_for_a_tag(release):
 
 
 def test_status_reads_both_shapes_of_the_describe_output(release):
-    release.job("hari-lari-weekly",
-                knative(f"{IMAGES}:bbb222", release="bbb222", **{"previous-release": "aaa111"}))
+    release.job(
+        "hari-lari-weekly",
+        knative(f"{IMAGES}:bbb222", release="bbb222", **{"previous-release": "aaa111"}),
+    )
     release.job("hari-lari-weekly-dryrun", v2(f"{IMAGES}:bbb222"))
     done = release.run("status")
     assert done.returncode == 0, done.stderr

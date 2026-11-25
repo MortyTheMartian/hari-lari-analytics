@@ -216,7 +216,9 @@ def test_missing_table_is_an_input_error(tmp_path):
 
 
 REAL_INPUT = Path("data/input")
-REAL_EXTRACT = Path("data/extract")
+# The run the parity was established on: a later run files past sales under the catalog of its
+# day (items moved from Non Coffee to Extras after 22 Nov 2026), unknown to the October export.
+REAL_EXTRACT = Path("data/extract/2026-11-22")
 
 
 @pytest.mark.skipif(

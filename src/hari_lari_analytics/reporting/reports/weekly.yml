@@ -4,9 +4,11 @@ title: Sales report
 description: >-
   The weekly sales report of today's job, as components: the cover with the full history and
   the three periods, then per period (14 days, 6 weeks, 3 months) the overview, the categories
-  and the items, hours and payments. The schedule is added at the cut-over (plan 9.7).
+  and the items, hours and payments. Sent to the group every Monday at 04:00 for the week that
+  ended on Sunday.
 kicker: Hari Lari Cafe
 footer: Hari Lari Cafe · Moka POS sales
+schedule: { cron: "0 4 * * 1", timezone: Asia/Makassar }
 outputs:
   pdf: true
   png: [cover]
@@ -20,7 +22,7 @@ text_blocks:
     - component: last_sale
     - text: "PDF and Excel lines: {{ drive_url }}"
 deliver:
-  drive: { folder: "{{ anchor }} (week {{ anchor_iso_week }})", files: [pdf, xlsx] }
+  drive: { folder: "{{ anchor }} (week {{ anchor_week }})", files: [pdf, xlsx] }
   telegram:
     - { to: group, photo: cover, document: pdf, text: weekly_caption }
 pages:

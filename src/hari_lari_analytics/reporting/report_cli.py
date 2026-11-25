@@ -1,40 +1,48 @@
-"""The report CLI `hari-lari-report`: build, validate and list the schedules of the reports.
+"""The report CLI `hari-lari-report`: run, build, validate and list the schedules of the reports.
 
 ```text
+hari-lari-report run --report weekly [--anchor YYYY-MM-DD] [--dry-run] [--to admin] [--force]
+                     [--run <run>]
+hari-lari-report run --scheduled [--dry-run]
 hari-lari-report build --report weekly [--run data/extract] [--anchor YYYY-MM-DD]
                        [--out DIR] [--strict]
 hari-lari-report gallery [--run data/extract] [--anchor YYYY-MM-DD] [--out DIR] [--no-png]
 hari-lari-report validate
 hari-lari-report schedules [--json]
 hari-lari-report schema [--check]
+hari-lari-report legacy-weekly [hari-lari-weekly options]
 ```
 
-`build` opens the latest extraction run, builds the models and the data checks, runs the report
-and writes its outputs (PDF, PNG pages, Telegram text, workbook, JSON bundle) to
+`run` is the job (plan 9.7, `delivery.py`): extract, model and check, build, store, deliver and
+mark as sent; `--scheduled` runs every report with a schedule on one extraction. `build` opens
+the latest extraction run, builds the models and the data checks, runs the report and writes its
+outputs (PDF, PNG pages, Telegram text, workbook, JSON bundle) to
 `data/output/reports/<report>/<anchor>/`; it never sends anything. `--strict` fails when a text
 runs over its slot. `gallery` draws every component with a visual on the run, one page each, to
 `data/output/gallery/` (plan 8.7). `validate` loads every component and report as strictly as a
 build would and checks the three JSON Schemas; `schedules` lists the reports with a schedule, as
 `deploy/` reads them. `--reports` and `--components` before the command point at other folders.
-The commands `run` and `--scheduled` of docs/components.md ("Running a report") arrive with the
-cut-over (plan 9.7).
 
-The old local command that writes today's PDF and Excel is `hari-lari-report-legacy`.
+`legacy-weekly` runs the old weekly job (`hari-lari-weekly`) in the same image, the fallback
+until the old report is deleted (plan 9.7b). The old local command that writes today's PDF and
+Excel is `hari-lari-report-legacy`.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import date
 from pathlib import Path
 from typing import TextIO
 
+from hari_lari_analytics.extract.run import DEFAULT_SINCE
 from hari_lari_analytics.load import InputError
 from hari_lari_analytics.project import project
 from hari_lari_analytics.reporting import components as components_module
-from hari_lari_analytics.reporting import gallery
+from hari_lari_analytics.reporting import delivery, gallery
 from hari_lari_analytics.reporting import reports as reports_module
 from hari_lari_analytics.reporting.builder import build_report
 from hari_lari_analytics.reporting.components import Component, ComponentError, components_dir
@@ -63,6 +71,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--reports", type=Path, help="the folder of the report files")
     parser.add_argument("--components", type=Path, help="the folder of the component files")
     commands = parser.add_subparsers(dest="command", required=True)
+
+    add_run_parser(commands)
 
     build = commands.add_parser("build", help="build the outputs of one report")
     build.add_argument("--report", required=True, help="a report id, or the path of its file")
@@ -121,6 +131,131 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--check", action="store_true", help="only check that the files are up to date"
     )
     return parser.parse_args(argv)
+
+
+def add_run_parser(commands) -> None:
+    env = os.environ.get
+    run = commands.add_parser(
+        "run", help="extract, build, store and deliver a report (the job of every schedule)"
+    )
+    which = run.add_mutually_exclusive_group(required=True)
+    which.add_argument("--report", help="a report id, or the path of its file")
+    which.add_argument(
+        "--scheduled", action="store_true", help="every report with a schedule, on one extraction"
+    )
+    run.add_argument(
+        "--anchor", type=date.fromisoformat, metavar="YYYY-MM-DD",
+        help="last day of the report (default: the report's `anchor` parameter, else the rule "
+        "of project.yml)",
+    )  # fmt: skip
+    run.add_argument(
+        "--dry-run", action="store_true",
+        help="do everything except sending; files go under dry-run/",
+    )  # fmt: skip
+    run.add_argument(
+        "--to", choices=sorted(project().telegram_targets),
+        help="send every Telegram delivery to this chat instead; no sent-marker",
+    )  # fmt: skip
+    run.add_argument("--force", action="store_true", help="send even if it was already sent")
+    run.add_argument(
+        "--run", dest="existing_run",
+        help="an existing run (a folder or gs://...) instead of a new extraction",
+    )  # fmt: skip
+    run.add_argument(
+        "--data-root", default=env("DATA_ROOT", "data/jobs"),
+        help="folder or gs://bucket[/prefix] for raw/, reports/, sent/",
+    )  # fmt: skip
+    run.add_argument("--config", type=Path, default=Path("config"), help="the config CSV folder")
+    run.add_argument(
+        "--drive-folder-id", default=env("DRIVE_FOLDER_ID"),
+        help="the Drive folder the report folders go into",
+    )  # fmt: skip
+    # The extraction: the same options and environment variables as hari-lari-extract
+    run.add_argument("--since", default=DEFAULT_SINCE, help="first day of the extraction")
+    run.add_argument(
+        "--token-store", choices=["file", "secret"], default=env("TOKEN_STORE", "file")
+    )
+    run.add_argument(
+        "--token-file", type=Path,
+        default=Path(env("MOKA_TOKEN_FILE", "extraction/moka/.token.json")),
+    )  # fmt: skip
+    run.add_argument("--gcp-project", default=env("GCP_PROJECT"))
+    run.add_argument("--token-secret", default=env("MOKA_TOKEN_SECRET", "moka-oauth-token"))
+
+
+# --- run ------------------------------------------------------------------------------------------
+
+
+def run_services(args: argparse.Namespace, log) -> delivery.Services:
+    """The Moka extraction, Telegram, the chat ids and Drive, from secrets and options."""
+    from hari_lari_analytics.deliver import settings as secrets
+    from hari_lari_analytics.deliver.drive import DriveUploader, drive_session
+    from hari_lari_analytics.deliver.telegram import TelegramClient
+    from hari_lari_analytics.extract.cli import make_store
+    from hari_lari_analytics.extract.client import MokaClient
+    from hari_lari_analytics.extract.run import run_extraction
+    from hari_lari_analytics.extract.tokens import TokenManager
+
+    telegram: TelegramClient | None = None
+
+    def get_telegram() -> TelegramClient:
+        nonlocal telegram
+        if telegram is None:
+            telegram = TelegramClient(secrets.get_secret(secrets.BOT_TOKEN, args.gcp_project))
+        return telegram
+
+    def chat_id(target: str) -> str:
+        settings = project()
+        spec = (settings.telegram_env(target), settings.telegram_targets[target])
+        return secrets.get_secret(spec, args.gcp_project)
+
+    def extract(out: str):
+        try:
+            store = make_store(args)
+        except SystemExit as error:  # a missing option; report it as a failed step
+            raise RuntimeError(str(error)) from None
+        client = MokaClient(TokenManager(store))
+        return run_extraction(
+            client, out, since=args.since, log=lambda m: log.info(m, step="extract")
+        )
+
+    def drive(folder_id: str) -> DriveUploader:
+        get = lambda spec: secrets.get_secret(spec, args.gcp_project)  # noqa: E731
+        session = drive_session(
+            get(secrets.DRIVE_CLIENT_ID),
+            get(secrets.DRIVE_CLIENT_SECRET),
+            get(secrets.DRIVE_REFRESH_TOKEN),
+        )
+        return DriveUploader(session, folder_id)
+
+    return delivery.Services(extract=extract, telegram=get_telegram, chat_id=chat_id, drive=drive)
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    from hari_lari_analytics.extract.cli import load_env
+    from hari_lari_analytics.weekly.log import JsonLog
+    from hari_lari_analytics.weekly.store import make_store
+
+    load_env()
+    log = JsonLog()
+    settings = delivery.RunSettings(
+        store=make_store(args.data_root),
+        config_dir=args.config,
+        anchor=args.anchor,
+        dry_run=args.dry_run,
+        force=args.force,
+        to=args.to,
+        run=args.existing_run,
+        drive_folder_id=args.drive_folder_id,
+    )
+    services = run_services(args, log)
+    components = load_components(args.components)
+    if args.scheduled:
+        directory = args.reports or reports_dir()
+        reports = reports_module.load_reports(components, directory)
+        return delivery.run_scheduled(list(reports.values()), settings, services, log)
+    report = find_report(args.report, components, args.reports)
+    return delivery.run_report_job(report, settings, services, log)
 
 
 # --- loading --------------------------------------------------------------------------------------
@@ -322,9 +457,16 @@ def cmd_schema(args: argparse.Namespace, out: TextIO) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["legacy-weekly"]:
+        from hari_lari_analytics.weekly.cli import main as legacy_weekly
+
+        return legacy_weekly(argv[1:])
     args = parse_args(argv)
     out, err = sys.stdout, sys.stderr
     try:
+        if args.command == "run":
+            return cmd_run(args)
         if args.command == "build":
             return cmd_build(args, out, err)
         if args.command == "gallery":

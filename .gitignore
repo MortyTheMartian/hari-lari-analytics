@@ -3,6 +3,8 @@ data/input/*
 !data/input/.gitkeep
 data/output/*
 data/extract/
+data/jobs/
+data/weekly/
 !data/output/.gitkeep
 *.csv
 !config/*.csv

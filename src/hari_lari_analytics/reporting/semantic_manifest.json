@@ -2789,9 +2789,13 @@
     {
       "id": "weekly",
       "title": "Sales report",
-      "description": "The weekly sales report of today's job, as components: the cover with the full history and the three periods, then per period (14 days, 6 weeks, 3 months) the overview, the categories and the items, hours and payments. The schedule is added at the cut-over (plan 9.7).",
+      "description": "The weekly sales report of today's job, as components: the cover with the full history and the three periods, then per period (14 days, 6 weeks, 3 months) the overview, the categories and the items, hours and payments. Sent to the group every Monday at 04:00 for the week that ended on Sunday.",
       "params": {},
-      "schedule": null,
+      "schedule": {
+        "cron": "0 4 * * 1",
+        "timezone": "Asia/Makassar",
+        "enabled": true
+      },
       "outputs": {
         "pdf": true,
         "png": [
