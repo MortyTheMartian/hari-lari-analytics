@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.cli import prepare_lines
+from hari_lari_analytics.dimensions import prepare_lines
 from hari_lari_analytics.load import (
     InputError,
     load_aliases,
@@ -52,7 +52,7 @@ def _comparable(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
 
 def _pandas_lines(tables, aliases_path, groups_path, anchor) -> pd.DataFrame:
     result = api_sales_lines(tables, load_aliases(aliases_path))
-    lines, _ = prepare_lines(result, groups_path, anchor, source="api")
+    lines, _ = prepare_lines(result, groups_path, anchor)
     return lines
 
 
@@ -356,7 +356,7 @@ REAL_RUN = Path("data/extract/2026-11-22")
 def test_parity_with_the_pandas_lines_on_the_real_run():
     anchor = date(2026, 11, 22)
     run, result = load_api_sales(REAL_RUN, load_aliases(Path("config/item_aliases.csv")))
-    expected, _ = prepare_lines(result, Path("config/category_group.csv"), anchor, source="api")
+    expected, _ = prepare_lines(result, Path("config/category_group.csv"), anchor)
     db = open_run(REAL_RUN, Path("config"), anchor)
     assert len(expected) == 2707
     _assert_same_lines(db.con, expected)

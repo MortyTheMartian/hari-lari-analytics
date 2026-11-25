@@ -1,11 +1,8 @@
 import json
-from datetime import date
 
-import pandas as pd
 import pytest
 
 from hari_lari_analytics.deliver import cli, settings
-from hari_lari_analytics.deliver.caption import build_caption, date_range
 from hari_lari_analytics.deliver.telegram import (
     MAX_CAPTION,
     TelegramClient,
@@ -180,78 +177,6 @@ def test_logs_url_points_at_the_execution_or_the_job():
         "https://console.cloud.google.com/run/jobs/details/asia-southeast2/"
         "hari-lari-weekly/logs?project=hari-lari"
     )
-
-
-# ---- 4.8 caption ------------------------------------------------------------------
-def _lines(rows):
-    """rows: (timestamp, receipt, net_sales) -> minimal cleaned lines."""
-    df = pd.DataFrame(rows, columns=["sale_ts", "receipt_nr", "net_sales"])
-    df["sale_ts"] = pd.to_datetime(df["sale_ts"])
-    df["gross_sales"] = df["net_sales"]
-    df["discounts"] = 0
-    df["refunds"] = 0
-    df["quantity"] = 1
-    df["is_refund"] = False
-    df["counts_as_order"] = True
-    return df
-
-
-ANCHOR = date(2026, 11, 22)  # Sunday; week 16-22 Nov, prior week 9-15 Nov
-ROWS = [
-    ("2026-11-10 10:00", "P1", 100_000),
-    ("2026-11-11 10:00", "P2", 100_000),
-    ("2026-11-17 10:00", "C1", 150_000),
-    ("2026-11-22 21:43", "C2", 50_000),
-    ("2026-11-22 21:43", "C3", 100_000),
-]
-
-
-def test_caption_has_week_figures_changes_and_last_sale():
-    text = build_caption(_lines(ROWS), ANCHOR)
-    assert "Week 47 · 16–22 Nov 2026" in text
-    assert "Net sales: IDR 300,000 (▲ 50.0%)" in text
-    assert "Orders: 3 (▲ 50.0%)" in text
-    assert "Avg order value: IDR 100,000 (unchanged)" in text
-    assert "Change vs previous week (9–15 Nov 2026)" in text
-    assert "Last sale: Sun 22 Nov 2026, 21:43" in text
-    assert "drive" not in text.lower()
-
-
-def test_caption_adds_the_drive_link():
-    text = build_caption(_lines(ROWS), ANCHOR, "https://drive.example/f")
-    assert text.endswith("PDF and Excel lines: https://drive.example/f")
-
-
-def test_caption_shows_a_decrease():
-    rows = [("2026-11-10 10:00", "P1", 400_000), ("2026-11-20 10:00", "C1", 300_000)]
-    assert "Net sales: IDR 300,000 (▼ 25.0%)" in build_caption(_lines(rows), ANCHOR)
-
-
-def test_caption_without_a_prior_week():
-    text = build_caption(_lines(ROWS[2:]), ANCHOR)
-    assert "Net sales: IDR 300,000 (no prior week)" in text
-
-
-def test_caption_for_a_week_without_sales():
-    text = build_caption(_lines(ROWS[:2]), ANCHOR)
-    assert "No sales in this week." in text
-    assert "Last sale: Wed 11 Nov 2026, 10:00" in text
-
-
-def test_caption_fits_a_telegram_caption():
-    assert len(build_caption(_lines(ROWS), ANCHOR, "https://drive.google.com/" + "x" * 60)) < 1024
-
-
-@pytest.mark.parametrize(
-    ("start", "end", "text"),
-    [
-        (date(2026, 11, 16), date(2026, 11, 22), "16–22 Nov 2026"),
-        (date(2026, 11, 30), date(2026, 12, 6), "30 Nov – 6 Dec 2026"),
-        (date(2026, 12, 28), date(2027, 1, 3), "28 Dec 2026 – 3 Jan 2027"),
-    ],
-)
-def test_date_range(start, end, text):
-    assert date_range(start, end) == text
 
 
 # ---- CLI helpers ------------------------------------------------------------------

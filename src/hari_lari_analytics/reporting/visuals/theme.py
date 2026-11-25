@@ -2,7 +2,7 @@
 
 A visual's options name tokens (`accent`, `highlight`, ...) and roles (`small`, `body`, ...),
 never a hex colour or a point size; `Theme` resolves them. `Palette` and `DAYLIGHT` are those of
-today's report, which imports them from here.
+the report before the component port, unchanged.
 """
 
 from __future__ import annotations

@@ -1,8 +1,7 @@
-"""Excel export: cleaned sales lines as a filterable table, ready for pivoting."""
+"""Excel export: cleaned sales lines as a filterable table, ready for pivoting. The workbook of
+a report (`reporting/outputs/xlsx.py`) writes its lines export with these sheets."""
 
 from __future__ import annotations
-
-from pathlib import Path
 
 import pandas as pd
 from openpyxl.utils import get_column_letter
@@ -109,8 +108,3 @@ def write_lines_sheets(writer: pd.ExcelWriter, lines: pd.DataFrame) -> None:
     guide_ws = writer.sheets["Column Guide"]
     guide_ws.column_dimensions["A"].width = 28
     guide_ws.column_dimensions["B"].width = 90
-
-
-def write_excel(path: Path, lines: pd.DataFrame) -> None:
-    with pd.ExcelWriter(path, engine="openpyxl") as writer:
-        write_lines_sheets(writer, lines)

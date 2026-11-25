@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from hari_lari_analytics.periods import report_periods
 from hari_lari_analytics.reporting import formats
 from hari_lari_analytics.reporting.compiler import Query, run_query
 from hari_lari_analytics.reporting.db import connect
@@ -37,7 +38,7 @@ from hari_lari_analytics.reporting.transforms.quality import small_n_mask
 from hari_lari_analytics.reporting.windows import Calendar
 
 from .api_fixture import api_tables
-from .test_compiler import PERIODS, real, real_run, rq, same  # noqa: F401  (real_run: a fixture)
+from .test_compiler import ANCHOR, PERIODS, real, real_run, rq, same  # noqa: F401  (real_run: a fixture)
 from .test_models import LAST_SALE, SEEDS
 
 REG = default_registry()
@@ -833,33 +834,21 @@ def test_the_requirements_of_pivot_are_dimensions_of_the_query():
         plan_query(query, ["nope"])
 
 
-# --- parity with today's report on the real run -------------------------------------------------
+# --- the real run --------------------------------------------------------------------------------
 
 
 @real
 @pytest.mark.parametrize("period", PERIODS)
-def test_parity_orders_by_hour_per_trading_day_through_the_transforms(real_run, period):  # noqa: F811
-    s = real_run[2][period]
+def test_orders_by_hour_per_trading_day_through_the_transforms(real_run, period):  # noqa: F811
+    lines = real_run[2]
     ctx = TransformContext(REG, real_run[1])
     r = rq(real_run, model="fct_sales_lines", dimensions=["hour_of_day"], window=period,
            metrics=["orders"])  # fmt: skip
     out = run_pipeline(r, ["fill_domain", "per_trading_day"], ctx)
-    # today's report: the hours from the first to the last order, zeros in between
-    assert out.df["hour_of_day"].tolist() == s.hours["hour"].tolist()
-    assert same(out.df["orders"], s.hours["orders"])
-
-
-@real
-@pytest.mark.parametrize("period", PERIODS)
-def test_parity_growth_through_the_transform(real_run, period):  # noqa: F811
-    s = real_run[2][period]
-    ctx = TransformContext(REG, real_run[1])
-    query = Query(model="fct_sales_lines", dimensions=["bucket"], window=period,
-                  metrics=["net_sales", "orders"], compare="prior")  # fmt: skip
-    r = run_query(real_run[0], plan_query(query, ["growth_vs_previous"]), REG, real_run[1])
-    out = run("growth_vs_previous", r, ctx, metrics=["net_sales", "orders"])
-    assert out.df["bucket"].tolist() == s.trend["bucket"].tolist()
-    # the daily view (L14D) has no growth in today's report, and none here
-    assert same(out.df["net_sales_growth"], s.trend["net_sales_growth"])
-    assert same(out.df["orders_growth"], s.trend["orders_growth"])
-    assert same(out.df["net_sales"], s.trend["net_sales"])
+    p = next(p for p in report_periods(ANCHOR) if p.key == period)
+    orders = lines[lines["counts_as_order"] & p.mask(lines["sale_ts"])]
+    per_hour = orders.groupby("hour_of_day")["receipt_nr"].nunique()
+    hours = range(per_hour.index.min(), per_hour.index.max() + 1)  # first to last, zeros between
+    expected = per_hour.reindex(hours, fill_value=0) / orders["sale_date"].nunique()
+    assert out.df["hour_of_day"].tolist() == list(hours)
+    assert same(out.df["orders"], expected)

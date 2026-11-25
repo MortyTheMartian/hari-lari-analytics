@@ -22,10 +22,17 @@ from hari_lari_analytics.project import (
     project,
     use_project,
 )
-from hari_lari_analytics.report_pdf import change_text, compact, headline, idr, pct
 from hari_lari_analytics.reporting import windows
 from hari_lari_analytics.reporting.components import check_calendar
 from hari_lari_analytics.reporting.db import connect
+from hari_lari_analytics.reporting.formats import (
+    change_text,
+    compact,
+    date_range,
+    headline,
+    idr,
+    pct,
+)
 from hari_lari_analytics.reporting.registry import RegistryError, load_registry
 
 from .api_fixture import api_tables
@@ -121,8 +128,11 @@ def test_use_project_swaps_the_settings_for_a_block():
 def test_the_deploy_files_use_the_project_time_zone():
     zone = project().timezone
     assert re.search(rf"^\s*TZ={zone}\s*$", (ROOT / "Dockerfile").read_text(), re.M)
-    setup = (ROOT / "deploy" / "setup.sh").read_text()
-    assert f"TZ={zone}" in setup and f'--time-zone "{zone}"' in setup
+    assert f"TZ={zone}" in (ROOT / "deploy" / "setup.sh").read_text()
+    weekly = yaml.safe_load(
+        (ROOT / "src/hari_lari_analytics/reporting/reports/weekly.yml").read_text()
+    )
+    assert weekly["schedule"]["timezone"] == zone  # the scheduler job's time zone
 
 
 # ---- number format: the old report's helpers, unchanged for today's settings ----------
@@ -192,6 +202,18 @@ def test_no_separator_and_no_compact_form():
     assert plain.numbers.number(1234567) == "1234567"
     assert plain.numbers.compact_number(2_500_000) == "2500000"
     assert plain.numbers.headline(2_500_000, short=True) == "2500000"
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "text"),
+    [
+        (date(2026, 11, 16), date(2026, 11, 22), "16–22 Nov 2026"),
+        (date(2026, 11, 30), date(2026, 12, 6), "30 Nov – 6 Dec 2026"),
+        (date(2026, 12, 28), date(2027, 1, 3), "28 Dec 2026 – 3 Jan 2027"),
+    ],
+)
+def test_date_range(start, end, text):
+    assert date_range(start, end) == text
 
 
 # ---- time zone and the anchor rule -------------------------------------------------

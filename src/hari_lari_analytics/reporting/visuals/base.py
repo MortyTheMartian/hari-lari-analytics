@@ -1,8 +1,8 @@
 """The drawing building blocks of today's report: card, chips, text after text, sparkline, the
 plottable table and its bar column, and the colour of a change.
 
-They were methods of `PdfReport` and moved here unchanged (plan 8.1), as functions that take
-the palette; the old report calls them through thin wrappers, and the visuals use them too.
+They were methods of the PDF report before the component port and moved here unchanged (plan
+8.1), as functions that take the palette.
 """
 
 from __future__ import annotations

@@ -466,9 +466,9 @@ def test_the_schemas_are_up_to_date(capsys):
     assert code == 0 and out.count("is up to date") == 3
 
 
-def test_the_two_commands_have_their_own_names():
+def test_the_report_command_is_the_reporting_cli():
     import tomllib
 
     scripts = tomllib.loads(Path("pyproject.toml").read_text())["project"]["scripts"]
     assert scripts["hari-lari-report"] == "hari_lari_analytics.reporting.report_cli:main"
-    assert scripts["hari-lari-report-legacy"] == "hari_lari_analytics.cli:main"
+    assert "hari-lari-weekly" not in scripts and "hari-lari-report-legacy" not in scripts

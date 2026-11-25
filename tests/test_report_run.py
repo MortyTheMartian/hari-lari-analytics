@@ -23,14 +23,15 @@ from hari_lari_analytics.reporting.delivery import (
     marker_keys,
     run_report_job,
     run_scheduled,
+    token_expiry_notice,
 )
+from hari_lari_analytics.reporting.log import JsonLog
 from hari_lari_analytics.reporting.reports import load_reports, parse_report
-from hari_lari_analytics.weekly.log import JsonLog
-from hari_lari_analytics.weekly.store import LocalStore
+from hari_lari_analytics.reporting.store import LocalStore
 
 from .api_fixture import api_tables
 from .conftest import FIXTURES
-from .test_weekly import ADMIN, GROUP, DriveSession, Telegram
+from .fakes import ADMIN, GROUP, DriveSession, Telegram
 
 ANCHOR = date(2026, 10, 13)
 NOW = datetime(2026, 10, 14, 4, 0, tzinfo=project().tz)
@@ -256,6 +257,23 @@ def test_the_token_reminder_goes_to_the_admin_chat(env):
     assert "Moka API token expires" in env.telegram.text(ADMIN, "sendMessage")
 
 
+def test_reminder_when_fewer_than_45_days_remain():
+    manifest = {"token_expires_at": "2026-11-20T10:00:00+08:00"}
+    text = token_expiry_notice(manifest, NOW)
+    assert "20 Nov 2026" in text and "37 days" in text
+
+
+def test_no_reminder_with_45_days_or_more():
+    manifest = {"token_expires_at": "2026-11-28T04:00:00+08:00"}
+    assert token_expiry_notice(manifest, NOW) is None
+    assert token_expiry_notice({}, NOW) is None
+
+
+def test_an_expired_token_is_called_expired():
+    manifest = {"token_expires_at": "2026-10-01T00:00:00+08:00"}
+    assert "expired on 1 Oct 2026" in token_expiry_notice(manifest, NOW)
+
+
 # --- deliver.when ---------------------------------------------------------------------------------
 
 
@@ -327,7 +345,7 @@ def test_the_packaged_weekly_report_is_scheduled_on_monday_at_four():
         "args": ["run", "--report", "weekly"],
     }
     drive = reports["weekly"].spec.deliver.drive
-    assert drive.folder == "{{ anchor }} (week {{ anchor_week }})"  # as hari-lari-weekly names it
+    assert drive.folder == "{{ anchor }} (week {{ anchor_week }})"  # the existing week folders
 
 
 def test_the_run_command_dry_runs_a_report_on_an_existing_run(run_dir, tmp_path, capsys):
@@ -344,10 +362,3 @@ def test_the_run_command_dry_runs_a_report_on_an_existing_run(run_dir, tmp_path,
 def test_run_needs_a_report_or_scheduled():
     with pytest.raises(SystemExit):
         report_cli.main(["run", "--dry-run"])
-
-
-def test_legacy_weekly_hands_over_to_the_old_job(monkeypatch):
-    seen = []
-    monkeypatch.setattr("hari_lari_analytics.weekly.cli.main", lambda argv: seen.append(argv) or 0)
-    assert report_cli.main(["legacy-weekly", "--dry-run", "--to", "admin"]) == 0
-    assert seen == [["--dry-run", "--to", "admin"]]

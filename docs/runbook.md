@@ -78,7 +78,7 @@ Files in the data root:
 | `raw/<run date>/` | The extraction: Parquet tables, `manifest.json`, raw JSON |
 | `reports/<report>/<anchor>/` | The PDF, the PNG pages, the Excel workbook, the Telegram texts, `bundle.json` |
 | `sent/<report>/<anchor>.json` | The sent-marker. Its existence means "this report went out for this anchor" |
-| `reports/<anchor>/`, `sent/<anchor>.json` | The same, written by the old `hari-lari-weekly` before the cut-over; the weekly report also respects that old marker |
+| `reports/<anchor>/`, `sent/<anchor>.json` | The same, written by the old weekly command before the cut-over (9.7); the weekly report also respects that old marker |
 | `dry-run/...` | The same layout, written by dry runs |
 
 ### Running it by hand
@@ -119,24 +119,15 @@ Logs are JSON lines. In Cloud Logging, filter by step:
 | `step marker failed ... could not be written` | The report was sent, but the "already sent" marker is missing. A plain re-run would send the report again. Create `sent/<report>/<anchor>.json` by hand. |
 | `The Moka API token expires on ...` | See below. |
 
-### The cut-over from `hari-lari-weekly` (plan 9.7, once)
+### The cut-over (plan 9.7, done 25 Nov 2026)
 
-The image's entry point is `hari-lari-report` since 9.7; the old command `hari-lari-weekly` ran
-the old report. In this order, with an owner login in `gcloud`:
-
-1. `deploy/setup.sh report-scheduler`: the scheduler's account may start the job with
-   arguments, and the release account may manage the scheduler jobs. Before the merge: without
-   it, the release fails at its last step, after the promotion.
-2. Merge to `main`. The release builds the image, dry-runs `run --scheduled --dry-run`,
-   promotes it and creates the scheduler job `hari-lari-report-weekly`.
-3. Pause the old scheduler job, so no Monday runs twice:
-   `gcloud scheduler jobs pause hari-lari-weekly --location asia-southeast2 --project hari-lari`
-   (the job would fail anyway: the image no longer runs without arguments).
-4. A private run to the admin chat:
-   `gcloud run jobs execute hari-lari-weekly --region asia-southeast2 --project hari-lari --args=run,--report,weekly,--to,admin --wait`.
-
-Until the old report is deleted (9.7b), it can still be sent from the same image:
-`gcloud run jobs execute hari-lari-weekly ... --args=legacy-weekly` (or `legacy-weekly,--to,admin`).
+Until 9.7 the image ran the old command `hari-lari-weekly` with the old report, started by the
+scheduler job of the same name. Since then the image's entry point is `hari-lari-report` and the
+weekly report is a component report. The cut-over: `deploy/setup.sh report-scheduler`, the
+release that created `hari-lari-report-weekly`, the old scheduler job paused, a private run to
+the admin chat, and then the old scheduler job and the old report's code deleted (9.7b). There
+is no fallback to the old report: a bad release is rolled back to an image from after the
+cut-over (see "Release path").
 
 ### Re-authorising the Moka token
 
@@ -201,8 +192,8 @@ merge to main -> build image <commit> -> smoke test -> push -> dry run (hari-lar
   `deploy/release.sh schedules [tag]`.
 * **Rolling back:** Actions > Release > Run workflow > `rollback`, or by hand
   `deploy/release.sh rollback` (previous release) or `deploy/release.sh rollback <tag>`.
-* **Do not roll back across the cut-over (9.7):** an image from before it runs `hari-lari-weekly`
-  and does not understand the scheduler's `run --report weekly`.
+* **Do not roll back across the cut-over (9.7):** an image older than `dc1499cb5270` runs the old
+  command and does not understand the scheduler's `run --report weekly`.
 * **By hand:** `deploy/release.sh {build|dryrun|promote|rollback|schedules|all|status} [tag]`; without a tag
   it uses the current commit, which must be committed (`ALLOW_DIRTY=1` overrides). `status` shows
   the image of both jobs and the previous release. Needs `docker` and a `gcloud` login.

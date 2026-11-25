@@ -168,11 +168,11 @@ def test_parity_with_the_pandas_metrics_on_the_fixture(con):
 
 @pytest.mark.skipif(not REAL_RUN.is_dir(), reason="needs the real extraction run (kept out of git)")
 def test_parity_with_the_pandas_metrics_on_the_real_run():
-    from hari_lari_analytics.cli import prepare_lines
+    from hari_lari_analytics.dimensions import prepare_lines
 
     anchor = date(2026, 11, 22)
     _, result = load_api_sales(REAL_RUN, load_aliases(Path("config/item_aliases.csv")))
-    lines, _ = prepare_lines(result, Path("config/category_group.csv"), anchor, source="api")
+    lines, _ = prepare_lines(result, Path("config/category_group.csv"), anchor)
     _parity(open_run(REAL_RUN, Path("config"), anchor).con, lines)
 
 

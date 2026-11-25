@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Phase 3: Google Cloud infrastructure for the weekly Hari Lari job. Idempotent: safe to re-run.
-# Usage: deploy/setup.sh <step>   (steps: apis bucket sa secrets registry build job scheduler alert all)
+# Usage: deploy/setup.sh <step>   (steps: apis bucket sa secrets registry build job alert all)
 # Phase 4 (not part of `all`): deploy/setup.sh telegram-token | telegram-chat group|admin <id>
 # Phase 5 (not part of `all`): deploy/setup.sh drive-secrets   (OAuth client for the Drive upload)
 #   then DRIVE_FOLDER_ID=<folder id> deploy/setup.sh job
@@ -46,7 +46,7 @@ JSON
   rm -f "$lc"
 }
 
-step_sa() { # 3.6 (+ invoker for 3.12)
+step_sa() { # 3.6 (+ the scheduler's invoker)
   g iam service-accounts describe "$JOB_SA" >/dev/null 2>&1 ||
     g iam service-accounts create "$JOB_SA_NAME" --display-name "Hari Lari weekly job"
   g iam service-accounts describe "$INVOKER_SA" >/dev/null 2>&1 ||
@@ -250,19 +250,6 @@ step_drive_secrets() {
   printf %s "$secret" | g secrets versions add drive-oauth-client-secret --data-file=-
 }
 
-step_scheduler() { # 3.12
-  g run jobs add-iam-policy-binding "$JOB" --region "$REGION" \
-    --member "serviceAccount:$INVOKER_SA" --role roles/run.invoker >/dev/null
-  local uri="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT}/jobs/${JOB}:run"
-  local verb=create
-  g scheduler jobs describe "$JOB" --location "$REGION" >/dev/null 2>&1 && verb=update
-  g scheduler jobs "$verb" http "$JOB" --location "$REGION" \
-    --schedule "0 4 * * 1" --time-zone "Asia/Makassar" \
-    --uri "$uri" --http-method POST --oauth-service-account-email "$INVOKER_SA"
-  # Stay paused until go-live (phase 6.4)
-  g scheduler jobs pause "$JOB" --location "$REGION"
-}
-
 # 9.7 One Cloud Scheduler job per scheduled report, synced by the release (deploy/release.sh
 # schedules). Each starts the live job with the report's arguments as a container override, so
 # the scheduler's account needs runWithOverrides on the job. The release account creates and
@@ -307,7 +294,7 @@ JSON
 }
 
 case "${1:-}" in
-  apis|bucket|sa|secrets|registry|build|job|scheduler|alert)
+  apis|bucket|sa|secrets|registry|build|job|alert)
     "step_$1" ;;
   drive-secrets) step_drive_secrets ;;
   dryrun-job) step_dryrun_job ;;
@@ -316,6 +303,6 @@ case "${1:-}" in
   report-scheduler) step_report_scheduler ;;
   telegram-token) step_telegram_token ;;
   telegram-chat) step_telegram_chat "${2:-}" "${3:-}" ;;
-  all) for s in apis bucket sa secrets registry build job scheduler alert; do echo "== $s"; "step_$s"; done ;;
-  *) echo "usage: $0 {apis|bucket|sa|secrets|registry|build|job|scheduler|alert|drive-secrets|dryrun-job|cleanup-policy|wif|report-scheduler|all|telegram-token|telegram-chat}"; exit 1 ;;
+  all) for s in apis bucket sa secrets registry build job alert; do echo "== $s"; "step_$s"; done ;;
+  *) echo "usage: $0 {apis|bucket|sa|secrets|registry|build|job|alert|drive-secrets|dryrun-job|cleanup-policy|wif|report-scheduler|all|telegram-token|telegram-chat}"; exit 1 ;;
 esac

@@ -10,7 +10,6 @@ hari-lari-report gallery [--run data/extract] [--anchor YYYY-MM-DD] [--out DIR] 
 hari-lari-report validate
 hari-lari-report schedules [--json]
 hari-lari-report schema [--check]
-hari-lari-report legacy-weekly [hari-lari-weekly options]
 ```
 
 `run` is the job (plan 9.7, `delivery.py`): extract, model and check, build, store, deliver and
@@ -22,10 +21,6 @@ runs over its slot. `gallery` draws every component with a visual on the run, on
 `data/output/gallery/` (plan 8.7). `validate` loads every component and report as strictly as a
 build would and checks the three JSON Schemas; `schedules` lists the reports with a schedule, as
 `deploy/` reads them. `--reports` and `--components` before the command point at other folders.
-
-`legacy-weekly` runs the old weekly job (`hari-lari-weekly`) in the same image, the fallback
-until the old report is deleted (plan 9.7b). The old local command that writes today's PDF and
-Excel is `hari-lari-report-legacy`.
 """
 
 from __future__ import annotations
@@ -233,8 +228,8 @@ def run_services(args: argparse.Namespace, log) -> delivery.Services:
 
 def cmd_run(args: argparse.Namespace) -> int:
     from hari_lari_analytics.extract.cli import load_env
-    from hari_lari_analytics.weekly.log import JsonLog
-    from hari_lari_analytics.weekly.store import make_store
+    from hari_lari_analytics.reporting.log import JsonLog
+    from hari_lari_analytics.reporting.store import make_store
 
     load_env()
     log = JsonLog()
@@ -457,11 +452,6 @@ def cmd_schema(args: argparse.Namespace, out: TextIO) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    argv = sys.argv[1:] if argv is None else argv
-    if argv[:1] == ["legacy-weekly"]:
-        from hari_lari_analytics.weekly.cli import main as legacy_weekly
-
-        return legacy_weekly(argv[1:])
     args = parse_args(argv)
     out, err = sys.stdout, sys.stderr
     try:
