@@ -198,15 +198,18 @@ src/hari_lari_analytics/reporting/
   reports/
     weekly.yml
     category_deep_dive.yml
+  formats.py                      # display strings: idr, pct, compact, headline, change_text, ...
+  present.py                      # a result as display cells: value, text, tone, small, n
   visuals/
-    __init__.py                   # the @visual registry
-    base.py                       # Palette, theme, card, chips, table, bar column, sparkline
-    formats.py                    # idr, pct, compact, headline, change_text
+    __init__.py                   # the @visual registry, Area, DrawContext, draw()
+    theme.py                      # Palette, DAYLIGHT, theme tokens and text roles
+    base.py                       # card, chips, table, bar column, sparkline (from report_pdf)
+    common.py                     # arrows, tone colours, n= labels, event marks, legends
     kpi.py                        # kpi_card, summary_card, text_line
     tables.py                     # table (bars, deltas, rank, total row)
     charts.py                     # bar_trend, hbar, dot_plot, stacked_share_bar, heatmap,
                                   # scatter_quadrant, waterfall
-    text.py                       # notes_card, insights
+    notes.py                      # notes_card, insights
 config/
   item_aliases.csv
   category_group.csv
@@ -913,7 +916,7 @@ query:
 transforms:
   - per_trading_day
   - pivot: { rows: weekday, columns: hour_of_day }
-visual: { type: heatmap, format: decimal }
+visual: { type: heatmap }
 ```
 
 The fields: `id`, `title` and `hint` (short Jinja strings with access to `meta`, `facet` and the
@@ -934,9 +937,12 @@ calendar), and fails with the file name and field, listing every schema error at
   compiles too;
 - the additivity check described above;
 - the facet (see below);
-- every parameter is bound by a default or by the report, and every default is used;
-- not yet: the visual and the insight rules are only checked for their form (a `type` and a list
-  of names) until their registries exist (plan 8.1 and 8.3).
+- the visual exists, its options fit its schema, it draws the result's shape, and the metrics
+  its options name are in the query (`visual: bars: aov is not a metric of the query`; see
+  "Visuals");
+- every insight rule exists in `insights.yml`, its options (with the component's changes) fit,
+  it reads the result's shape, and a rule that compares has `compare` (see "Insights");
+- every parameter is bound by a default or by the report, and every default is used.
 
 **Parameters.** A value written `$name` anywhere in the query, transforms, facet or visual is a
 parameter and replaced as a whole value of any type (a window name, a category, a number for
@@ -1001,24 +1007,125 @@ and the visual is drawn once per cell.
 
 ## Visuals
 
+Visuals draw and never compute. The contract below (plan 8.0, agreed 25 Nov 2026, D15 to D18)
+keeps them renderer-neutral: the YAML of a visual says *what* to show, so a web renderer (plan
+12) can implement the same visual types from the same YAML and the same display strings, and
+show the same numbers as the PDF.
+
+### The contract
+
+- **Options say what, never how.** A visual's options name metrics and columns (`metric`,
+  `bars`, `deltas`, `bold`), switch elements on or off (`prior`, `growth`, `sparkline`,
+  `events`), state an emphasis (`highlight: { top: 3 }`, `rank`) or a display form (`style:
+  compact`, `orientation: metrics`). They never hold a point size, a coordinate, a line width
+  or a hex colour; a test checks every visual's options schema for that. Colours are **theme tokens** and text sizes are **text roles**, both resolved by
+  the renderer's theme.
+- **One place formats numbers.** `reporting/formats.py` (no matplotlib) writes every display
+  string from the settings of `project.yml`: values by the metric's `format` (`idr`,
+  `idr_compact`, `count`, `decimal`, `pct`, `timestamp`) in a `style` (`full`, `compact`,
+  `headline`), changes, deltas and growth, bucket labels and window labels. The old helpers
+  `idr`, `pct`, `compact`, `headline`, `stamp` and `change_text` live there too, and
+  `report_pdf.py` imports them.
+- **One presentation step.** `reporting/present.py` turns a result into display cells: for each
+  row and column the raw value, the display string, the tone of a change, the sample-size flag
+  and its `n`, plus the row's label. The matplotlib visuals draw from these cells, and the JSON
+  bundle (plan 8.9) writes the same cells, so no frontend formats a number or applies a rule.
+- **Changes.** A change is shown as a signed percentage for amounts, counts and decimals
+  (`+12.3%`, capped at `>+999%`), and as a difference in percentage points for `pct` metrics
+  (`+1.2 pp`); a `delta` of an amount or count is a signed number (`+3,812`). The display string
+  has no arrow: a visual that wants ▲ ▼ adds it. A comparison that is not valid shows `n/a`, a
+  missing value `–`.
+- **Tone.** Every change has a tone: `good` or `bad` from its sign and the metric's
+  `up_is_good`, `neutral` for a metric with `up_is_good: null` (share, first and last sale) and
+  for no change at all. Good is drawn in `good`, bad in `bad`, neutral in the normal text
+  colour, so a neutral change stays readable but carries no signal.
+- **Small samples** (D7). A value below its sample-size rule is flagged `small`, with its `n`; a
+  change is small when either side is. A small value and its change are drawn in `muted`, with
+  `n=12` beside them, and a small change is never drawn in `good` or `bad`, because the colour
+  would suggest a signal. (To revisit once the owners have read the first component reports.)
+  Matrix cells (after `pivot`) carry no sample size and are not greyed.
+- **Calendar events.** A result whose rows are time buckets or days carries the holidays,
+  closures and promotions of both its windows in `meta.events` (one entry per day: date, kind,
+  name), set by the compiler from `dim_calendar`. A time visual marks the buckets that hold an
+  event and the bundle writes them; the visual never looks anything up.
+- **Empty windows.** For a result with `meta.empty`, the registry draws "No sales in this
+  period" instead of calling the visual.
+
+### Theme tokens and text roles
+
+The theme (`reporting/visuals/theme.py`) maps the tokens to today's `DAYLIGHT` palette:
+
+| Token | Use | Today |
+| --- | --- | --- |
+| `bg`, `card`, `edge`, `grid` | page, card, card border, gridlines | `#f3f5f8`, `#ffffff`, `#e3e7ed`, `#e9edf2` |
+| `text`, `muted` | text; secondary text, small samples | `#0f172a`, `#64748b` |
+| `accent` | bars, lines, the main series | `#0e7c7b` |
+| `highlight` | emphasis: the top hours, the latest point | `#ff6b4a` |
+| `prior` | the comparison period: ticks, hollow dots | `#ff6b4a` |
+| `good`, `bad` | the tone of a change | `#0e7c7b`, `#d9480f` |
+| `holiday`, `closure`, `promotion` | calendar events | `#f2b84b`, `#64748b`, `#7c8db5` |
+| `series` | categorical colours (payment types) | the four of `DAYLIGHT` |
+
+Text roles: `page_title`, `kicker`, `card_title`, `hint`, `headline` (the big KPI number),
+`value` (a KPI number in a smaller card), `label` (upper-case labels above a value), `body`
+(tables and text), `small` (annotations, value labels). Their sizes in points are the theme's;
+an option may choose a role (`role: small`), never a size.
+
+### The registry
+
 A visual is a registered Python function:
 
 ```python
-@visual("table", options=TableOptions, accepts={"rows", "single"}, min_size=(0.25, 0.20))
-def table(fig: Figure, rect: Rect, result: Result, options: TableOptions, theme: Theme) -> None:
+@visual("table", options=TableOptions, accepts=("rows", "single"), min_size=(0.25, 0.20),
+        check=table_needs, text=table_text)
+def table(area: Area, result: Result, options: TableOptions, ctx: DrawContext) -> None:
     ...
 ```
 
-It formats values from the metric specs in `result.meta`, lays them out and draws. It never
-filters, groups or computes a metric. `accepts` lists the result shapes it can draw, and
-`min_size` (as fractions of the page) lets the layout engine refuse a slot that is too small.
-Rows below the sample-size rule are drawn in grey with their `n`.
+- `area` is the figure and the rectangle the visual may use (the inside of its slot's card, in
+  fractions of the page), with helpers to place text by role and colour by token and to add
+  axes inside it.
+- `ctx` holds the theme and, for a facet by metric, the metric of the cell; for the `insights`
+  visual, the collected sentences.
+- `accepts` lists the result shapes it can draw; `min_size` (width, height as fractions of the
+  A4 landscape page) lets the layout engine refuse a slot that is too small (plan 8.4).
+- `check(options, query, shape, registry)` runs when the component loads: the metrics an option
+  names must be in the query, a comparison option needs `compare`, and a visual that stacks rows
+  (`stacked_share_bar`) takes a share (a `pct` metric such as `share`), so it never adds up
+  amounts itself. An error names the file and the option, like every loader error.
+- `text(result, options, ctx)`, where a visual has one, gives its plain-text form for the
+  Telegram text blocks (plan 8.5): `kpi_card`, `text_line`, `notes_card` and `insights` have
+  one.
 
-The first visuals are those of today's report (plan 8.1 moves the building blocks out of
-`report_pdf.py` unchanged, so the old report keeps rendering identically): `kpi_card`,
-`summary_card`, `text_line`, `table` (bars, deltas, rank, total row), `bar_trend`, `dot_plot`,
-`stacked_share_bar` and `notes_card`. New ones: `hbar`, `heatmap`, `scatter_quadrant`,
-`waterfall` and `insights`.
+The JSON Schema of a component lists every visual with its options, so the editor
+autocompletes `visual:` too.
+
+### The visuals
+
+| Visual | Shapes | What it shows | Main options |
+| --- | --- | --- | --- |
+| `kpi_card` | single, series | one metric: the value, its change and prior; on a series with `totals: true` the window total and a sparkline of the buckets | `metric` (default: the facet's), `prior`, `sparkline`, `style`, `card` |
+| `summary_card` | single, series | a period card: the window, its comparison and two or three metrics with their change, and a sparkline on a series | `metrics`, `sparkline`, `card` |
+| `text_line` | single | one line of values: "Gross 1.2M · Discounts 85k · Refunds 0 IDR" | `metrics`, `labels`, `style` |
+| `table` | rows, single, series | one row per group: dimension columns, metric columns with bars, prior values and deltas, rank, the total row; a result without dimensions as one row per metric (current, prior, change) | `columns`, `bars`, `deltas`, `prior`, `bold`, `rank`, `total`, `orientation` |
+| `bar_trend` | series, rows | bars over buckets or an ordered dimension (hours), prior ticks, growth labels, a second metric as a line, highlighted bars, event marks | `metric`, `line`, `prior`, `growth`, `labels`, `highlight`, `events`, `color` |
+| `hbar` | rows | horizontal bars of one metric per group, with value labels and prior ticks | `metric`, `prior`, `highlight`, `labels` |
+| `dot_plot` | rows | one dot per group, the prior as a hollow dot joined by a line, coloured by tone | `metric`, `prior`, `labels` |
+| `stacked_share_bar` | rows | one bar split by the groups' shares (a `pct` metric), with a legend of values | `metric`, `details` |
+| `heatmap` | matrix | the cells of a pivot shaded by value (a change shaded good or bad), with the values written in | `labels`, `color` |
+| `scatter_quadrant` | rows | two metrics per group, the split lines of a `classify` quadrant, points coloured by class | `x`, `y`, `classes`, `labels` |
+| `waterfall` | decomposition | the KPI's prior value, one step per driver or member (level 1), the current value; a note when there is no valid comparison or the change is not split | `labels` |
+| `notes_card` | rows, series | a short list, one note per row: a column with optional columns before and after it | `column`, `before`, `after`, `empty`, `max_items` |
+| `insights` | any | the sentences of the insight engine (see "Insights") | `max_items`, `empty` |
+
+The heatmap's numbers are in the format of its metric, so `per_trading_day` makes them decimals
+without an option. A chart that does not label its marks shows a value axis; one that labels
+them (`labels: true`, the default) leaves the axis out. Under every chart a one-line legend
+names what needs naming: the prior ticks, "pale: small sample" and the kinds of calendar event
+marked.
+
+The first ones replace the drawing code of today's report (plan 8.1 moves its building blocks out
+of `report_pdf.py` unchanged, so the old report keeps rendering identically until 9.7).
 
 By default a slot draws a card with the component's `title` and `hint` and gives the visual the
 inner rectangle. `title` and `hint` have access to `meta`, so
@@ -1027,8 +1134,11 @@ with `card: false` (the cover KPI line).
 
 ## Insights
 
-Insight rule types are Python (plan 8.3); the rules themselves are YAML. A rule reads one result
-and returns sentences with a score.
+Insight rule types are Python (`reporting/insights.py`, plan 8.3); the rules themselves are
+YAML (`reporting/insights.yml`). A rule type reads one result and returns findings: the
+variables of a sentence as display strings from `present.py`, a score, a key (what the sentence
+is about: the metric and the group) and a tone. A rule picks a type, sets its options, a
+`weight` (default 1) and the Jinja `text` of the sentence:
 
 ```yaml
 top_drivers:                       # for results of shape decomposition
@@ -1036,25 +1146,49 @@ top_drivers:                       # for results of shape decomposition
   top: 2
   min_share_of_change: 0.2
   text: >-
-    {{ kpi.label }} {{ change | signed_pct }} on the {{ compare.label }}:
-    {{ drivers | join_effects }}
+    {{ kpi.label }} {{ kpi.change }} vs {{ compare.label }} ({{ kpi.prior }} to {{ kpi.value }}
+    {{ kpi.unit }}), mostly {{ drivers | join_effects }}
 
 movers:                            # for breakdowns with a comparison
   type: movers
-  by: delta
   top: 2
-  min_abs_delta: { pct: 0.05, idr: 2000 }
-  text: "{{ row.label }}: {{ metric.label | lower }} {{ row.delta | signed }} ({{ row.n_orders }} orders)"
+  min_abs_delta: { pct: 0.05, idr: 2000, idr_compact: 2000, count: 5 }
+  text: >-
+    {{ row.label }}: {{ metric.label | lower }} {{ row.delta }} vs {{ compare.label }}
+    ({{ row.prior }} to {{ row.value }}{% if metric.unit %} {{ metric.unit }}{% endif %})
 
 best_bucket:                       # for trends
   type: record
-  text: "Best {{ grain }} since opening: {{ bucket.label }} with {{ bucket.value | idr }}"
+  weight: 0.8
+  text: "Best {{ grain }} {{ since }}: {{ bucket }} with {{ value }} ..."
 ```
 
-Rules never speak about a row or period below its `min_n`, nor about a change without a valid
-comparison. The score is the size of the effect relative to its KPI. The report collects the
-sentences of all components, removes duplicates (same metric and group), ranks them, and shows
-the top ones through the `insights` visual and in the Telegram text.
+On the run of 22 Nov 2026 these say, for example: "Avg Order Value +11.0% vs prior 6 weeks
+(67,129 to 74,490 IDR), mostly items per order +3,812 and avg net price per item +3,549" and
+"Best week since opening: the week of 16 Nov with 13,752,000 IDR net sales (previous best
+13,234,000, the week of 09 Nov)".
+
+| Rule type | Shapes | Fires when | Score | Options |
+| --- | --- | --- | --- | --- |
+| `drivers` | decomposition | the KPI changed and some drivers (level 1) carry at least `min_share_of_change` of it; none when the change is not split | the KPI's change (a ratio, at most 1) | `top`, `min_share_of_change` |
+| `movers` | rows | a group's delta is at least `min_abs_delta` for the metric's format | a pp move as a fraction (5 pp is 0.05), otherwise the delta over the total | `metrics`, `top`, `min_abs_delta` |
+| `threshold` | single, rows | the value crossed `above` (or `below`) since the comparison period | 0.5 plus half the distance past the threshold | `metric`, `above` or `below`, `rows` |
+| `record` | series | the latest bucket is the best of the series (D19): the highest, the lowest where down is good; a partial last bucket and buckets without trading days do not count; "since opening" only when the series starts at the first sale | 0.3 plus the margin over the previous best | `metric`, `min_buckets` |
+| `notes` | rows | a data note (source `notes`) of the given kinds | `score` (0.5) | `kinds`, `score` |
+
+The loader checks `insights.yml` (the type, its options, the weight, and that the text uses only
+the variables of its type) and every component's rules: known rules, options, the result shape,
+the metrics they name, and `compare` on the query for a rule that compares. A component lists
+rules by name, or changes an option for itself: `insights: [{movers: {metrics: [penetration],
+top: 1}}]`.
+
+Rules never speak about a row or period below its `min_n` (a small row, or a change with a small
+side), nor about a change without a valid comparison: `drivers`, `movers` and `threshold` do not
+run then. Scores are comparable across rules, about 0 to 1, times the rule's weight. The report
+(plan 8.5) evaluates each component's rules on each facet (`component_insights`), collects the
+sentences of all components with `collect`: the best sentence per key (the same metric and
+group, in the same facet), ranked by score, the top ones. It shows them through the `insights`
+visual and in the Telegram text (the visual's text form).
 
 ## Layouts
 
@@ -1393,10 +1527,10 @@ items per order: 70,746 × ln(2.047 / 1.939) = +3,812, and the average item pric
 orders and +4,500,382 from the higher AOV.
 
 **5. Draw and say it.** The waterfall goes from 67,129 through the two effects to 74,490. The
-`top_drivers` rule writes: "Avg Order Value +11.0% on the prior 6 weeks: +3,812 from more items
-per order (1.94 → 2.05), +3,549 from a higher price per item." On the weekly v2 page (plan 10.1)
-the same rule on `sales_volume_value` writes: "Net sales +131% on the prior 6 weeks: +31.7M from
-more orders, +4.5M from a higher order value."
+`top_drivers` rule writes: "Avg Order Value +11.0% vs prior 6 weeks (67,129 to 74,490 IDR),
+mostly items per order +3,812 and avg net price per item +3,549." On the weekly v2 page (plan
+10.1) the same rule on `sales_volume_value` names the more orders and the higher order value
+behind the net sales change of +130.8%.
 
 No step needed Python beyond what the framework provides. With `facet: { by: period, values:
 [L14D, L6W, L3M], layout: row }` it shows the three periods side by side, and with
@@ -1474,7 +1608,7 @@ and gives the name to the new subcommands; 9.7 deletes the legacy command. At th
 
 D1 and D2 were agreed on 24 Nov 2026 with the first version. D3 to D10 were agreed on the same
 day after the revision (plan task 7.1b), each as proposed. D11 to D14 were agreed on 25 Nov 2026
-(plan task 7A.9).
+(plan task 7A.9), D15 to D19 on the same day (plan tasks 8.0 and 8.3).
 
 | # | Question | Decision |
 | --- | --- | --- |
@@ -1492,3 +1626,8 @@ day after the revision (plan task 7.1b), each as proposed. D11 to D14 were agree
 | D12 | Running several scheduled reports | agreed: one Cloud Run job for all reports, one Cloud Scheduler job per report that passes `run --report <id>`; the release path still promotes one live job and its dry-run twin |
 | D13 | Who keeps the scheduler jobs in line with the YAML | agreed: the release workflow, after the dry run and promotion; the release service account gets `cloudscheduler.admin` on the project |
 | D14 | Telegram chats a report can deliver to | agreed: named targets in `project.yml`, each mapped to the Secret Manager secret of its chat id; `admin` is required; a new chat (managers, a stock-alert group) needs no code |
+| D15 | Visual contract | agreed: options say what to show, never how; colours are theme tokens and text sizes text roles; one formatting module reads `project.yml`; a neutral change (`up_is_good: null`) is drawn in the text colour |
+| D16 | Where display strings are made | agreed: one presentation step (`present.py`) turns a result into display cells (value, text, tone, small-sample flag, n); the matplotlib visuals and the JSON bundle both use it |
+| D17 | Small samples in a visual | agreed for now: the value and its change in grey with `n=…`, the change never coloured; to revisit after reading the first reports |
+| D18 | Calendar events on time visuals | agreed: the compiler puts the events of both windows in `meta.events`; visuals and the bundle read them from the result |
+| D19 | The `record` insight | agreed: only when the latest bucket is the best of the series (the lowest for a metric where down is good); "since opening" only when the series starts at the first sale |

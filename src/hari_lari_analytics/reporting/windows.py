@@ -35,25 +35,42 @@ _UNIT = {"D": "days", "W": "weeks", "M": "months"}
 
 
 @dataclass(frozen=True)
+class DayEvent:
+    """The calendar event of one day (config/calendar_events.csv through `dim_calendar`)."""
+
+    date: date
+    kind: str  # the most telling kind of the day: closure, holiday, promotion or other
+    name: str  # several names joined by ' + '
+
+
+@dataclass(frozen=True)
 class Calendar:
-    """What the resolver needs from a run: the anchor, the first sale and the trading days."""
+    """What the resolver needs from a run: the anchor, the first sale and the trading days, plus
+    the calendar events, which the compiler hands to the results of time queries."""
 
     anchor: date
     first_sale: date | None  # None: no sales at all
     trading_dates: frozenset[date] = frozenset()
+    events: tuple[DayEvent, ...] = ()  # by date
 
     @classmethod
     def from_db(cls, con: duckdb.DuckDBPyConnection) -> Calendar:
         anchor = con.execute("select anchor from run_context").fetchone()[0]
-        days = con.execute("select date, is_trading_day from dim_calendar").fetchall()
+        days = con.execute(
+            "select date, is_trading_day, event_kind, event_name from dim_calendar order by date"
+        ).fetchall()
         return cls(
             anchor=anchor,
-            first_sale=min((d for d, _ in days), default=None),
-            trading_dates=frozenset(d for d, trading in days if trading),
+            first_sale=min((d for d, *_ in days), default=None),
+            trading_dates=frozenset(d for d, trading, *_ in days if trading),
+            events=tuple(DayEvent(d, kind, name) for d, _, kind, name in days if kind),
         )
 
     def trading_days(self, start: date, end: date) -> int:
         return sum(start <= d <= end for d in self.trading_dates)
+
+    def events_between(self, start: date, end: date) -> tuple[DayEvent, ...]:
+        return tuple(e for e in self.events if start <= e.date <= end)
 
     def in_history(self, start: date) -> bool:
         """True when a range starting on `start` lies fully within the sales history."""

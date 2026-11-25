@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import itertools
 import math
+import numbers
+from datetime import date
 from typing import Literal
 
 import numpy as np
@@ -285,7 +287,8 @@ def _pivot_requires(options: PivotOptions, registry: Registry) -> Requirements:
 )
 def pivot(result: Result, options: PivotOptions, ctx: TransformContext) -> Result:
     """Turn two dimensions into a matrix: one row per value of `rows`, one column per value of
-    `columns`, in the order of the result. Total rows are dropped."""
+    `columns`, in the order of the result; columns of numbers or days are sorted (the hours of
+    a weekday × hour matrix). Total rows are dropped."""
     meta, df = result.meta, result.df
     dims = dimension_columns(result)
     if options.rows == options.columns:
@@ -324,6 +327,8 @@ def pivot(result: Result, options: PivotOptions, ctx: TransformContext) -> Resul
     row_keys, col_keys = keys(options.rows), keys(options.columns)
     row_order = list(dict.fromkeys(row_keys))
     col_order = list(dict.fromkeys(col_keys))
+    if all(isinstance(k, numbers.Real | date) for k in col_order):
+        col_order.sort()  # hours, weekdays, buckets: in their order, not as they first appear
     cells = np.full((len(row_order), len(col_order)), np.nan)
     seen: set[tuple[int, int]] = set()
     row_pos = {k: i for i, k in enumerate(row_order)}

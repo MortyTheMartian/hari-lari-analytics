@@ -3,8 +3,9 @@
 A component is one YAML file in `components/` (docs/components.md, "Components"): `id`,
 `title`, `hint`, `description`, default `params`, `query`, `transforms`, `facet`, `visual` and
 `insights`. Loading validates it strictly: an unknown key fails with the file and the field,
-and the query, the transforms and the facet are checked against the registry and the compiler
-without touching any data (on a fixed calendar, since the checks need no sales).
+and the query, the transforms, the facet, the visual and the insight rules are checked against
+the registries and the compiler without touching any data (on a fixed calendar, since the
+checks need no sales).
 
 A value written `$name` anywhere in the query, the transforms, the facet or the visual is a
 parameter, and so is a name used as `{{ name }}` in the title or hint (besides `meta` and
@@ -13,9 +14,6 @@ defaults. A component whose parameters all have a default is checked completely 
 component with a parameter only a report binds (`$category`) is checked as far as possible when
 loaded and completely when bound. A report slot may change a component with `with:`, a deep
 merge (mappings merge, everything else is replaced), which is validated in the same way.
-
-The visual and the insight rules are only checked for their form until their registries exist
-(plan 8.1 and 8.3).
 """
 
 from __future__ import annotations
@@ -45,7 +43,7 @@ from pydantic import (
 )
 
 from hari_lari_analytics.project import project
-from hari_lari_analytics.reporting import transforms
+from hari_lari_analytics.reporting import insights, transforms, visuals
 from hari_lari_analytics.reporting.compiler import Query, QueryError, compile_query
 from hari_lari_analytics.reporting.facets import FacetError, FacetSpec, check_facet
 from hari_lari_analytics.reporting.queries import SOURCES, QueryContext, SourceQuery, execute
@@ -106,7 +104,7 @@ StepSpec = Annotated[Any, AfterValidator(_step)]
 
 
 class VisualSpec(BaseModel):
-    """The visual and its options; the options are checked by the visual registry (plan 8.1)."""
+    """The visual and its options, which the visual registry checks against the query."""
 
     model_config = ConfigDict(extra="allow", frozen=True)
 
@@ -127,7 +125,8 @@ class ComponentSpec(_Strict):
     transforms: list[StepSpec] = []
     facet: FacetSpec | None = None
     visual: VisualSpec | None = None
-    insights: list[str] = []
+    # rules of insights.yml: `movers`, or `{movers: {metrics: [penetration]}}`
+    insights: list[str | dict[str, dict[str, Any] | None]] = []
 
     @field_validator("params")
     @classmethod
@@ -360,6 +359,15 @@ def _check(
             check_facet(spec.facet, query, parameters, registry, calendar)
         except FacetError as error:
             raise ComponentError(f"{source}: facet: {error}") from None
+    if spec.visual is not None:
+        try:
+            visuals.check_visual(spec.visual.type, spec.visual.options, query, shape, registry)
+        except visuals.VisualError as error:
+            raise ComponentError(f"{source}: visual: {error}") from None
+    try:
+        insights.check_insights(spec.insights, query, shape, registry)
+    except insights.InsightError as error:
+        raise ComponentError(f"{source}: insights: {error}") from None
     unused = sorted(set(spec.params) - parameters)
     if unused:
         raise ComponentError(
@@ -513,7 +521,53 @@ def component_json_schema(registry: Registry | None = None) -> dict:
             }
         )
     schema["properties"]["transforms"]["items"] = {"anyOf": steps}
-    schema["properties"]["visual"]["description"] = "the visual and its options (plan 8.1)"
+
+    shown: list[dict] = []
+    for name, spec in sorted(visuals.VISUALS.items()):
+        options = spec.options.model_json_schema()
+        for key, value in options.pop("$defs", {}).items():
+            if key in defs and defs[key] != value:
+                raise ValueError(f"the schema definition {key} is used twice")
+            defs[key] = value
+        props = {k: _or_param(v) for k, v in options.get("properties", {}).items()}
+        shown.append(
+            {
+                "type": "object",
+                "description": spec.description,
+                "properties": {"type": {"const": name}, **props},
+                "required": ["type", *options.get("required", [])],
+                "additionalProperties": False,
+            }
+        )
+    schema["properties"]["visual"] = {
+        "anyOf": [{"anyOf": shown}, {"type": "null"}],
+        "description": "the visual (`type`) and its options",
+    }
+    defs.pop("VisualSpec", None)
+
+    rules = insights.default_rules()
+    refs: list[dict] = [_enum(rules, "a rule of insights.yml")]
+    for name, rule in sorted(rules.items()):
+        options = rule.type.options.model_json_schema()
+        for key, value in options.pop("$defs", {}).items():
+            defs.setdefault(key, value)
+        props = {k: _or_param(v) for k, v in options.get("properties", {}).items()}
+        props["weight"] = {"type": "number", "exclusiveMinimum": 0}
+        overrides = {"type": "object", "properties": props, "additionalProperties": False}
+        refs.append(
+            {
+                "type": "object",
+                "description": f"{rule.type.description} (options of the rule {name})",
+                "properties": {name: {"anyOf": [overrides, {"type": "null"}]}},
+                "required": [name],
+                "additionalProperties": False,
+            }
+        )
+    schema["properties"]["insights"] = {
+        "type": "array",
+        "items": {"anyOf": refs},
+        "description": "the insight rules of insights.yml the component uses",
+    }
 
     _parametrize(defs, ["Query", "TopSpec", "SourceQuery", "FacetSpec", "TopValues"])
     return {

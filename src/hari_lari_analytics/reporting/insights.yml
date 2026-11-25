@@ -1,0 +1,41 @@
+# The insight rules (docs/components.md, "Insights"). A rule is a rule type of
+# reporting/insights.py with its options, a `weight` (default 1) for its score and the Jinja
+# `text` of its sentence, whose variables are display strings. A component lists the rules it
+# uses: `insights: [movers]`, or `[{movers: {metrics: [penetration]}}]` to change an option.
+
+top_drivers:
+  type: drivers
+  top: 2
+  min_share_of_change: 0.2
+  text: >-
+    {{ kpi.label }} {{ kpi.change }} vs {{ compare.label }} ({{ kpi.prior }} to {{ kpi.value }}
+    {{ kpi.unit }}), mostly {{ drivers | join_effects }}
+
+movers:
+  type: movers
+  top: 2
+  min_abs_delta: { pct: 0.05, idr: 2000, idr_compact: 2000, count: 5 }
+  text: >-
+    {{ row.label }}: {{ metric.label | lower }} {{ row.delta }} vs {{ compare.label }}
+    ({{ row.prior }} to {{ row.value }}{% if metric.unit %} {{ metric.unit }}{% endif %})
+
+best_bucket:
+  type: record
+  weight: 0.8
+  text: >-
+    Best {{ grain }} {{ since }}: {{ bucket }} with {{ value }}
+    {%- if metric.unit %} {{ metric.unit }}{% endif %} {{ metric.label | lower }}
+    (previous best {{ previous.value }}, {{ previous.bucket }})
+
+discount_rate_high:
+  type: threshold
+  metric: discount_rate
+  above: 0.1
+  text: >-
+    {{ metric.label }} rose {{ direction }} {{ threshold }}: {{ value }}, from {{ prior }}
+    vs {{ compare.label }}
+
+data_notes:
+  type: notes
+  weight: 0.6
+  text: "{{ note }}"

@@ -871,21 +871,6 @@
       "title": "TopValues",
       "type": "object"
     },
-    "VisualSpec": {
-      "additionalProperties": true,
-      "description": "The visual and its options; the options are checked by the visual registry (plan 8.1).",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "type"
-      ],
-      "title": "VisualSpec",
-      "type": "object"
-    },
     "Band": {
       "additionalProperties": false,
       "properties": {
@@ -903,6 +888,21 @@
         "label"
       ],
       "title": "Band",
+      "type": "object"
+    },
+    "Highlight": {
+      "additionalProperties": false,
+      "properties": {
+        "top": {
+          "minimum": 1,
+          "title": "Top",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "top"
+      ],
+      "title": "Highlight",
       "type": "object"
     }
   },
@@ -1632,22 +1632,1458 @@
     "visual": {
       "anyOf": [
         {
-          "$ref": "#/$defs/VisualSpec"
+          "anyOf": [
+            {
+              "type": "object",
+              "description": "Bars of one metric along time (or along a dimension), with the prior period as ticks, the",
+              "properties": {
+                "type": {
+                  "const": "bar_trend"
+                },
+                "metric": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Metric"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "line": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Line"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "prior": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Prior",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "growth": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Growth",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "labels": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Labels",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "highlight": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/Highlight"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "events": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Events",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "color": {
+                  "anyOf": [
+                    {
+                      "default": "accent",
+                      "enum": [
+                        "bg",
+                        "card",
+                        "edge",
+                        "grid",
+                        "text",
+                        "muted",
+                        "accent",
+                        "highlight",
+                        "prior",
+                        "good",
+                        "bad",
+                        "holiday",
+                        "closure",
+                        "promotion"
+                      ],
+                      "title": "Color",
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "One dot per row for a metric (a share or a rate), the prior value as a hollow dot and the",
+              "properties": {
+                "type": {
+                  "const": "dot_plot"
+                },
+                "metric": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Metric"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "prior": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Prior",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "labels": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Labels",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "Horizontal bars of one metric, one per row in the result's order, with the prior value",
+              "properties": {
+                "type": {
+                  "const": "hbar"
+                },
+                "metric": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Metric"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "prior": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Prior",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "highlight": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/Highlight"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "labels": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Labels",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "A matrix (weekday \u00d7 hour) as shaded cells: the larger the value, the darker; a change is",
+              "properties": {
+                "type": {
+                  "const": "heatmap"
+                },
+                "labels": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Labels",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "color": {
+                  "anyOf": [
+                    {
+                      "default": "accent",
+                      "enum": [
+                        "bg",
+                        "card",
+                        "edge",
+                        "grid",
+                        "text",
+                        "muted",
+                        "accent",
+                        "highlight",
+                        "prior",
+                        "good",
+                        "bad",
+                        "holiday",
+                        "closure",
+                        "promotion"
+                      ],
+                      "title": "Color",
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "The insight sentences of the report or the component, ranked, each with a dot in the",
+              "properties": {
+                "type": {
+                  "const": "insights"
+                },
+                "max_items": {
+                  "anyOf": [
+                    {
+                      "default": 5,
+                      "minimum": 1,
+                      "title": "Max Items",
+                      "type": "integer"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "empty": {
+                  "anyOf": [
+                    {
+                      "default": "Nothing stands out",
+                      "title": "Empty",
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "One metric: its label, the value, the change with the prior value, and a sparkline.",
+              "properties": {
+                "type": {
+                  "const": "kpi_card"
+                },
+                "metric": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Metric"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "prior": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Prior",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "sparkline": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Sparkline",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "style": {
+                  "anyOf": [
+                    {
+                      "default": "headline",
+                      "enum": [
+                        "full",
+                        "compact",
+                        "headline"
+                      ],
+                      "title": "Style",
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "card": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Card",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "A short list of notes, one per row (the anomalies, the closures): a column with an",
+              "properties": {
+                "type": {
+                  "const": "notes_card"
+                },
+                "column": {
+                  "anyOf": [
+                    {
+                      "title": "Column",
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "before": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Before"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "after": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "After"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "empty": {
+                  "anyOf": [
+                    {
+                      "default": "Nothing to note",
+                      "title": "Empty",
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "max_items": {
+                  "anyOf": [
+                    {
+                      "default": 5,
+                      "minimum": 1,
+                      "title": "Max Items",
+                      "type": "integer"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type",
+                "column"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "Two metrics as a scatter, split into quadrants where `classify` split them (menu",
+              "properties": {
+                "type": {
+                  "const": "scatter_quadrant"
+                },
+                "x": {
+                  "anyOf": [
+                    {
+                      "title": "X",
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "y": {
+                  "anyOf": [
+                    {
+                      "title": "Y",
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "classes": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Classes"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "labels": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Labels",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type",
+                "x",
+                "y"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "One bar split into the shares of the rows (payment types), with a legend of the names,",
+              "properties": {
+                "type": {
+                  "const": "stacked_share_bar"
+                },
+                "metric": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Metric"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "details": {
+                  "anyOf": [
+                    {
+                      "default": [],
+                      "items": {
+                        "type": "string"
+                      },
+                      "title": "Details",
+                      "type": "array"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "A period card: the window, its comparison, up to three metrics with their change and a",
+              "properties": {
+                "type": {
+                  "const": "summary_card"
+                },
+                "metrics": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Metrics"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "sparkline": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Sparkline"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "card": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Card",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "A table: one row per group with bars, deltas, rank and the total row, or one row per",
+              "properties": {
+                "type": {
+                  "const": "table"
+                },
+                "columns": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Columns"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "bars": {
+                  "anyOf": [
+                    {
+                      "default": [],
+                      "items": {
+                        "type": "string"
+                      },
+                      "title": "Bars",
+                      "type": "array"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "deltas": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "enum": [
+                          "change",
+                          "delta"
+                        ],
+                        "type": "string"
+                      },
+                      "default": {},
+                      "title": "Deltas",
+                      "type": "object"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "prior": {
+                  "anyOf": [
+                    {
+                      "default": [],
+                      "items": {
+                        "type": "string"
+                      },
+                      "title": "Prior",
+                      "type": "array"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "bold": {
+                  "anyOf": [
+                    {
+                      "default": [],
+                      "items": {
+                        "type": "string"
+                      },
+                      "title": "Bold",
+                      "type": "array"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "rank": {
+                  "anyOf": [
+                    {
+                      "default": false,
+                      "title": "Rank",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "total": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Total",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "orientation": {
+                  "anyOf": [
+                    {
+                      "default": "auto",
+                      "enum": [
+                        "auto",
+                        "groups",
+                        "metrics"
+                      ],
+                      "title": "Orientation",
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "One line of values: Gross 1,234,000 \u00b7 discounts 12,000 \u00b7 refunds 0 IDR.",
+              "properties": {
+                "type": {
+                  "const": "text_line"
+                },
+                "metrics": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Metrics"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "labels": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "default": {},
+                      "title": "Labels",
+                      "type": "object"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                },
+                "style": {
+                  "anyOf": [
+                    {
+                      "default": "full",
+                      "enum": [
+                        "full",
+                        "compact",
+                        "headline"
+                      ],
+                      "title": "Style",
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "A bridge from the KPI's prior value to its current value through the effect of each",
+              "properties": {
+                "type": {
+                  "const": "waterfall"
+                },
+                "labels": {
+                  "anyOf": [
+                    {
+                      "default": true,
+                      "title": "Labels",
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                      "description": "a parameter"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          ]
         },
         {
           "type": "null"
         }
       ],
-      "default": null,
-      "description": "the visual and its options (plan 8.1)"
+      "description": "the visual (`type`) and its options"
     },
     "insights": {
-      "default": [],
+      "type": "array",
       "items": {
-        "type": "string"
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "best_bucket",
+              "data_notes",
+              "discount_rate_high",
+              "movers",
+              "top_drivers"
+            ],
+            "description": "a rule of insights.yml"
+          },
+          {
+            "type": "object",
+            "description": "The latest bucket of a trend is the best one (D19): the highest, or the lowest when down (options of the rule best_bucket)",
+            "properties": {
+              "best_bucket": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "metric": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null,
+                            "title": "Metric"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "min_buckets": {
+                        "anyOf": [
+                          {
+                            "default": 4,
+                            "minimum": 2,
+                            "title": "Min Buckets",
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "best_bucket"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "The data notes (source `notes`): extraction errors and warnings, failing checks. (options of the rule data_notes)",
+            "properties": {
+              "data_notes": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kinds": {
+                        "anyOf": [
+                          {
+                            "default": [
+                              "extraction",
+                              "check"
+                            ],
+                            "items": {
+                              "type": "string"
+                            },
+                            "title": "Kinds",
+                            "type": "array"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "score": {
+                        "anyOf": [
+                          {
+                            "default": 0.5,
+                            "maximum": 1,
+                            "minimum": 0,
+                            "title": "Score",
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "data_notes"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "A value that crossed a threshold since the comparison period. (options of the rule discount_rate_high)",
+            "properties": {
+              "discount_rate_high": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "metric": {
+                        "anyOf": [
+                          {
+                            "title": "Metric",
+                            "type": "string"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "above": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null,
+                            "title": "Above"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "below": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null,
+                            "title": "Below"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "rows": {
+                        "anyOf": [
+                          {
+                            "default": false,
+                            "title": "Rows",
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "discount_rate_high"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "The groups of a breakdown that moved most against the comparison. (options of the rule movers)",
+            "properties": {
+              "movers": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "metrics": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null,
+                            "title": "Metrics"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "top": {
+                        "anyOf": [
+                          {
+                            "default": 2,
+                            "minimum": 1,
+                            "title": "Top",
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "min_abs_delta": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": {
+                              "type": "number"
+                            },
+                            "default": {},
+                            "propertyNames": {
+                              "enum": [
+                                "idr",
+                                "idr_compact",
+                                "count",
+                                "decimal",
+                                "pct",
+                                "timestamp"
+                              ]
+                            },
+                            "title": "Min Abs Delta",
+                            "type": "object"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "movers"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "The largest drivers of a KPI's change, from `decompose`: one sentence per KPI. (options of the rule top_drivers)",
+            "properties": {
+              "top_drivers": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "top": {
+                        "anyOf": [
+                          {
+                            "default": 2,
+                            "minimum": 1,
+                            "title": "Top",
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "min_share_of_change": {
+                        "anyOf": [
+                          {
+                            "default": 0.2,
+                            "maximum": 1,
+                            "minimum": 0,
+                            "title": "Min Share Of Change",
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "top_drivers"
+            ],
+            "additionalProperties": false
+          }
+        ]
       },
-      "title": "Insights",
-      "type": "array"
+      "description": "the insight rules of insights.yml the component uses"
     }
   },
   "required": [
