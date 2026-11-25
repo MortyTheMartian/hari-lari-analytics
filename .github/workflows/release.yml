@@ -48,7 +48,14 @@ jobs:
       - name: Release
         env:
           ACTION: ${{ inputs.action || 'all' }}
-        run: deploy/release.sh "$ACTION"
+        # The auth step writes a credentials file into the workspace (git-ignored and
+        # docker-ignored), so the tree counts as dirty: name the commit's tag explicitly.
+        run: |
+          if [[ "$ACTION" == all ]]; then
+            deploy/release.sh all "$(deploy/release.sh tag)"
+          else
+            deploy/release.sh "$ACTION"
+          fi
 
       - name: Status
         if: always()

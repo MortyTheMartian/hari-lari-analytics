@@ -10,3 +10,4 @@ tests
 docs
 *.pdf
 *Zone.Identifier
+gha-creds-*.json

@@ -32,3 +32,6 @@ dist/
 # Moka API extraction: tokens, raw API responses and schema dumps stay local
 extraction/moka/.token.json*
 extraction/moka/output/
+
+# Written into the workspace by google-github-actions/auth
+gha-creds-*.json
