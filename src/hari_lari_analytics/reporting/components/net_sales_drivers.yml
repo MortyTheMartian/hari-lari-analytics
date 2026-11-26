@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: net_sales_drivers
+title: What moved net sales
+description: >-
+  Insight-only (rules, no visual): the change of net sales against the prior period, split exactly
+  into the effect of the orders and of the AOV (net sales = orders × AOV, LMDI). A card names it
+  with `insights_from`, so a card of a single number can say what the number is made of.
+params: { period: L6W }
+query:
+  model: fct_sales_lines
+  metrics: [net_sales]
+  window: $period
+  compare: prior
+transforms:
+  - decompose: { identity: sales_volume_value }
+insights: [net_sales_drivers]

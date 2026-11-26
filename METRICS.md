@@ -108,7 +108,8 @@ but its (usually zero) net sales still count towards its Contributive AOV.
 | Adjusted Category | Category according to today's set of categories, see below |
 | Item | Item name recorded at the time of sale |
 | Adjusted Item | Today's name of the item, see below |
-| Item-Variant | `Item-Variant`, or just `Item` when there is no variant (also as Adjusted Item-Variant) |
+| Item-Variant | `Item-Variant` as sold, or just `Item` when there is no variant |
+| Adjusted Item-Variant | The adjusted item and today's name of the line's variant, found by the variant's id; just the adjusted item when that variant has no name, was deleted or is unknown, so a variant Moka renamed or dropped is still the same item |
 | Discounted | TRUE when a discount was applied |
 | Discount Code | Name of the applied discount, empty if none |
 | Payment Type | Payment method of the receipt |

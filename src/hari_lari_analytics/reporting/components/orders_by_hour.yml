@@ -12,5 +12,7 @@ query:
   metrics: [orders]
   where: { counts_as_order: true }  # a fully refunded receipt adds no hour
   window: $period
+  compare: prior  # the busiest hours of the prior period (insights); the chart draws no prior
 transforms: [per_trading_day, fill_domain]
 visual: { type: bar_trend, metric: orders, highlight: { top: 3 }, prior: false, growth: false }
+insights: [peak_hours]

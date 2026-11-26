@@ -2752,13 +2752,128 @@
           {
             "type": "string",
             "enum": [
+              "aov_drivers",
               "best_bucket",
+              "category_slices",
               "data_notes",
+              "discount_cost",
               "discount_rate_high",
+              "discount_rate_total",
+              "item_share",
               "movers",
-              "top_drivers"
+              "net_sales_drivers",
+              "payment_share",
+              "peak_hours",
+              "sales_record",
+              "top_drivers",
+              "top_entries"
             ],
             "description": "a rule of insights.yml"
+          },
+          {
+            "type": "object",
+            "description": "The largest drivers of a KPI's change, from `decompose`: one sentence per KPI. (options of the rule aov_drivers)",
+            "properties": {
+              "aov_drivers": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "top": {
+                        "anyOf": [
+                          {
+                            "default": 2,
+                            "minimum": 1,
+                            "title": "Top",
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "min_share_of_change": {
+                        "anyOf": [
+                          {
+                            "default": 0.2,
+                            "maximum": 1,
+                            "minimum": 0,
+                            "title": "Min Share Of Change",
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "min_abs_change": {
+                        "anyOf": [
+                          {
+                            "default": 0,
+                            "minimum": 0,
+                            "title": "Min Abs Change",
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "every_driver": {
+                        "anyOf": [
+                          {
+                            "default": false,
+                            "title": "Every Driver",
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "style": {
+                        "anyOf": [
+                          {
+                            "default": "full",
+                            "enum": [
+                              "full",
+                              "compact"
+                            ],
+                            "title": "Style",
+                            "type": "string"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "aov_drivers"
+            ],
+            "additionalProperties": false
           },
           {
             "type": "object",
@@ -2805,6 +2920,24 @@
                           }
                         ]
                       },
+                      "style": {
+                        "anyOf": [
+                          {
+                            "default": "full",
+                            "enum": [
+                              "full",
+                              "compact"
+                            ],
+                            "title": "Style",
+                            "type": "string"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
                       "weight": {
                         "type": "number",
                         "exclusiveMinimum": 0
@@ -2820,6 +2953,83 @@
             },
             "required": [
               "best_bucket"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "A group whose contributive AOV moved, and whether it is in more orders (penetration) or (options of the rule category_slices)",
+            "properties": {
+              "category_slices": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "top": {
+                        "anyOf": [
+                          {
+                            "default": 3,
+                            "minimum": 1,
+                            "title": "Top",
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "min_abs_delta": {
+                        "anyOf": [
+                          {
+                            "default": 2000,
+                            "minimum": 0,
+                            "title": "Min Abs Delta",
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "skip": {
+                        "anyOf": [
+                          {
+                            "default": [
+                              "Custom Amount",
+                              "Other"
+                            ],
+                            "items": {
+                              "type": "string"
+                            },
+                            "title": "Skip",
+                            "type": "array"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "category_slices"
             ],
             "additionalProperties": false
           },
@@ -2883,6 +3093,119 @@
             },
             "required": [
               "data_notes"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "The groups of a breakdown that moved most against the comparison. (options of the rule discount_cost)",
+            "properties": {
+              "discount_cost": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "metrics": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null,
+                            "title": "Metrics"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "top": {
+                        "anyOf": [
+                          {
+                            "default": 2,
+                            "minimum": 1,
+                            "title": "Top",
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "min_abs_delta": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": {
+                              "type": "number"
+                            },
+                            "default": {},
+                            "propertyNames": {
+                              "enum": [
+                                "idr",
+                                "idr_compact",
+                                "count",
+                                "decimal",
+                                "pct",
+                                "timestamp"
+                              ]
+                            },
+                            "title": "Min Abs Delta",
+                            "type": "object"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "skip": {
+                        "anyOf": [
+                          {
+                            "default": [
+                              "Custom Amount",
+                              "Other"
+                            ],
+                            "items": {
+                              "type": "string"
+                            },
+                            "title": "Skip",
+                            "type": "array"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "discount_cost"
             ],
             "additionalProperties": false
           },
@@ -2984,6 +3307,173 @@
           },
           {
             "type": "object",
+            "description": "The total row of a metric moved by at least `min_abs_delta` against the comparison. (options of the rule discount_rate_total)",
+            "properties": {
+              "discount_rate_total": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "metric": {
+                        "anyOf": [
+                          {
+                            "title": "Metric",
+                            "type": "string"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "min_abs_delta": {
+                        "anyOf": [
+                          {
+                            "minimum": 0,
+                            "title": "Min Abs Delta",
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "discount_rate_total"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "The groups of a breakdown that moved most against the comparison. (options of the rule item_share)",
+            "properties": {
+              "item_share": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "metrics": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null,
+                            "title": "Metrics"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "top": {
+                        "anyOf": [
+                          {
+                            "default": 2,
+                            "minimum": 1,
+                            "title": "Top",
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "min_abs_delta": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": {
+                              "type": "number"
+                            },
+                            "default": {},
+                            "propertyNames": {
+                              "enum": [
+                                "idr",
+                                "idr_compact",
+                                "count",
+                                "decimal",
+                                "pct",
+                                "timestamp"
+                              ]
+                            },
+                            "title": "Min Abs Delta",
+                            "type": "object"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "skip": {
+                        "anyOf": [
+                          {
+                            "default": [
+                              "Custom Amount",
+                              "Other"
+                            ],
+                            "items": {
+                              "type": "string"
+                            },
+                            "title": "Skip",
+                            "type": "array"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "item_share"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
             "description": "The groups of a breakdown that moved most against the comparison. (options of the rule movers)",
             "properties": {
               "movers": {
@@ -3057,6 +3547,26 @@
                           }
                         ]
                       },
+                      "skip": {
+                        "anyOf": [
+                          {
+                            "default": [
+                              "Custom Amount",
+                              "Other"
+                            ],
+                            "items": {
+                              "type": "string"
+                            },
+                            "title": "Skip",
+                            "type": "array"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
                       "weight": {
                         "type": "number",
                         "exclusiveMinimum": 0
@@ -3072,6 +3582,401 @@
             },
             "required": [
               "movers"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "The largest drivers of a KPI's change, from `decompose`: one sentence per KPI. (options of the rule net_sales_drivers)",
+            "properties": {
+              "net_sales_drivers": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "top": {
+                        "anyOf": [
+                          {
+                            "default": 2,
+                            "minimum": 1,
+                            "title": "Top",
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "min_share_of_change": {
+                        "anyOf": [
+                          {
+                            "default": 0.2,
+                            "maximum": 1,
+                            "minimum": 0,
+                            "title": "Min Share Of Change",
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "min_abs_change": {
+                        "anyOf": [
+                          {
+                            "default": 0,
+                            "minimum": 0,
+                            "title": "Min Abs Change",
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "every_driver": {
+                        "anyOf": [
+                          {
+                            "default": false,
+                            "title": "Every Driver",
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "style": {
+                        "anyOf": [
+                          {
+                            "default": "full",
+                            "enum": [
+                              "full",
+                              "compact"
+                            ],
+                            "title": "Style",
+                            "type": "string"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "net_sales_drivers"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "The groups of a breakdown that moved most against the comparison. (options of the rule payment_share)",
+            "properties": {
+              "payment_share": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "metrics": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null,
+                            "title": "Metrics"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "top": {
+                        "anyOf": [
+                          {
+                            "default": 2,
+                            "minimum": 1,
+                            "title": "Top",
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "min_abs_delta": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": {
+                              "type": "number"
+                            },
+                            "default": {},
+                            "propertyNames": {
+                              "enum": [
+                                "idr",
+                                "idr_compact",
+                                "count",
+                                "decimal",
+                                "pct",
+                                "timestamp"
+                              ]
+                            },
+                            "title": "Min Abs Delta",
+                            "type": "object"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "skip": {
+                        "anyOf": [
+                          {
+                            "default": [
+                              "Custom Amount",
+                              "Other"
+                            ],
+                            "items": {
+                              "type": "string"
+                            },
+                            "title": "Skip",
+                            "type": "array"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "payment_share"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "The top n members of a distribution (the busiest hours) are not the prior period's, and (options of the rule peak_hours)",
+            "properties": {
+              "peak_hours": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "metric": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null,
+                            "title": "Metric"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "top": {
+                        "anyOf": [
+                          {
+                            "default": 3,
+                            "minimum": 1,
+                            "title": "Top",
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "margin": {
+                        "anyOf": [
+                          {
+                            "default": 0.15,
+                            "minimum": 0,
+                            "title": "Margin",
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "labels": {
+                        "anyOf": [
+                          {
+                            "default": "text",
+                            "enum": [
+                              "text",
+                              "hour"
+                            ],
+                            "title": "Labels",
+                            "type": "string"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "peak_hours"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "The latest bucket of a trend is the best one (D19): the highest, or the lowest when down (options of the rule sales_record)",
+            "properties": {
+              "sales_record": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "metric": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null,
+                            "title": "Metric"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "min_buckets": {
+                        "anyOf": [
+                          {
+                            "default": 4,
+                            "minimum": 2,
+                            "title": "Min Buckets",
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "style": {
+                        "anyOf": [
+                          {
+                            "default": "full",
+                            "enum": [
+                              "full",
+                              "compact"
+                            ],
+                            "title": "Style",
+                            "type": "string"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "sales_record"
             ],
             "additionalProperties": false
           },
@@ -3115,6 +4020,53 @@
                           }
                         ]
                       },
+                      "min_abs_change": {
+                        "anyOf": [
+                          {
+                            "default": 0,
+                            "minimum": 0,
+                            "title": "Min Abs Change",
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "every_driver": {
+                        "anyOf": [
+                          {
+                            "default": false,
+                            "title": "Every Driver",
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "style": {
+                        "anyOf": [
+                          {
+                            "default": "full",
+                            "enum": [
+                              "full",
+                              "compact"
+                            ],
+                            "title": "Style",
+                            "type": "string"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
                       "weight": {
                         "type": "number",
                         "exclusiveMinimum": 0
@@ -3132,10 +4084,80 @@
               "top_drivers"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "A member of a `top` query that was not in the prior top n, from the `prior_rank` column (options of the rule top_entries)",
+            "properties": {
+              "top_entries": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "top": {
+                        "anyOf": [
+                          {
+                            "default": 2,
+                            "minimum": 1,
+                            "title": "Top",
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "skip": {
+                        "anyOf": [
+                          {
+                            "default": [
+                              "Custom Amount",
+                              "Other"
+                            ],
+                            "items": {
+                              "type": "string"
+                            },
+                            "title": "Skip",
+                            "type": "array"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$([a-z_][a-z0-9_]*)$",
+                            "description": "a parameter"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "top_entries"
+            ],
+            "additionalProperties": false
           }
         ]
       },
       "description": "the insight rules of insights.yml the component uses"
+    },
+    "insights_from": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Insights From",
+      "type": "array"
     }
   },
   "required": [

@@ -144,6 +144,19 @@ class ComponentSpec(_Strict):
     visual: VisualSpec | None = None
     # rules of insights.yml: `movers`, or `{movers: {metrics: [penetration]}}`
     insights: list[str | dict[str, dict[str, Any] | None]] = []
+    # insight-only components (rules, no visual) run with this component's parameters and filters;
+    # their sentences are this chart's, so a card of a single number can tell what it is made of
+    insights_from: list[str] = []
+
+    @field_validator("insights_from")
+    @classmethod
+    def _sources(cls, names: list[str]) -> list[str]:
+        bad = [n for n in names if not re.match(NAME, n)]
+        if bad:
+            raise ValueError(f"{', '.join(bad)}: a component id is snake_case")
+        if len(set(names)) != len(names):
+            raise ValueError("a component is named once")
+        return names
 
     @field_validator("params")
     @classmethod
@@ -452,7 +465,46 @@ def load_components(
     directory = directory or components_dir()
     if not directory.is_dir():
         return {}
-    return {c.id: c for c in (load_component(p, registry) for p in sorted(directory.glob("*.yml")))}
+    found = {
+        c.id: c for c in (load_component(p, registry) for p in sorted(directory.glob("*.yml")))
+    }
+    check_sources(found)
+    return found
+
+
+def check_sources(components: Mapping[str, Component]) -> None:
+    """The `insights_from` of every component names an insight-only component: one that exists,
+    has rules, draws no visual and binds with the parameters of the component that names it."""
+    for host in components.values():
+        for name in host.raw.get("insights_from") or []:
+            where = f"{host.source}: insights_from: {name}"
+            if name == host.id:
+                raise ComponentError(f"{where}: a component is not its own source")
+            source = components.get(name)
+            if source is None:
+                known = ", ".join(sorted(components)) or "none"
+                raise ComponentError(f"{where}: no such component (known: {known})")
+            if not source.raw.get("insights"):
+                raise ComponentError(f"{where}: the component has no insight rules")
+            if source.raw.get("visual"):
+                raise ComponentError(
+                    f"{where}: the component draws a visual; a source of insights has none"
+                )
+            if source.raw.get("insights_from"):
+                raise ComponentError(f"{where}: a source of insights has no sources of its own")
+            missing = source.unbound - host.parameters - set(host.defaults)
+            if missing:
+                names = ", ".join(f"${p}" for p in sorted(missing))
+                raise ComponentError(
+                    f"{where}: needs the parameter(s) {names}, which {host.id} neither uses "
+                    "nor gives a default"
+                )
+            if source.parameters <= set(host.defaults) | set(source.defaults):
+                shared = {k: v for k, v in host.defaults.items() if k in source.parameters}
+                try:
+                    source.bind(shared)
+                except ComponentError as error:
+                    raise ComponentError(f"{where}: {error}") from None
 
 
 # --- the JSON Schema ------------------------------------------------------------------------------
@@ -490,9 +542,7 @@ def component_json_schema(registry: Registry | None = None) -> dict:
     schema = ComponentSpec.model_json_schema()
     defs = schema["$defs"]
     models = sorted(
-        m
-        for m, spec in registry.models.items()
-        if spec.exposed and registry.metrics_on(m)
+        m for m, spec in registry.models.items() if spec.exposed and registry.metrics_on(m)
     )
 
     def metrics() -> dict:

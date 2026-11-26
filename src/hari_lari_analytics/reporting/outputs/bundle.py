@@ -214,6 +214,8 @@ def _slot(run: SlotRun) -> dict:
         ],
         "results": results,
         "facets": facets,
+        "insights": [_insight(i) for i in run.insights],
+        "insights_status": run.status,
     }
 
 
@@ -257,6 +259,7 @@ def bundle(run: ReportRun, theme: Theme = DEFAULT_THEME) -> dict:
             "generated": run.generated,
             "run": run.ctx.run.name if run.ctx.run is not None else None,
             "params": run.report.params,
+            "insights": report.insights,
         },
         "theme": _theme(theme),
         "pages": [_page(p) for p in run.pages],

@@ -17,3 +17,4 @@ query:
   compare: prior
 transforms: [growth_vs_previous]
 visual: { type: bar_trend, metric: net_sales, line: orders }
+insights: [sales_record]

@@ -11,5 +11,7 @@ query:
   dimensions: [adjusted_item_variant, adjusted_category]
   metrics: [items_sold, net_sales, share]
   window: $period
+  compare: prior  # for the rank each item had before (insights), the table does not show it
   top: { n: 15, by: net_sales }
 visual: { type: table, rank: true, bars: [share], bold: [net_sales] }
+insights: [top_entries, item_share]

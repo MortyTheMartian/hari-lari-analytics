@@ -18,14 +18,31 @@ from hari_lari_analytics.reporting.visuals.theme import Theme
 EMPTY_PAGE_AREA: Rect = (layouts.LEFT, layouts.BOTTOM, layouts.RIGHT - layouts.LEFT, 0.78)
 
 
+QUIET = "✓ nothing stands out"
+NO_COMPARISON = "no comparison"
+
+
 def draw_slot(fig: Figure, theme: Theme, slot: SlotRun, insights: Sequence) -> None:
-    """One slot: the card with the component's title and hint, its facets inside and the note
-    at the foot."""
+    """One slot: the card with the component's title and hint, its facets inside, the note at
+    the foot and, with `insights: chart`, the chart's sentences above the note (under the cells
+    of a slot without a card) or, for a chart whose rules say nothing, the tag in the card's
+    header row. `insights` are the page's sentences, for the notes visuals."""
     area = Area(fig, slot.slot.rect, theme)
     if slot.slot.card:
         area = visuals.card(area, slot.title, slot.hint)
     if slot.note:
         area = visuals.note(area, slot.note)
+    if slot.draw_insights:
+        if slot.insights:
+            labelled = len(slot.facets) > 1
+            area = visuals.foot(
+                area,
+                [(i.text, i.tone) for i in slot.insights],
+                [i.facet or "" if labelled else "" for i in slot.insights],
+            )
+        elif slot.slot.card and slot.status in ("quiet", "no_comparison"):
+            tag = QUIET if slot.status == "quiet" else NO_COMPARISON
+            visuals.quiet_tag(fig, theme, slot.slot.rect, tag)
     spec = slot.slot.bound.spec
     visual = spec.visual
     layout = spec.facet.layout if spec.facet else "row"

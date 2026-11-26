@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=../schema/component.schema.json
+id: aov_drivers
+title: What moved the AOV
+description: >-
+  Insight-only (rules, no visual): the change of the AOV against the prior period, split exactly
+  into the effect of the items per order and of the average net price per item (AOV = items per
+  order × avg item price, LMDI). A card names it with `insights_from`.
+params: { period: L6W }
+query:
+  model: fct_orders
+  metrics: [aov]
+  window: $period
+  compare: prior
+transforms:
+  - decompose: { identity: aov_basket }
+insights: [aov_drivers]

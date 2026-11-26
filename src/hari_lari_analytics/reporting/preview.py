@@ -10,14 +10,14 @@ the component's file changes, so a component is written with the picture beside 
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, TextIO
 
 import matplotlib
 from matplotlib.transforms import Bbox
 
-from hari_lari_analytics.reporting import layouts
+from hari_lari_analytics.reporting import layouts, visuals
 from hari_lari_analytics.reporting.builder import run_slot
 from hari_lari_analytics.reporting.components import Component
 from hari_lari_analytics.reporting.insights import collect
@@ -31,6 +31,7 @@ from hari_lari_analytics.reporting.reports import (
     ReportError,
     draws_own_card,
     facet_count,
+    has_rules,
 )
 from hari_lari_analytics.reporting.visuals import page
 from hari_lari_analytics.reporting.visuals.theme import DEFAULT_THEME, H, Theme, W
@@ -40,8 +41,15 @@ DEFAULT_SPAN, DEFAULT_HEIGHT = 12, 3
 MARGIN = 0.12  # inches around the slot in the image
 
 
-def preview_slot(component: Component, params: Mapping[str, Any], span: int, height: int):
-    """The slot a component is previewed in: row 1 of a grid of 6 equal rows."""
+def preview_slot(
+    component: Component,
+    params: Mapping[str, Any],
+    span: int,
+    height: int,
+    sources: Sequence[Component] = (),
+):
+    """The slot a component is previewed in: row 1 of a grid of 6 equal rows. `sources` are the
+    components of its `insights_from`."""
     if not 1 <= span <= layouts.COLUMNS:
         raise ReportError(f"--span: 1 to {layouts.COLUMNS} columns")
     if not 1 <= height <= ROWS:
@@ -55,7 +63,18 @@ def preview_slot(component: Component, params: Mapping[str, Any], span: int, hei
         raise ReportError(f"{component.source}: the component has no visual to preview")
     card = not draws_own_card(visual.type)
     ref = BoundRef(component, dict(params), None, bound, (), f"preview of {component.id}")
-    return BoundSlot(spec, rect, ref, visual.type, card)
+    bound_sources = tuple(
+        BoundRef(
+            c,
+            {k: v for k, v in params.items() if k in c.parameters},
+            None,
+            c.bind({k: v for k, v in params.items() if k in c.parameters}),
+            (),
+            f"insights_from {c.id} of {component.id}",
+        )
+        for c in sources
+    )
+    return BoundSlot(spec, rect, ref, visual.type, card, bound_sources)
 
 
 def render_preview(
@@ -66,22 +85,27 @@ def render_preview(
     span: int = DEFAULT_SPAN,
     height: int = DEFAULT_HEIGHT,
     theme: Theme = DEFAULT_THEME,
+    sources: Sequence[Component] = (),
 ) -> list[Overflow]:
-    """Draw a component into its slot and save the slot as a PNG. Returns the texts that run
-    over the slot. A slot smaller than the visual's `min_size` is refused, as in a report."""
-    slot = preview_slot(component, params, span, height)
+    """Draw a component into its slot and save the slot as a PNG, with its insight sentences as
+    a report with `insights: chart` draws them. Returns the texts that run over the slot. A slot
+    smaller than the visual's `min_size` is refused, as in a report."""
+    slot = preview_slot(component, params, span, height, sources)
+    cells = layouts.facet_cells(slot.bound.spec.facet, facet_count(slot.bound))
+    hint = bool(slot.bound.spec.hint)
+    # the sentences get their two lines when the slot has the room; a slot that only fits the
+    # visual is drawn without them (a report gives the room in its grid)
+    lines = visuals.FOOT_RESERVE_LINES if has_rules(slot.bound) else 0
+    mode = "chart"
     try:
-        layouts.check_size(
-            slot.rect,
-            slot.visual,
-            slot.card,
-            bool(slot.bound.spec.hint),
-            layouts.facet_cells(slot.bound.spec.facet, facet_count(slot.bound)),
-            slot.ref.where,
-        )
+        layouts.check_size(slot.rect, slot.visual, slot.card, hint, cells, slot.ref.where, lines)
     except LayoutError as error:
-        raise ReportError(f"{error} (--span {span}, --height {height})") from None
-    run = run_slot(slot, ctx)
+        try:
+            layouts.check_size(slot.rect, slot.visual, slot.card, hint, cells, slot.ref.where)
+        except LayoutError:
+            raise ReportError(f"{error} (--span {span}, --height {height})") from None
+        mode = "none"
+    run = run_slot(slot, ctx, insights=mode)
     with matplotlib.rc_context(theme.rc()):
         fig = page(theme)
         before = layouts.texts_of(fig)

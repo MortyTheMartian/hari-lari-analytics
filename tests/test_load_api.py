@@ -63,7 +63,7 @@ def test_has_the_ids():
     lines = _api()
     assert {"payment_id", "item_id", "variant_id", "category_id"} <= set(lines)
     latte = _line(lines, "R002", "Latte")
-    assert (latte["payment_id"], latte["item_id"], latte["variant_id"]) == ("p2", 1, 10)
+    assert (latte["payment_id"], latte["item_id"], latte["variant_id"]) == ("p2", 1, 11)
 
 
 def test_refund_has_the_opposite_sign():

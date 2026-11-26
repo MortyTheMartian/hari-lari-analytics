@@ -1,0 +1,14 @@
+# The result of the component on the test fixture (tests/test_snapshots.py).
+# Refresh with `uv run pytest tests/test_snapshots.py --update-snapshots` and read the diff.
+component: net_sales_drivers
+params: {}
+facets:
+- key: null
+  label: null
+  metric: null
+  shape: decomposition
+  csv: |
+    level,metric,label,sign,status,prior,current,delta,change,effect,share_of_change,is_total,n_orders,prior_n_orders
+    1,orders,Orders,1,,,2,,,,,False,2,
+    1,aov,Avg Order Value,1,,,49000,,,,,False,2,
+    0,net_sales,Net Sales,1,,,98000,,,,,True,2,

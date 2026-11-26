@@ -25,11 +25,12 @@ or total (a 5 pp move in a share scores 0.05), times the rule's `weight`.
 from __future__ import annotations
 
 import functools
+import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import jinja2
 import jinja2.meta
@@ -99,6 +100,8 @@ class RuleType:
 
 
 RULE_TYPES: dict[str, RuleType] = {}
+
+CHART_MAX = 2  # the sentences a chart carries
 
 
 def rule_type(
@@ -175,12 +178,27 @@ def _cap(score: float) -> float:
     return max(0.0, min(float(score), 1.0))
 
 
+Style = Literal["full", "compact"]  # the amounts of a sentence: every digit, or 31.68M
+
+SKIP = ["Custom Amount", "Other"]  # members a sentence never names
+
+
+def _member(pres: Presentation, row: Row) -> str:
+    """The value of the first dimension of a row as shown ("Americano", where the row's label
+    is "Americano · Coffee"); the label of a row without dimensions."""
+    dims = [c for c, col in pres.columns.items() if col.kind == "dimension"]
+    return row.cells[dims[0]].text if dims else row.label
+
+
 # --- drivers ---------------------------------------------------------------------------------
 
 
 class DriversOptions(Options):
     top: int = Field(default=2, ge=1)  # the drivers named in the sentence
     min_share_of_change: float = Field(default=0.2, ge=0, le=1)
+    min_abs_change: float = Field(default=0, ge=0)  # the KPI's change, as a ratio (0.03: 3%)
+    every_driver: bool = False  # name every driver of level 1, the largest first, not a top
+    style: Style = "full"
 
 
 @rule_type(
@@ -192,22 +210,33 @@ class DriversOptions(Options):
 )
 def drivers(result: Result, options: DriversOptions, ctx: InsightContext) -> list[Finding]:
     """The largest drivers of a KPI's change, from `decompose`: one sentence per KPI."""
-    pres = present(result)
+    pres = present(result, options.style)
     df = result.df
     kpi = next((r for r in pres.rows if r.kind == "total"), None)
     if kpi is None or kpi.small or kpi["change"].value in (None, 0):
         return []
+    if abs(kpi["change"].value) < options.min_abs_change:
+        return []
     steps = [r for r in pres.rows if r.kind != "total" and df["level"].iloc[r.position] == 1]
     if any(df["status"].iloc[r.position] == "undefined" for r in steps):
         return []
-    named = [
-        r
-        for r in steps
-        if not r.small
-        and not r["effect"].small
-        and r["effect"].value not in (None, 0)
-        and abs(r["share_of_change"].value or 0) >= options.min_share_of_change
-    ]
+    if options.every_driver:
+        # every driver is named, so none may be unknown or small: a partial list would read as
+        # the whole explanation
+        if not steps or any(
+            r.small or r["effect"].small or r["effect"].value is None for r in steps
+        ):
+            return []
+        named = list(steps)
+    else:
+        named = [
+            r
+            for r in steps
+            if not r.small
+            and not r["effect"].small
+            and r["effect"].value not in (None, 0)
+            and abs(r["share_of_change"].value or 0) >= options.min_share_of_change
+        ]
     named.sort(key=lambda r: abs(r["effect"].value), reverse=True)
     if not named:
         return []
@@ -231,7 +260,7 @@ def drivers(result: Result, options: DriversOptions, ctx: InsightContext) -> lis
                 "change": r["change"].text,
                 "delta": r["delta"].text,
             }
-            for r in named[: options.top]
+            for r in (named if options.every_driver else named[: options.top])
         ],
         "window": _window(result),
     }
@@ -246,6 +275,7 @@ class MoversOptions(Options):
     top: int = Field(default=2, ge=1)
     # the smallest move worth a sentence, by the metric's format: {pct: 0.05} is 5 pp
     min_abs_delta: dict[Format, float] = {}
+    skip: list[str] = SKIP  # members never named: "Custom Amount" is not an item to act on
 
 
 def _movers_check(options: MoversOptions, query, shape, registry) -> None:
@@ -275,6 +305,9 @@ def movers(result: Result, options: MoversOptions, ctx: InsightContext) -> list[
             delta = row[f"{m}_delta"]
             if row.kind != "row" or row[m].small or delta.small or delta.value in (None, 0):
                 continue
+            member = _member(pres, row)
+            if member in options.skip:
+                continue
             if abs(delta.value) < options.min_abs_delta.get(spec.format, 0):
                 continue
             if spec.format == "pct":
@@ -286,6 +319,7 @@ def movers(result: Result, options: MoversOptions, ctx: InsightContext) -> list[
             values = {
                 "row": {
                     "label": row.label,
+                    "member": member,
                     "value": row[m].text,
                     "prior": row[f"prior_{m}"].text,
                     "delta": delta.text,
@@ -371,6 +405,7 @@ def threshold(result: Result, options: ThresholdOptions, ctx: InsightContext) ->
 class RecordOptions(Options):
     metric: str | None = None  # default: the first metric of the result
     min_buckets: int = Field(default=4, ge=2)  # the history a record needs
+    style: Style = "full"  # compact: the amounts as the bar labels show them (13.75M)
 
 
 def _record_check(options: RecordOptions, query, shape, registry) -> None:
@@ -394,7 +429,7 @@ def record(result: Result, options: RecordOptions, ctx: InsightContext) -> list[
     if m is None or m not in result.df or meta.grain is None or meta.window is None:
         return []
     spec = meta.metrics[m]
-    pres = present(result)
+    pres = present(result, options.style)
     rows = _record_rows(result, pres)
     if rows and _bucket(result, rows[-1])[1] > meta.window.current.end:
         rows = rows[:-1]  # the bucket is not over yet
@@ -443,6 +478,243 @@ def _bucket(result: Result, row: Row):
     start = pd.Timestamp(result.df[column].iloc[row.position]).date()
     ends = {b.start: b.end for b in result.meta.buckets}
     return start, ends.get(start, start)
+
+
+# --- slice_movers ----------------------------------------------------------------------------
+
+
+class SliceMoversOptions(Options):
+    top: int = Field(default=3, ge=1)
+    min_abs_delta: float = Field(default=2000, ge=0)  # of the contributive AOV, in the currency
+    skip: list[str] = SKIP
+
+
+def _slice_check(options: SliceMoversOptions, query, shape, registry) -> None:
+    _need_metrics(
+        "slice_movers", "query", ["penetration", "category_aov", "contributive_aov"], query
+    )
+
+
+@rule_type(
+    "slice_movers",
+    SliceMoversOptions,
+    shapes=("rows",),
+    variables=("row", "why", "compare"),
+    compares=True,
+    check=_slice_check,
+)
+def slice_movers(result: Result, options: SliceMoversOptions, ctx: InsightContext):
+    """A group whose contributive AOV moved, and whether it is in more orders (penetration) or
+    the orders with it spend more on it (category AOV): the LMDI split of the row."""
+    pres = present(result)
+    total = pres.total
+    aov = total["contributive_aov"].value if total is not None else None
+    found = []
+    for row in pres.rows:
+        member = _member(pres, row)
+        slice_ = row["contributive_aov"]
+        d = row["contributive_aov_delta"]
+        if row.kind != "row" or member in options.skip or slice_.small or d.small:
+            continue
+        if d.value in (None, 0) or abs(d.value) < options.min_abs_delta:
+            continue
+        p1, p0 = row["penetration"].value, row["prior_penetration"].value
+        a1, a0 = row["category_aov"].value, row["prior_category_aov"].value
+        if not all(v and v > 0 for v in (p1, p0, a1, a0)):
+            why = "new" if not p0 else "gone"
+        else:
+            # the change of a product splits by the logs of its factors (LMDI)
+            in_orders, per_order = math.log(p1 / p0), math.log(a1 / a0)
+            if abs(in_orders) >= abs(per_order):
+                more = "more" if in_orders > 0 else "fewer"
+                why = f"in {more} orders (penetration {row['penetration_delta'].text})"
+            else:
+                more = "more" if per_order > 0 else "less"
+                why = (
+                    f"{more} spent on it per order (category AOV {row['category_aov_change'].text})"
+                )
+        values = {
+            "row": {
+                "label": row.label,
+                "member": member,
+                "delta": d.text,
+                "value": slice_.text,
+                "prior": row["prior_contributive_aov"].text,
+            },
+            "why": why,
+            "compare": _compare(result),
+            "window": _window(result),
+        }
+        score = abs(d.value) / abs(aov) if aov else 0.1
+        found.append(Finding(values, _cap(score), ("slice", member), d.tone))
+    found.sort(key=lambda f: f.score, reverse=True)
+    return found[: options.top]
+
+
+# --- top_entries -----------------------------------------------------------------------------
+
+
+class TopEntriesOptions(Options):
+    top: int = Field(default=2, ge=1)
+    skip: list[str] = SKIP
+
+
+def _entries_check(options: TopEntriesOptions, query, shape, registry) -> None:
+    if isinstance(query, Query) and query.top is None:
+        raise InsightError("top_entries: the query needs `top` (the ranking it reads)")
+
+
+@rule_type(
+    "top_entries",
+    TopEntriesOptions,
+    shapes=("rows",),
+    variables=("row", "rank", "prior_rank", "n", "compare"),
+    compares=True,
+    check=_entries_check,
+)
+def top_entries(result: Result, options: TopEntriesOptions, ctx: InsightContext):
+    """A member of a `top` query that was not in the prior top n, from the `prior_rank` column
+    the compiler adds: new at its rank, with the rank it had before, if it sold at all."""
+    if "prior_rank" not in result.df:
+        raise InsightError(
+            "top_entries: the result has no prior_rank (a query with top and compare)"
+        )
+    pres = present(result)
+    rows = [r for r in pres.rows if r.kind == "row"]
+    n = result.meta.top_n or len(rows)
+    found = []
+    for rank, row in enumerate(rows, start=1):
+        member = _member(pres, row)
+        before = row["prior_rank"].value
+        if member in options.skip or row.small or (before is not None and before <= n):
+            continue
+        values = {
+            "row": {"label": row.label, "member": member},
+            "rank": str(rank),
+            "prior_rank": "not sold" if before is None else f"#{int(before)}",
+            "n": str(n),
+            "compare": _compare(result),
+            "window": _window(result),
+        }
+        score = 0.05 + (n + 1 - rank) / n * 0.15  # a newcomer at the top says more
+        found.append(Finding(values, _cap(score), ("entry", member), "neutral"))
+    found.sort(key=lambda f: f.score, reverse=True)
+    return found[: options.top]
+
+
+# --- peaks -----------------------------------------------------------------------------------
+
+
+class PeaksOptions(Options):
+    metric: str | None = None  # default: the first metric of the result
+    top: int = Field(default=3, ge=1)  # the busiest members
+    margin: float = Field(default=0.15, ge=0)  # a newcomer beats the member it replaces by this
+    labels: Literal["text", "hour"] = "text"  # hour: 6 is written 06:00
+
+
+def _peaks_check(options: PeaksOptions, query, shape, registry) -> None:
+    _need_metrics("peaks", "metric", [options.metric], query)
+
+
+@rule_type(
+    "peaks",
+    PeaksOptions,
+    shapes=("series", "rows"),
+    variables=("now", "before", "compare"),
+    compares=True,
+    check=_peaks_check,
+)
+def peaks(result: Result, options: PeaksOptions, ctx: InsightContext) -> list[Finding]:
+    """The top n members of a distribution (the busiest hours) are not the prior period's, and
+    each newcomer beats the member it replaces by `margin` in both periods."""
+    meta = result.meta
+    m = options.metric or next(iter(meta.value_metrics), None)
+    dim = next(iter(meta.dimensions), None)
+    if m is None or dim is None or f"prior_{m}" not in result.df:
+        return []
+    pres = present(result)
+    rows = [r for r in pres.rows if r.kind == "row" and r[dim].value is not None]
+    now_cell = {r[dim].value: r[m] for r in rows}
+    was_cell = {r[dim].value: r[f"prior_{m}"] for r in rows}
+
+    def top(cells: dict) -> list:
+        ranked = [k for k, c in cells.items() if c.value is not None]
+        ranked.sort(key=lambda k: (-cells[k].value, k))
+        return ranked[: options.top]
+
+    now, before = top(now_cell), top(was_cell)
+    if len(now) < options.top or set(now) == set(before):
+        return []
+    came, went = set(now) - set(before), set(before) - set(now)
+    for c in came:
+        for w in went:
+            wins_now = now_cell[c].value >= (1 + options.margin) * (now_cell[w].value or 0)
+            wins_before = was_cell[w].value >= (1 + options.margin) * (was_cell[c].value or 0)
+            # the newcomer is named from this period's data, the hour it replaced from the prior's
+            if not (wins_now and wins_before) or now_cell[c].small or was_cell[w].small:
+                return []
+
+    def write(keys: Sequence) -> str:
+        if options.labels == "hour":
+            return _and_join([f"{int(k):02d}:00" for k in sorted(keys)])
+        return _and_join(
+            [next(r[dim].text for r in rows if r[dim].value == k) for k in sorted(keys)]
+        )
+
+    values = {
+        "now": write(now),
+        "before": write(before),
+        "compare": _compare(result),
+        "window": _window(result),
+    }
+    return [Finding(values, _cap(0.06 * len(came)), ("peaks", m), "neutral")]
+
+
+# --- total_change ----------------------------------------------------------------------------
+
+
+class TotalChangeOptions(Options):
+    metric: str
+    # the smallest move worth a sentence, in the metric's own unit: 0.02 is 2 pp for a rate
+    min_abs_delta: float = Field(ge=0)
+
+
+def _total_check(options: TotalChangeOptions, query, shape, registry) -> None:
+    _need_metrics("total_change", "metric", [options.metric], query)
+
+
+@rule_type(
+    "total_change",
+    TotalChangeOptions,
+    shapes=("rows", "single"),
+    variables=("metric", "value", "prior", "delta", "change", "compare"),
+    compares=True,
+    check=_total_check,
+)
+def total_change(result: Result, options: TotalChangeOptions, ctx: InsightContext):
+    """The total row of a metric moved by at least `min_abs_delta` against the comparison."""
+    m = options.metric
+    if f"{m}_delta" not in result.df:
+        raise InsightError(f"total_change: the result has no {m} with its comparison")
+    pres = present(result)
+    row = pres.total if pres.total is not None else (pres.rows[0] if pres.rows else None)
+    if row is None:
+        return []
+    d = row[f"{m}_delta"]
+    if row[m].small or d.small or d.value in (None, 0) or abs(d.value) < options.min_abs_delta:
+        return []
+    spec = result.meta.metrics[m]
+    values = {
+        "metric": _metric(result, m),
+        "value": row[m].text,
+        "prior": row[f"prior_{m}"].text,
+        "delta": d.text,
+        "change": row[f"{m}_change"].text,
+        "compare": _compare(result),
+        "window": _window(result),
+    }
+    score = abs(d.value) if spec.format == "pct" else abs(row[f"{m}_change"].value or 0)
+    return [Finding(values, _cap(score), (m, "total"), d.tone)]
 
 
 # --- notes -----------------------------------------------------------------------------------

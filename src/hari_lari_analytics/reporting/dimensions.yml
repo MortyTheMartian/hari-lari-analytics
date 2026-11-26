@@ -204,7 +204,10 @@ adjusted_item:
 
 adjusted_item_variant:
   label: Item-variant
-  description: Adjusted item and variant, or just the item when there is no variant
+  description: >-
+    Adjusted item and today's name of the line's variant (by id), or just the item when the
+    variant has no name, was deleted or is unknown, so that a renamed or dropped variant stays
+    the same item
   grain: item
   models: [fct_sales_lines, fct_stock]
   sort: { by: net_sales, desc: true }

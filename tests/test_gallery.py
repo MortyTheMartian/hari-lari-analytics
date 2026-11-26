@@ -26,7 +26,7 @@ from .conftest import FIXTURES
 from .test_report_build import ANCHOR, GENERATED
 from .test_snapshots import SNAPSHOTS
 
-NO_VISUAL = {"lines_export"}
+NO_VISUAL = {"lines_export", "net_sales_drivers", "aov_drivers"}  # the last two: insights only
 
 
 def snapshot_params() -> dict[str, dict]:
@@ -55,7 +55,7 @@ def test_every_component_with_a_visual_has_a_page(built):
     pages = [p.page.id for p in result.run.pages]
     expected = sorted(set(all_components()) - NO_VISUAL)
     assert pages == expected
-    assert {s.component: s.reason for s in skipped} == {"lines_export": "no visual"}
+    assert {s.component: s.reason for s in skipped} == dict.fromkeys(NO_VISUAL, "no visual")
 
 
 def test_no_text_overflows_its_slot(built):

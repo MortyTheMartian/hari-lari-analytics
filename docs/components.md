@@ -285,6 +285,19 @@ the first day of the week of `project.yml`.
   lines, the item and category resolution by `item_id` with the alias fallback, `Custom Amount`,
   variant capitalisation, fully refunded receipts. Plus the order attributes and the item
   lifecycle.
+- **Item identity by id** (plan 9.8): an item is the same item when its id is, whatever Moka
+  renamed. `adjusted_item` already follows `item_id`; `adjusted_item_variant` now follows the
+  line's `variant_id` too: a variant that is still in today's catalog (`stg_item_variants`, not
+  deleted, of the same item) gives today's label, `adjusted_item` plus the variant's name (just
+  `adjusted_item` when that variant has no name); a variant that is deleted or unknown to the
+  catalog, or a line without one, is `adjusted_item`. On 30 Oct Moka dropped the Hot and Cold
+  variants of Latte, Americano, Matcha Latte and Raw Cacao Latte, so "Latte-Hot", "Latte-Cold"
+  and "Latte" are one item, and a top-15 no longer shows a false newcomer. A run without the
+  `item_variants` table (from before it was extracted) keeps the label of the time of the sale.
+  `item_variant` (the raw label of the Excel lines) stays as sold. An accepted edge: a deleted
+  variant beside live, named variants of the same item is its own row "X" next to "X-Small".
+  The pandas lines (`dimensions.add_dimensions`, which the parity tests compare with) apply the
+  same rule.
 - **`fct_sales_lines`**: line grain. The columns of today's cleaned lines (the result of
   `load_api_sales` plus `add_dimensions` and `add_category_groups`), so every existing metric
   and dimension keeps its name: ids, `receipt_nr`, `sale_ts`, the time truncations,
@@ -763,6 +776,12 @@ cover all groups. `by` may be any metric except a relative one. Under a `focus`,
 "Other" are ranked among the focused groups only. `keep_prior_only` does not combine with
 `top` or with a time dimension.
 
+With a comparison, a `top` query also returns `prior_rank`: the rank the group had in the prior
+window among *all* groups, by the same `by` (NULL when it did not sell then, NULL on every row
+when the comparison is not valid; the rows of "Other" and the totals have none), and
+`ResultMeta.top_n` holds the `n`. That is what the `top_entries` insight reads: an item is new
+in the top when its `prior_rank` is NULL or above n.
+
 **Series.** A query with a time dimension returns a series: `bucket` groups by the query's
 `grain` (default: the window's), and `sale_date`, `sale_week` and `sale_month` group by their own
 grain. Every bucket of the window appears, for every group of the window, with zeros where
@@ -966,7 +985,9 @@ calendar), and fails with the file name and field, listing every schema error at
   its options name are in the query (`visual: bars: aov is not a metric of the query`; see
   "Visuals");
 - every insight rule exists in `insights.yml`, its options (with the component's changes) fit,
-  it reads the result's shape, and a rule that compares has `compare` (see "Insights");
+  it reads the result's shape, and a rule that compares has `compare` (see "Insights"); every
+  `insights_from` names an insight-only component that binds with this one's parameters (checked
+  with all components, `check_sources`);
 - every parameter is bound by a default or by the report, and every default is used.
 
 **Parameters.** A value written `$name` anywhere in the query, transforms, facet or visual is a
@@ -1197,11 +1218,19 @@ On the run of 22 Nov 2026 these say, for example: "Avg Order Value +11.0% vs pri
 
 | Rule type | Shapes | Fires when | Score | Options |
 | --- | --- | --- | --- | --- |
-| `drivers` | decomposition | the KPI changed and some drivers (level 1) carry at least `min_share_of_change` of it; none when the change is not split | the KPI's change (a ratio, at most 1) | `top`, `min_share_of_change` |
-| `movers` | rows | a group's delta is at least `min_abs_delta` for the metric's format | a pp move as a fraction (5 pp is 0.05), otherwise the delta over the total | `metrics`, `top`, `min_abs_delta` |
+| `drivers` | decomposition | the KPI changed (by at least `min_abs_change`, a ratio) and some drivers (level 1) carry at least `min_share_of_change` of it; none when the change is not split. With `every_driver` it names every driver, the largest effect first, and stays silent when one is small or unknown | the KPI's change (a ratio, at most 1) | `top`, `min_share_of_change`, `min_abs_change` (0), `every_driver` (false), `style` |
+| `movers` | rows | a group's delta is at least `min_abs_delta` for the metric's format; the members in `skip` (default `Custom Amount`, `Other`) are never named | a pp move as a fraction (5 pp is 0.05), otherwise the delta over the total | `metrics`, `top`, `min_abs_delta`, `skip` |
 | `threshold` | single, rows | the value crossed `above` (or `below`) since the comparison period | 0.5 plus half the distance past the threshold | `metric`, `above` or `below`, `rows` |
-| `record` | series | the latest bucket is the best of the series (D19): the highest, the lowest where down is good; a partial last bucket and buckets without trading days do not count; "since opening" only when the series starts at the first sale | 0.3 plus the margin over the previous best | `metric`, `min_buckets` |
+| `record` | series | the latest bucket is the best of the series (D19): the highest, the lowest where down is good; a partial last bucket and buckets without trading days do not count; "since opening" only when the series starts at the first sale. It needs no comparison | 0.3 plus the margin over the previous best | `metric`, `min_buckets`, `style` |
+| `slice_movers` | rows | a group's contributive AOV moved by at least `min_abs_delta` (in the currency); the sentence says whether it is in more or fewer orders (penetration) or more or less is spent on it per order (category AOV), by the larger of the two log ratios (the LMDI split of the row), or that the group is new or gone. The query needs `penetration`, `category_aov` and `contributive_aov` | the delta over the total contributive AOV (the AOV) | `top`, `min_abs_delta`, `skip` |
+| `top_entries` | rows | a member of a `top` query was not in the prior top n: it is new at its rank, with the rank it had (`prior_rank`, see "Queries and the compiler") or "not sold" | 0.05 plus 0.15 for the rank (the first is the most) | `top`, `skip` |
+| `peaks` | series, rows | the busiest `top` members of a distribution (the hours) are not the prior period's, and each newcomer beats the member it replaces by `margin` (15%) in both periods | 0.06 per newcomer | `metric`, `top`, `margin`, `labels` (`hour` writes 6 as 06:00) |
+| `total_change` | rows, single | the total of a metric moved by at least `min_abs_delta` in its own unit (0.02 is 2 pp for a rate) | the pp move, or the change for an amount | `metric`, `min_abs_delta` |
 | `notes` | rows | a data note (source `notes`) of the given kinds | `score` (0.5) | `kinds`, `score` |
+
+`style: compact` (on `drivers` and `record`) writes the amounts as the bars label them (31.68M),
+which a sentence of one line needs. `slice_movers`, `top_entries`, `peaks` and `total_change`
+compare, so they need `compare` on the query like `movers`; `top_entries` needs `top`.
 
 The loader checks `insights.yml` (the type, its options, the weight, and that the text uses only
 the variables of its type) and every component's rules: known rules, options, the result shape,
@@ -1216,6 +1245,64 @@ run then. Scores are comparable across rules, about 0 to 1, times the rule's wei
 sentences of all components with `collect`: the best sentence per key (the same metric and
 group, in the same facet), ranked by score, the top ones. It shows them through the `insights`
 visual and in the Telegram text (the visual's text form).
+
+### Sentences on the charts (plan 9.8)
+
+A report says where its sentences go with `insights: chart | none` (default `none`, so a new
+report never gets an empty tile; the weekly report has `chart`, the stock alert and the category
+deep dive stay `none`). With `chart`, each card carries the sentences of its own component at its
+foot, under the visual and above the component's `note`, at the `hint` size, each with a dot in
+the tone's colour, a thin rule above them, wrapped to the card's width, **at most 2 per chart**
+(`CHART_MAX`). The rule is that the page is read chart first and the sentences confirm what the
+reader saw: a sentence leads with a number the chart shows and adds the why, so that "nothing
+stands out" can be trusted. The option only decides what is drawn: the rules run for every
+report, for `deliver.when: insight`, the text blocks and the bundle.
+
+- A faceted component with more than one facet prefixes each sentence with the facet's label.
+- A slot without a card (the KPI row of the overview) gets its sentences under its cells.
+- A chart with rules whose rules say nothing shows `✓ nothing stands out` at the right of the
+  card's header row (`hint` size, muted). A chart that asked for a comparison and has no valid
+  one (L3M today) shows `no comparison` there instead, even when a rule that needs none (a
+  record) was looked at. A chart without rules, an empty window, or a quiet slot without a card
+  shows nothing.
+- `check_size` keeps two lines free in the slot of a component that has rules (its own or
+  `insights_from`) when the report is `chart`, so a grid that fits the chart must also fit its
+  sentences. That is why the weekly overview has rows `[1.35, 4]` and the details page `[6.2, 4]`.
+
+**`insights_from`.** A card of a single number (the KPI cards) has no result to read a sentence
+from, and the sentence about it comes from another query (net sales split into orders and AOV). A
+component lists insight-only components in `insights_from: [net_sales_drivers, aov_drivers]`.
+An insight-only component has a query and rules and no visual (`net_sales_drivers` is net sales
+by `decompose: {identity: sales_volume_value}`, `aov_drivers` the AOV by `aov_basket`); the
+gallery leaves it out. The slot binds each one with its own parameters and filters (and its
+`ignore_filters`), runs it, and the sentences count as the host's. The loader checks that each
+named component exists, has rules, draws no visual, is not the host and has no sources of its
+own, and binds with the host's parameters.
+
+In the run, `SlotRun.insights` holds the chart's sentences (its rules' and its sources', the best
+per facet and key, at most 2, best first), `SlotRun.candidates` everything its rules found and
+`SlotRun.status` one of `found`, `quiet`, `no_comparison` or `None`. `PageRun.insights` stays the
+page-wide `collect` of the candidates (for the text blocks and `insights.pages`), and
+`deliver.when: insight` reads the candidates. The bundle has `insights` and `insights_status` on
+every slot and `insights` in the `report` object.
+
+The rules of the weekly report, with the 22 Nov 2026 run for the wording (`insights.yml`):
+
+| Component | Rule | Type | Says, for example |
+| --- | --- | --- | --- |
+| `net_sales_drivers` | `net_sales_drivers` | `drivers` | Net sales +130.8%: +31.68M from orders, +4.50M from AOV |
+| `aov_drivers` | `aov_drivers` | `drivers` | AOV +11.0%: items per order +5.5%, item price +5.1% |
+| `sales_trend` | `sales_record` | `record` | Best week in 6 weeks: week of 16 Nov, 13.75M (was 13.23M) |
+| `category_contributive_aov` | `category_slices` | `slice_movers` | Mains +14,933 to the AOV, mostly in more orders (penetration +15.8 pp) |
+| `top_items` | `top_entries`, `item_share` | `top_entries`, `movers` | Rösti n Poached Eggs new in the top 15 at #1 (was #42) |
+| `orders_by_hour` | `peak_hours` | `peaks` | Busiest hours now 06:00, 07:00 and 08:00 (were 06:00, 07:00 and 11:00) |
+| `discount_codes` | `discount_rate_total`, `discount_cost` | `total_change`, `movers` | Discounts 7.9% of gross sales, -4.3 pp |
+| `payment_types` | `payment_share` | `movers` | Cash 24.0% of net sales, +13.8 pp |
+
+`top_items`, `orders_by_hour`, `discount_codes` and `payment_types` got `compare: prior` for
+this (and `discount_codes` `totals: true`); their visuals show what they showed before.
+`key_figures` has no rules: its numbers are the cards' numbers. Wording is for the owner to
+review in 10.0.
 
 ## Layouts
 
@@ -1287,6 +1374,7 @@ text_blocks:
     - component: week_kpis           # net sales, orders and AOV against the prior week
     - insights: { top: 3 }
     - text: "PDF and Excel lines: {{ drive_url }}"   # filled in by the deliver step
+insights: chart                      # chart | none (default): each chart's sentences at its foot
 deliver:
   drive: { folder: "{{ anchor }} (week {{ anchor_iso_week }})", files: [pdf, xlsx] }
   telegram:
@@ -1572,7 +1660,9 @@ report and an empty page, against it. The contract for a renderer:
 - `slots[]`: `component`, the rendered `title`, `hint` and `note` (empty without one),
   `visual {type, options}`, the facet
   `layout`, `position`, `card`, the `filters` in force, `results[]` and `facets[]`, which point at
-  a result by index (facets by metric share one result).
+  a result by index (facets by metric share one result), the chart's own `insights` (at most 2,
+  best first) and `insights_status` (`found`, `quiet`, `no_comparison` or null); `report.insights`
+  says whether the pages draw them.
 - `results[]`: `shape`, `empty`, the `window` with its comparison (`compare_ok` false means show
   `n/a`), the metrics (label, description, format, unit, `up_is_good`), the calendar `events`,
   and `columns` and `rows` of **cells** `{value, text, compact?, tone?, small?, n?}`. A renderer

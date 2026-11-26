@@ -8,6 +8,7 @@ facets:
   metric: null
   shape: rows
   csv: |
-    discount_code,is_total,orders,gross_sales,discounts,discount_rate,n_orders,trading_days
-    ,False,1,108000,0,0,1,1
-    FOUNDER25,False,1,40000,10000,0.25,1,1
+    discount_code,is_total,orders,gross_sales,discounts,discount_rate,prior_orders,orders_change,orders_delta,prior_gross_sales,gross_sales_change,gross_sales_delta,prior_discounts,discounts_change,discounts_delta,prior_discount_rate,discount_rate_change,discount_rate_delta,n_orders,prior_n_orders,trading_days,prior_trading_days
+    ,False,1,108000,0,0,,,,,,,,,,,,,1,,1,
+    FOUNDER25,False,1,40000,10000,0.25,,,,,,,,,,,,,1,,1,
+    ,True,2,148000,10000,0.06756756757,,,,,,,,,,,,,2,,1,

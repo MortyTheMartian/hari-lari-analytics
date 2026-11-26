@@ -28,6 +28,7 @@ from typing import Any
 
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
 from matplotlib.text import Text
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -43,6 +44,7 @@ from hari_lari_analytics.reporting.visuals.theme import (
     Role,
     Theme,
     Token,
+    Tone,
     W,
 )
 
@@ -377,6 +379,63 @@ def note(area: Area, text: str) -> Area:
     )
     used = area.points_y(size * (NOTE_LINESPACING * len(lines) + 1))
     return area.sub(0, used, 1, max(1 - used, 0.05))
+
+
+FOOT_STEP = 1.5  # the line step of the sentences, in hint sizes
+FOOT_RESERVE_LINES = 2  # what `check_size` keeps free for a chart's sentences
+
+
+def foot_points(lines: int, theme: Theme = DEFAULT_THEME) -> float:
+    """The height of `lines` lines of sentences at the foot of a card, with the rule above
+    them, in points."""
+    return theme.size("hint") * (FOOT_STEP * lines + 0.8)
+
+
+def foot(
+    area: Area, sentences: Sequence[tuple[str, Tone | None]], prefixes: Sequence[str] = ()
+) -> Area:
+    """The insight sentences of a chart at the foot of the area (`hint` size, a dot in the
+    tone's colour, wrapped to the width, a thin rule above them); returns the area above.
+
+    `sentences` are (text, tone); a prefix (the facet label of a faceted chart) goes before
+    its sentence."""
+    theme = area.theme
+    mark_w = area.points_x(theme.size("hint") * 1.4)
+    lines: list[tuple[str, str, str]] = []
+    for i, (text, tone) in enumerate(sentences):
+        prefix = prefixes[i] if i < len(prefixes) else ""
+        full = f"{prefix}: {text}" if prefix else text
+        for k, line in enumerate(wrap(full, area, "hint", 0.97 - mark_w)):
+            lines.append(("●" if k == 0 else "", theme.tone_color(tone), line))
+    step = area.points_y(theme.size("hint") * FOOT_STEP)
+    y = step * (len(lines) - 1)
+    for mark, color, line in lines:
+        area.text(0, y, mark, role="hint", color=color, va="bottom")
+        area.text(mark_w, y, line, role="hint", color="text", va="bottom")
+        y -= step
+    used = area.points_y(foot_points(len(lines), theme))
+    rule_y = used - area.points_y(theme.size("hint") * 0.4)
+    x0, y0 = area.at(0, rule_y)
+    x1, _ = area.at(1, rule_y)
+    area.fig.add_artist(Line2D([x0, x1], [y0, y0], color=theme.color("grid"), lw=0.6))
+    return area.sub(0, used, 1, max(1 - used, 0.05))
+
+
+def quiet_tag(
+    fig: Figure, theme: Theme, rect: tuple[float, float, float, float], text: str
+) -> None:
+    """The tag in the header row of a card (its rectangle on the page): the right end, `hint`
+    size, muted."""
+    x, y, w, h = rect
+    fig.text(
+        x + w - CARD_PAD[0],
+        y + h - 0.018,
+        text,
+        fontsize=theme.size("hint"),
+        color=theme.color("muted"),
+        ha="right",
+        va="top",
+    )
 
 
 def page(theme: Theme = DEFAULT_THEME) -> Figure:

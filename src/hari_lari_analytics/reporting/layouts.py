@@ -154,14 +154,16 @@ def place(grid: GridSpec, slots: Sequence[SlotSpec], where: str = "page") -> lis
 # --- sizes ----------------------------------------------------------------------------------------
 
 
-def inner_size(rect: Rect, card: bool, hint: bool) -> tuple[float, float]:
+def inner_size(rect: Rect, card: bool, hint: bool, foot_lines: int = 0) -> tuple[float, float]:
     """The width and height (fractions of the page) a visual gets inside a slot: the slot
-    without its card's padding and head."""
+    without its card's padding and head, and without the `foot_lines` lines of sentences a chart
+    of a report with `insights: chart` keeps free at its foot."""
+    foot = visuals.foot_points(foot_lines) * visuals.POINT / H if foot_lines else 0
     if not card:
-        return rect[2], rect[3]
+        return rect[2], rect[3] - foot
     px, py = CARD_PAD
     head = CARD_HEAD["hint" if hint else "title"]
-    return rect[2] - 2 * px, rect[3] - head - py
+    return rect[2] - 2 * px, rect[3] - head - py - foot
 
 
 def facet_cells(facet: FacetSpec | None, count: int | None = None) -> tuple[int, int]:
@@ -182,10 +184,12 @@ def check_size(
     hint: bool,
     cells: tuple[int, int] = (1, 1),
     where: str = "slot",
+    foot_lines: int = 0,
 ) -> None:
-    """Refuse a slot too small for its visual; each facet cell must reach the `min_size`."""
+    """Refuse a slot too small for its visual; each facet cell must reach the `min_size`. A
+    slot with `foot_lines` lines of sentences has that much less room."""
     min_w, min_h = visuals.get(visual).min_size
-    w, h = inner_size(rect, card, hint)
+    w, h = inner_size(rect, card, hint, foot_lines)
     rows, cols = cells
     gx = (FACET_GAP_POINTS / 72) / W * (cols - 1)
     gy = (FACET_GAP_POINTS / 72) / H * (rows - 1)

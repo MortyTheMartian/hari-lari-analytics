@@ -11,7 +11,7 @@ bundle the builder writes against it. A frontend (phase 12) reads this file and 
 - `pages`: each with its chips, note, 12-column grid and `slots`; a slot names its component,
   rendered title and hint, visual with options, position, filters and `results` (the distinct
   results of its facets, each as columns and rows of display cells) and `facets`, which point
-  at the results;
+  at the results, and its own `insights` (at most 2) with an `insights_status`;
 - the page's `insights`, and `texts`, the Telegram text blocks (the Drive link is still the
   placeholder `{{ drive_url }}`).
 
@@ -171,6 +171,15 @@ class FacetRef(_Strict):
     result: int = Field(description="the index in the slot's `results`")
 
 
+class Insight(_Strict):
+    text: str
+    tone: Tone
+    rule: str
+    score: float
+    component: str | None = None
+    facet: str | None = None
+
+
 class Slot(_Strict):
     component: str
     title: str
@@ -183,6 +192,19 @@ class Slot(_Strict):
     filters: list[Filter]
     results: list[Result]
     facets: list[FacetRef]
+    insights: list[Insight] = Field(
+        description=(
+            "the chart's own sentences, best first, at most 2: those of its rules and of its "
+            "`insights_from`; filled whatever the report's `insights` option says"
+        )
+    )
+    insights_status: Literal["found", "quiet", "no_comparison"] | None = Field(
+        description=(
+            "found: the chart has sentences; quiet: it has rules and nothing stands out; "
+            "no_comparison: it asks for a comparison that is not valid, so its rules cannot "
+            "say; null: no rules, or no sales"
+        )
+    )
 
 
 class Chip(_Strict):
@@ -193,15 +215,6 @@ class Chip(_Strict):
 class Grid(_Strict):
     columns: Literal[12]
     rows: list[float] = Field(description="the row heights, in parts")
-
-
-class Insight(_Strict):
-    text: str
-    tone: Tone
-    rule: str
-    score: float
-    component: str | None = None
-    facet: str | None = None
 
 
 class Page(_Strict):
@@ -232,6 +245,9 @@ class ReportInfo(_Strict):
     generated: str = Field(description="when it was built, ISO date and time, local clock")
     run: str | None = Field(description="the extraction run it was built from")
     params: dict[str, Any]
+    insights: Literal["chart", "none"] = Field(
+        description="chart: the pages draw each chart's sentences at its foot"
+    )
 
 
 class ThemeInfo(_Strict):
