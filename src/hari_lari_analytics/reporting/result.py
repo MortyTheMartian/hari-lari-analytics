@@ -3,7 +3,9 @@
 Columns, in order: the dimensions (a total row has them NULL, except the time bucket of a
 bucket total), `is_total`, `is_other` (with `top: {other: true}`), `in_window` (with
 `buckets_before`), one column per metric, and with a comparison `prior_<metric>`,
-`<metric>_change` (ratio) and `<metric>_delta` (difference; for `pct` metrics in fractions).
+`<metric>_change` (ratio) and `<metric>_delta` (difference; for `pct` metrics in fractions); with
+`top` and a comparison also `prior_rank`, the group's rank by the `top` metric among all groups
+of the prior window (NULL when it had no rows then).
 Then `n_orders` and every count named in a metric's `min_n` as `n_<count>` (with `prior_n_*`),
 and `trading_days` (with `prior_trading_days`) when the query has dimensions.
 """
@@ -86,6 +88,7 @@ class ResultMeta:
     decomposition: DecompositionSpec | None = None  # set by `decompose`
     # the calendar events of both windows (and the buckets before), for a query by time
     events: tuple[DayEvent, ...] = ()
+    top_n: int | None = None  # the `n` of the query's `top`
 
     @property
     def n_columns(self) -> dict[str, Metric]:

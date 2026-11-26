@@ -1377,7 +1377,7 @@
     {
       "id": "adjusted_item_variant",
       "label": "Item-variant",
-      "description": "Adjusted item and variant, or just the item when there is no variant",
+      "description": "Adjusted item and today's name of the line's variant (by id), or just the item when the variant has no name, was deleted or is unknown, so that a renamed or dropped variant stays the same item",
       "grain": "item",
       "models": [
         "fct_sales_lines",
@@ -2117,6 +2117,137 @@
       "options": {},
       "weight": 0.6,
       "compares": false
+    },
+    {
+      "name": "net_sales_drivers",
+      "type": "drivers",
+      "description": "The largest drivers of a KPI's change, from `decompose`: one sentence per KPI.",
+      "options": {
+        "every_driver": true,
+        "style": "compact",
+        "min_abs_change": 0.03
+      },
+      "weight": 1.0,
+      "compares": true
+    },
+    {
+      "name": "aov_drivers",
+      "type": "drivers",
+      "description": "The largest drivers of a KPI's change, from `decompose`: one sentence per KPI.",
+      "options": {
+        "every_driver": true,
+        "style": "compact",
+        "min_abs_change": 0.05
+      },
+      "weight": 0.8,
+      "compares": true
+    },
+    {
+      "name": "sales_record",
+      "type": "record",
+      "description": "The latest bucket of a trend is the best one (D19): the highest, or the lowest when down is good. A partial last bucket and buckets without trading days do not count.",
+      "options": {
+        "style": "compact"
+      },
+      "weight": 0.8,
+      "compares": false
+    },
+    {
+      "name": "category_slices",
+      "type": "slice_movers",
+      "description": "A group whose contributive AOV moved, and whether it is in more orders (penetration) or the orders with it spend more on it (category AOV): the LMDI split of the row.",
+      "options": {
+        "top": 3,
+        "min_abs_delta": 2000
+      },
+      "weight": 1.0,
+      "compares": true
+    },
+    {
+      "name": "top_entries",
+      "type": "top_entries",
+      "description": "A member of a `top` query that was not in the prior top n, from the `prior_rank` column the compiler adds: new at its rank, with the rank it had before, if it sold at all.",
+      "options": {
+        "top": 2
+      },
+      "weight": 1.0,
+      "compares": true
+    },
+    {
+      "name": "item_share",
+      "type": "movers",
+      "description": "The groups of a breakdown that moved most against the comparison.",
+      "options": {
+        "metrics": [
+          "share"
+        ],
+        "top": 2,
+        "min_abs_delta": {
+          "pct": 0.015
+        }
+      },
+      "weight": 1.0,
+      "compares": true
+    },
+    {
+      "name": "peak_hours",
+      "type": "peaks",
+      "description": "The top n members of a distribution (the busiest hours) are not the prior period's, and each newcomer beats the member it replaces by `margin` in both periods.",
+      "options": {
+        "top": 3,
+        "margin": 0.15,
+        "labels": "hour"
+      },
+      "weight": 1.0,
+      "compares": true
+    },
+    {
+      "name": "discount_rate_total",
+      "type": "total_change",
+      "description": "The total row of a metric moved by at least `min_abs_delta` against the comparison.",
+      "options": {
+        "metric": "discount_rate",
+        "min_abs_delta": 0.02
+      },
+      "weight": 1.0,
+      "compares": true
+    },
+    {
+      "name": "discount_cost",
+      "type": "movers",
+      "description": "The groups of a breakdown that moved most against the comparison.",
+      "options": {
+        "metrics": [
+          "discounts"
+        ],
+        "top": 1,
+        "min_abs_delta": {
+          "idr": 500000
+        },
+        "skip": [
+          "Custom Amount",
+          "Other",
+          "No discount"
+        ]
+      },
+      "weight": 0.5,
+      "compares": true
+    },
+    {
+      "name": "payment_share",
+      "type": "movers",
+      "description": "The groups of a breakdown that moved most against the comparison.",
+      "options": {
+        "metrics": [
+          "share"
+        ],
+        "top": 1,
+        "min_abs_delta": {
+          "pct": 0.05
+        }
+      },
+      "weight": 1.0,
+      "compares": true
     }
   ],
   "components": [
@@ -2145,6 +2276,33 @@
       "visual": "waterfall",
       "insights": [
         "top_drivers"
+      ]
+    },
+    {
+      "id": "aov_drivers",
+      "title": "What moved the AOV",
+      "description": "Insight-only (rules, no visual): the change of the AOV against the prior period, split exactly into the effect of the items per order and of the average net price per item (AOV = items per order × avg item price, LMDI). A card names it with `insights_from`.",
+      "hint": null,
+      "note": null,
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_orders",
+        "metrics": [
+          "aov"
+        ],
+        "window": "$period",
+        "compare": "prior"
+      },
+      "transforms": [
+        "decompose"
+      ],
+      "facet": null,
+      "visual": null,
+      "insights": [
+        "aov_drivers"
       ]
     },
     {
@@ -2214,7 +2372,7 @@
       "facet": null,
       "visual": "table",
       "insights": [
-        "movers"
+        "category_slices"
       ]
     },
     {
@@ -2282,12 +2440,17 @@
           "discounts",
           "discount_rate"
         ],
-        "window": "$period"
+        "window": "$period",
+        "compare": "prior",
+        "totals": true
       },
       "transforms": [],
       "facet": null,
       "visual": "table",
-      "insights": []
+      "insights": [
+        "discount_rate_total",
+        "discount_cost"
+      ]
     },
     {
       "id": "full_history_amounts",
@@ -2406,6 +2569,33 @@
       "insights": []
     },
     {
+      "id": "net_sales_drivers",
+      "title": "What moved net sales",
+      "description": "Insight-only (rules, no visual): the change of net sales against the prior period, split exactly into the effect of the orders and of the AOV (net sales = orders × AOV, LMDI). A card names it with `insights_from`, so a card of a single number can say what the number is made of.",
+      "hint": null,
+      "note": null,
+      "params": {
+        "period": "L6W"
+      },
+      "unbound": [],
+      "query": {
+        "model": "fct_sales_lines",
+        "metrics": [
+          "net_sales"
+        ],
+        "window": "$period",
+        "compare": "prior"
+      },
+      "transforms": [
+        "decompose"
+      ],
+      "facet": null,
+      "visual": null,
+      "insights": [
+        "net_sales_drivers"
+      ]
+    },
+    {
       "id": "orders_by_hour",
       "title": "Orders by hour",
       "description": "Orders per trading day in each hour of the day, from the first to the last hour with a sale, with the three busiest hours highlighted.",
@@ -2426,7 +2616,8 @@
         "where": {
           "counts_as_order": true
         },
-        "window": "$period"
+        "window": "$period",
+        "compare": "prior"
       },
       "transforms": [
         "per_trading_day",
@@ -2434,7 +2625,9 @@
       ],
       "facet": null,
       "visual": "bar_trend",
-      "insights": []
+      "insights": [
+        "peak_hours"
+      ]
     },
     {
       "id": "orders_by_weekday_hour",
@@ -2486,6 +2679,7 @@
           "net_sales"
         ],
         "window": "$period",
+        "compare": "prior",
         "top": {
           "n": 3,
           "by": "net_sales",
@@ -2495,7 +2689,9 @@
       "transforms": [],
       "facet": null,
       "visual": "stacked_share_bar",
-      "insights": []
+      "insights": [
+        "payment_share"
+      ]
     },
     {
       "id": "period_kpis",
@@ -2595,7 +2791,9 @@
       ],
       "facet": null,
       "visual": "bar_trend",
-      "insights": []
+      "insights": [
+        "sales_record"
+      ]
     },
     {
       "id": "stock_alert",
@@ -2693,6 +2891,7 @@
           "share"
         ],
         "window": "$period",
+        "compare": "prior",
         "top": {
           "n": 15,
           "by": "net_sales"
@@ -2701,7 +2900,10 @@
       "transforms": [],
       "facet": null,
       "visual": "table",
-      "insights": []
+      "insights": [
+        "top_entries",
+        "item_share"
+      ]
     },
     {
       "id": "week_kpis",

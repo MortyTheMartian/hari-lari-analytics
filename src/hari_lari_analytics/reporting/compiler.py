@@ -140,6 +140,7 @@ class CompiledQuery:
             sql=self.sql,
             params=self.params,
             events=self.events,
+            top_n=self.query.top.n if self.query.top else None,
         )
         df = df.drop(columns=["_lvl", "_rows", "_td", "_ptd"]).reset_index(drop=True)
         return Result(df, meta)
@@ -488,6 +489,8 @@ class _Compiler:
             ctes.append((f"{side}_r", self._rows(side)))
         if q.top:
             ctes.append(("ranked", self._ranked()))
+            if self.compare_run:
+                ctes.append(("prior_ranked", self._prior_ranked()))
             for side in sides:
                 ctes.append((f"{side}_k", self._keyed(side)))
         for side in sides:
@@ -599,6 +602,20 @@ class _Compiler:
         return (
             f"select {', '.join(keys)}, row_number() over (order by {', '.join(order)}) as _rank\n"
             f"from cur_r{focus}\ngroup by {', '.join(keys)}"
+        )
+
+    def _prior_ranked(self) -> str:
+        """The rank of every group of the prior window by the `top` metric, over all of them
+        (not only those of the current top): `prior_rank` of a group that is new in the top."""
+        keys = [f"_n{i}" for i in range(len(self.n_dims))]
+        order = [
+            f"{self._ranking_expr(self.q.top.by)} desc nulls last",
+            *(f"{k} nulls last" for k in keys),
+        ]
+        focus = "\nwhere _f" if self.focus else ""
+        return (
+            f"select {', '.join(keys)}, row_number() over (order by {', '.join(order)}) "
+            f"as _prank\nfrom prior_r{focus}\ngroup by {', '.join(keys)}"
         )
 
     def _keyed(self, side: str) -> str:
@@ -830,7 +847,13 @@ class _Compiler:
         for side in sides:
             prefix = "" if side == "cur" else "prior_"
             select += [f"{self._value(m, side)} as {prefix}{m}" for m in self.plan.computed]
+        ranked = self.q.top is not None and self.compare_run
+        if ranked:
+            select.append("pr._prank")
         sql = "select\n    " + ",\n    ".join(select) + "\nfrom jt as j"
+        if ranked:
+            on_rank = " and ".join(["j._lvl = 0", *self._n_keys("pr", "j")])
+            sql += f"\nleft join prior_ranked as pr on {on_rank}"
         if self._needs_total():
             if self.time is None:
                 on = "t._lvl = 2"
@@ -874,6 +897,10 @@ class _Compiler:
                 cols.append(f"{null} as prior_{m}")
                 if not timestamp:
                     cols += [f"null::double as {m}_change", f"null::double as {m}_delta"]
+        if q.top and compare:
+            cols.append(
+                "_prank as prior_rank" if self.compare_run else "null::bigint as prior_rank"
+            )
         cols += [f"{c} as n_{c}" for c in self.counts]
         if compare:
             cols += [

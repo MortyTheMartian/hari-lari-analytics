@@ -213,6 +213,30 @@ def test_the_prior_of_other_holds_everything_outside_the_top(con):
     assert (rows["Other (2)"].net_sales, rows["Other (2)"].prior_net_sales) == (45_000, 98_000)
 
 
+def test_prior_rank_is_the_rank_in_the_prior_window_among_all_groups(con):
+    # this week only BCA paid; the week before BCA (68,000), Cash (30,000) and Gopay (0) did
+    kwargs = dict(model="fct_orders", dimensions=["payment_type"], metrics=["net_sales"],
+                  window="WTD", compare="prior")  # fmt: skip
+    r = q(con, top={"n": 1, "by": "net_sales"}, **kwargs)
+    assert r.df["payment_type"].tolist() == ["BCA"] and r.df["prior_rank"].tolist() == [1]
+    assert r.meta.top_n == 1
+    # a group of this week's top that had no rows the week before has no prior rank
+    r = q(con, model="fct_sales_lines", dimensions=["adjusted_category"],
+          metrics=["net_sales"], window="WTD", compare="prior",
+          top={"n": 2, "by": "net_sales"})  # fmt: skip
+    assert r.df["adjusted_category"].tolist() == ["Mains", "Cakes"]
+    assert r.df["prior_rank"].isna().all()
+
+
+def test_prior_rank_needs_top_and_a_comparison(con):
+    kwargs = dict(model="fct_orders", dimensions=["payment_type"], metrics=["net_sales"])
+    assert "prior_rank" not in q(con, window="WTD", compare="prior", **kwargs).df
+    assert "prior_rank" not in q(con, window="WTD", top={"n": 1, "by": "net_sales"}, **kwargs).df
+    # an invalid comparison (it starts before the first sale) gives a column of nulls
+    r = q(con, window="L14D", compare="prior", top={"n": 1, "by": "net_sales"}, **kwargs)
+    assert not r.meta.compare_ok and r.df["prior_rank"].isna().all()
+
+
 def test_bins_from_the_registry_and_from_the_query(con):
     r = q(con, model="fct_orders", dimensions=["basket_size"], window="full",
           metrics=["net_sales", "orders"])  # fmt: skip

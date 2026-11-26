@@ -319,7 +319,7 @@ def conditions(
                 i.rule == condition.insight
                 for page in built.run.pages
                 for slot in page.slots
-                for i in slot.insights
+                for i in slot.candidates
             )
             held.append((f"insight {condition.insight}", ok))
         elif condition.rows is not None:

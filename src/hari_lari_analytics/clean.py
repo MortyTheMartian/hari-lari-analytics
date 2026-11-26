@@ -24,6 +24,9 @@ REFUND_ITEM = re.compile(r"Refund for: \S+ - (.+)$")
 class CleanResult:
     lines: pd.DataFrame
     notes: list[str] = field(default_factory=list)
+    # today's variants from the API run (None for the CSV export, and for a run from before the
+    # table was extracted): the lines' item-variant label follows their ids (plan 9.8)
+    item_variants: pd.DataFrame | None = None
 
 
 @dataclass

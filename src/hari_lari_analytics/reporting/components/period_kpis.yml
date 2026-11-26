@@ -16,3 +16,5 @@ query:
   totals: true
 facet: { by: metric, layout: grid(1x4) }
 visual: { type: kpi_card }
+# the sentences under the cells: what moved net sales and the AOV
+insights_from: [net_sales_drivers, aov_drivers]

@@ -11,5 +11,7 @@ query:
   dimensions: [payment_type]
   metrics: [share, orders, net_sales]
   window: $period
+  compare: prior
   top: { n: 3, by: net_sales, other: true }
 visual: { type: stacked_share_bar, metric: share, details: [orders, net_sales] }
+insights: [payment_share]

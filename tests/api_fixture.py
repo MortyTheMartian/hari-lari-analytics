@@ -83,6 +83,7 @@ def api_tables() -> dict[str, pd.DataFrame]:
     lines["payment_no"] = lines["payment_id"].map(by_id)
     lines["net_sales"] = lines["gross_sales"] - lines["discount_amount"]
     lines["item_variant_id"] = lines["item_id"] * 10
+    lines.loc[lines["item_variant_name"] == "cold", "item_variant_id"] = 11  # Latte's cold
     lines["category_id"] = lines["category_name"].map(
         {c: i for i, c in enumerate(sorted(lines["category_name"].unique()), start=100)}
     )

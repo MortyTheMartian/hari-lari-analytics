@@ -272,6 +272,79 @@ def test_stock_is_a_snapshot_of_the_tracked_live_variants_at_the_extraction():
     assert _query(connect(tables, SEEDS), "select count(*) from fct_stock") == [(0,)]
 
 
+# --- item identity by id (plan 9.8) --------------------------------------------------------------
+
+
+def _latte_labels(tables, anchor=LAST_SALE):
+    """The item-variant label of each Latte line, by receipt, from the models and from pandas
+    (which must agree), with the label as sold next to it."""
+    con = connect(tables, SEEDS, anchor)
+    rows = _query(
+        con,
+        "select receipt_nr, adjusted_item_variant, item_variant from fct_sales_lines "
+        "where adjusted_item = 'Latte' order by receipt_nr",
+    )
+    expected = _pandas_lines(
+        tables, FIXTURES / "item_aliases.csv", FIXTURES / "category_group.csv", anchor
+    )
+    _assert_same_lines(con, expected)
+    return rows
+
+
+def test_a_live_variant_gives_todays_label_and_item_variant_stays_as_sold():
+    assert _latte_labels(api_tables()) == [
+        ("R001", "Latte-Hot", "Latte-Hot"),
+        ("R002", "Latte-Cold", "Latte-Cold"),
+    ]
+    tables = api_tables()
+    variants = tables["item_variants"]
+    variants.loc[variants["id"] == 10, "name"] = "large"  # Moka renamed Hot
+    assert _latte_labels(tables) == [
+        ("R001", "Latte-Large", "Latte-Hot"),
+        ("R002", "Latte-Cold", "Latte-Cold"),
+    ]
+
+
+def test_a_live_variant_without_a_name_is_the_item_alone():
+    tables = api_tables()
+    variants = tables["item_variants"]
+    variants.loc[variants["id"] == 10, "name"] = ""  # what Moka kept of the Hot variant
+    assert _latte_labels(tables) == [
+        ("R001", "Latte", "Latte-Hot"),
+        ("R002", "Latte-Cold", "Latte-Cold"),
+    ]
+
+
+def test_a_deleted_or_unknown_variant_falls_back_to_the_item():
+    tables = api_tables()
+    variants = tables["item_variants"]
+    variants.loc[variants["id"] == 11, "is_deleted"] = True  # Cold was dropped
+    variants.loc[variants["id"] == 10, "name"] = ""
+    assert _latte_labels(tables) == [
+        ("R001", "Latte", "Latte-Hot"),
+        ("R002", "Latte", "Latte-Cold"),
+    ]
+    tables = api_tables()
+    tables["item_variants"] = tables["item_variants"].query("id != 11")  # unknown to the catalog
+    assert _latte_labels(tables)[1] == ("R002", "Latte", "Latte-Cold")
+
+
+def test_a_variant_of_another_item_does_not_name_the_line():
+    tables = api_tables()
+    variants = tables["item_variants"]
+    variants.loc[variants["id"] == 11, "item_id"] = 2  # the id now belongs to another item
+    assert _latte_labels(tables)[1] == ("R002", "Latte", "Latte-Cold")
+
+
+def test_a_run_without_the_variants_table_keeps_the_label_of_the_sale():
+    tables = api_tables()
+    del tables["item_variants"]  # a run from before the table was extracted
+    assert _latte_labels(tables) == [
+        ("R001", "Latte-Hot", "Latte-Hot"),
+        ("R002", "Latte-Cold", "Latte-Cold"),
+    ]
+
+
 def test_build_order_puts_references_first_and_refuses_upward_references():
     models = {
         "fct_a": "create or replace view fct_a as select * from int_b join dim_c using (x)",

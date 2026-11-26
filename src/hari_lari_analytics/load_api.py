@@ -28,6 +28,7 @@ OPTIONAL_TABLES = [
     "transaction_line_discounts",
     "transaction_line_modifiers",
     "transaction_refunds",
+    "item_variants",  # the labels of the lines follow their variants' ids (plan 9.8)
 ]
 
 
@@ -142,7 +143,9 @@ def api_sales_lines(tables: dict[str, pd.DataFrame], aliases: pd.DataFrame) -> C
     _check_identity(df)
     _resolve_items(df, tables["items"], aliases, notes)
     return CleanResult(
-        lines=df.sort_values("sale_ts", kind="stable").reset_index(drop=True), notes=notes
+        lines=df.sort_values("sale_ts", kind="stable").reset_index(drop=True),
+        notes=notes,
+        item_variants=tables.get("item_variants"),
     )
 
 

@@ -9,6 +9,7 @@
           "type": "string",
           "enum": [
             "aov_basket_bridge",
+            "aov_drivers",
             "attach_rate_trend",
             "category_contributive_aov",
             "category_penetration",
@@ -19,6 +20,7 @@
             "key_figures",
             "last_sale",
             "lines_export",
+            "net_sales_drivers",
             "orders_by_hour",
             "orders_by_weekday_hour",
             "payment_types",
@@ -83,11 +85,21 @@
             {
               "type": "string",
               "enum": [
+                "aov_drivers",
                 "best_bucket",
+                "category_slices",
                 "data_notes",
+                "discount_cost",
                 "discount_rate_high",
+                "discount_rate_total",
+                "item_share",
                 "movers",
-                "top_drivers"
+                "net_sales_drivers",
+                "payment_share",
+                "peak_hours",
+                "sales_record",
+                "top_drivers",
+                "top_entries"
               ]
             },
             {
@@ -102,6 +114,7 @@
               "type": "string",
               "enum": [
                 "aov_basket_bridge",
+                "aov_drivers",
                 "attach_rate_trend",
                 "category_contributive_aov",
                 "category_penetration",
@@ -112,6 +125,7 @@
                 "key_figures",
                 "last_sale",
                 "lines_export",
+                "net_sales_drivers",
                 "orders_by_hour",
                 "orders_by_weekday_hour",
                 "payment_types",
@@ -717,6 +731,7 @@
           "type": "string",
           "enum": [
             "aov_basket_bridge",
+            "aov_drivers",
             "attach_rate_trend",
             "category_contributive_aov",
             "category_penetration",
@@ -727,6 +742,7 @@
             "key_figures",
             "last_sale",
             "lines_export",
+            "net_sales_drivers",
             "orders_by_hour",
             "orders_by_weekday_hour",
             "payment_types",
@@ -1166,6 +1182,15 @@
         "drive": null,
         "telegram": []
       }
+    },
+    "insights": {
+      "default": "none",
+      "enum": [
+        "chart",
+        "none"
+      ],
+      "title": "Insights",
+      "type": "string"
     },
     "repeat": {
       "anyOf": [

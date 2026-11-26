@@ -278,6 +278,10 @@ class ReportSpec(_Strict):
     outputs: OutputsSpec = OutputsSpec()
     text_blocks: dict[str, list[TextItem]] = {}
     deliver: DeliverSpec = DeliverSpec()
+    # chart: each chart draws its own insight sentences at its foot (docs/components.md,
+    # "Insights"). It only decides what is drawn: the rules run anyway, for `deliver.when`, the
+    # text blocks and the bundle.
+    insights: Literal["chart", "none"] = "none"
     repeat: dict[str, RepeatValues] | None = None  # every page, repeated
     pages: list[PageItem] = Field(min_length=1)
 
@@ -492,6 +496,7 @@ class BoundSlot:
     ref: BoundRef
     visual: str
     card: bool  # draw a card with the title and the hint
+    sources: tuple[BoundRef, ...] = ()  # the insight-only components of `insights_from`
 
     @property
     def bound(self) -> BoundComponent:
@@ -657,6 +662,31 @@ def facet_count(bound: BoundComponent) -> int | None:
     return None if isinstance(values, str) else values.top
 
 
+def has_rules(bound: BoundComponent) -> bool:
+    """The component has insight rules, its own or from its `insights_from`."""
+    return bool(bound.spec.insights or bound.spec.insights_from)
+
+
+def bind_sources(
+    report: Report,
+    slot: SlotSpec,
+    ref: BoundRef,
+    scope: Mapping[str, Any],
+    page_filters: FilterSpec | None,
+    where: str,
+) -> tuple[BoundRef, ...]:
+    """The `insights_from` components of a slot, bound with the slot's parameters and filters
+    (and its opt-outs)."""
+    scope = {**scope, **slot.params}
+    sources = []
+    for name in ref.bound.spec.insights_from:
+        source = ComponentRef(component=name, ignore_filters=slot.ignore_filters)
+        sources.append(
+            bind_ref(report, source, scope, page_filters, f"{where}: insights_from {name}")
+        )
+    return tuple(sources)
+
+
 def draws_own_card(visual: str) -> bool:
     """A visual with a `card` option draws its own card (the KPI cards)."""
     return "card" in visuals.get(visual).options.model_fields
@@ -684,10 +714,14 @@ def _bind_slot(
             bool(ref.bound.spec.hint),
             layouts.facet_cells(ref.bound.spec.facet, facet_count(ref.bound)),
             where,
+            foot_lines=visuals.FOOT_RESERVE_LINES
+            if report.spec.insights == "chart" and has_rules(ref.bound)
+            else 0,
         )
     except LayoutError as error:
         raise ReportError(str(error)) from None
-    return BoundSlot(placement.slot, placement.rect, ref, visual_spec.type, card)
+    sources = bind_sources(report, placement.slot, ref, scope, page_filters, where)
+    return BoundSlot(placement.slot, placement.rect, ref, visual_spec.type, card, sources)
 
 
 def filters_in_force(

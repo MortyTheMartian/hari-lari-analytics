@@ -26,4 +26,4 @@ visual:
   bars: [share]
   deltas: { penetration: delta, category_aov: change, contributive_aov: delta }
   bold: [net_sales, contributive_aov]
-insights: [movers]
+insights: [category_slices]

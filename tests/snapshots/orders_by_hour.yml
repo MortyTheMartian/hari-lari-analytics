@@ -8,6 +8,6 @@ facets:
   metric: null
   shape: rows
   csv: |
-    hour_of_day,is_total,orders,n_orders,trading_days
-    7,False,1,1,1
-    8,False,1,1,1
+    hour_of_day,is_total,orders,prior_orders,orders_change,orders_delta,n_orders,prior_n_orders,trading_days,prior_trading_days
+    7,False,1,,,,1,,1,
+    8,False,1,,,,1,,1,

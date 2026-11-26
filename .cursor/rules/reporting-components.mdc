@@ -84,7 +84,9 @@ A file in `components/` with `id`, `title`, optional `hint`/`description`, `para
 metric, period or dimension value), a `visual` and `insights` (rules of `insights.yml`). Titles
 and hints are Jinja templates over the parameters and the result's metadata. Pick the visual by
 the result shape (`single`, `rows`, `series`, `matrix`, `decomposition`): the manifest lists what
-each accepts. A component without a `visual` (such as `lines_export`) is for the workbook only.
+each accepts. A component without a `visual` (such as `lines_export`) is for the workbook only, or,
+with `insights`, for `insights_from` of another component (an insight-only component such as
+`net_sales_drivers`: its sentences are told on the card of the component that names it).
 The loader checks the query, the transforms and the visual against each other on a fixed
 calendar, without data.
 
@@ -117,8 +119,11 @@ refresh the schema and the manifest. `text_line` in `visuals/kpi.py` is the smal
 A file in `reports/` (`hari-lari-report` finds it by id) with `params`, `filters` (`where`/`focus`
 on every page), `pages` (a 12-column grid, `slots` naming a component with `row`, `col`, `span`,
 `height`; `repeat` over any parameter or the `top` members of a dimension; `when_empty`),
-`outputs` (`pdf`, `png`, `telegram` text blocks, `xlsx` sheets), and optionally `schedule` and
-`deliver`. `hari-lari-report validate` checks it as a build would; `build --strict` fails when
+`outputs` (`pdf`, `png`, `telegram` text blocks, `xlsx` sheets), `insights` (`chart` draws each
+chart's own sentences, at most 2, at its foot with a tag when it is quiet; `none` is the default
+and a new report keeps it until its rules are written; the rules run either way), and optionally
+`schedule` and `deliver`. With `chart`, `check_size` keeps two lines free in every slot whose
+component has rules, so give those slots a little more height. `hari-lari-report validate` checks it as a build would; `build --strict` fails when
 text runs over its slot. `tests/fixtures/reports/tracer.yml` is a small complete example, and
 `docs/components.md` ("Reports") has the rest.
 

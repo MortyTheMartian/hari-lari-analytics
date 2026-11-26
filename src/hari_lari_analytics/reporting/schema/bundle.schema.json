@@ -662,6 +662,15 @@
           "additionalProperties": true,
           "title": "Params",
           "type": "object"
+        },
+        "insights": {
+          "description": "chart: the pages draw each chart's sentences at its foot",
+          "enum": [
+            "chart",
+            "none"
+          ],
+          "title": "Insights",
+          "type": "string"
         }
       },
       "required": [
@@ -672,7 +681,8 @@
         "anchor",
         "generated",
         "run",
-        "params"
+        "params",
+        "insights"
       ],
       "title": "ReportInfo",
       "type": "object"
@@ -1016,6 +1026,31 @@
           },
           "title": "Facets",
           "type": "array"
+        },
+        "insights": {
+          "description": "the chart's own sentences, best first, at most 2: those of its rules and of its `insights_from`; filled whatever the report's `insights` option says",
+          "items": {
+            "$ref": "#/$defs/Insight"
+          },
+          "title": "Insights",
+          "type": "array"
+        },
+        "insights_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "found",
+                "quiet",
+                "no_comparison"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "found: the chart has sentences; quiet: it has rules and nothing stands out; no_comparison: it asks for a comparison that is not valid, so its rules cannot say; null: no rules, or no sales",
+          "title": "Insights Status"
         }
       },
       "required": [
@@ -1029,7 +1064,9 @@
         "card",
         "filters",
         "results",
-        "facets"
+        "facets",
+        "insights",
+        "insights_status"
       ],
       "title": "Slot",
       "type": "object"

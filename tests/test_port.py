@@ -17,9 +17,11 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
+import matplotlib
 import numpy as np
 import pandas as pd
 import pytest
+from matplotlib.text import Text
 
 from hari_lari_analytics.load_api import ApiRun
 from hari_lari_analytics.metrics import compute_metrics
@@ -29,9 +31,11 @@ from hari_lari_analytics.reporting.checks import check
 from hari_lari_analytics.reporting.components import load_components
 from hari_lari_analytics.reporting.db import connect, open_run
 from hari_lari_analytics.reporting.facets import run_facets
+from hari_lari_analytics.reporting.outputs.pages import render_page
 from hari_lari_analytics.reporting.queries import QueryContext
 from hari_lari_analytics.reporting.reports import load_reports
 from hari_lari_analytics.reporting.result import Result
+from hari_lari_analytics.reporting.visuals.theme import DEFAULT_THEME
 
 from .api_fixture import api_tables
 from .test_models import LAST_SALE, REAL_RUN, SEEDS, _comparable
@@ -201,6 +205,18 @@ def test_the_footer_is_todays(port, weekly):
         f"Hari Lari Cafe · Moka POS sales · data through {anchor:%d %b %Y} · "
         f"generated {GENERATED:%d %b %Y %H:%M}"
     )
+
+
+def test_the_weekly_pages_fit_with_their_sentences_and_every_table_shows_all_its_rows(port, weekly):
+    """Plan 9.8: no text over its slot on any page of L14D, L6W and L3M, and no table that ends
+    in "… and n more rows" (the sentences and the tags take room from the charts)."""
+    with matplotlib.rc_context(DEFAULT_THEME.rc()):
+        for page in weekly.pages:
+            fig, overflows = render_page(weekly, page, DEFAULT_THEME)
+            where = f"{page.page.id}"
+            assert [o.describe() for o in overflows] == [], where
+            texts = [t.get_text() for t in fig.findobj(Text)]
+            assert not [t for t in texts if t.startswith("… and ")], where
 
 
 # --- the category deep dive (9.5) ----------------------------------------------------------------

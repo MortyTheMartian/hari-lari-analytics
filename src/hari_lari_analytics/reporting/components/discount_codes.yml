@@ -11,4 +11,7 @@ query:
   dimensions: [discount_code]
   metrics: [orders, gross_sales, discounts, discount_rate]
   window: $period
+  compare: prior
+  totals: true
 visual: { type: table, bold: [discount_rate] }
+insights: [discount_rate_total, discount_cost]

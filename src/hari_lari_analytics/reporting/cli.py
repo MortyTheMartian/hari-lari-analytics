@@ -313,7 +313,10 @@ def cmd_preview(
 
     def draw() -> None:
         component = find_component(directory, args.id)  # read again: the file may have changed
-        overflows = preview.render_preview(component, ctx, params, path, args.span, args.height)
+        sources = [find_component(directory, n) for n in component.raw.get("insights_from") or []]
+        overflows = preview.render_preview(
+            component, ctx, params, path, args.span, args.height, sources=sources
+        )
         for found in overflows:
             print(f"Warning: {found.describe()}", file=err)
         print(f"Wrote {path}", file=out)

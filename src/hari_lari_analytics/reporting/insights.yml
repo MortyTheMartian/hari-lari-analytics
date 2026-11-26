@@ -39,3 +39,84 @@ data_notes:
   type: notes
   weight: 0.6
   text: "{{ note }}"
+
+# --- the rules of the weekly report (plan 9.8) ---------------------------------------------------
+# Each sentence leads with a number its chart shows and adds the why; the prior and current values
+# stay on the chart. 40 to 80 characters, so a sentence is one line of a half-width card.
+
+net_sales_drivers:  # the change of net sales and what it came from, every driver named
+  type: drivers
+  every_driver: true
+  style: compact
+  min_abs_change: 0.03
+  text: >-
+    Net sales {{ kpi.change }}: {% for d in drivers %}{{ d.effect }} from
+    {{ d.label | lower | replace('avg order value', 'AOV') }}{% if not loop.last %}, {% endif %}{% endfor %}
+
+aov_drivers:  # the AOV and its two factors, the factors as the changes of their own
+  type: drivers
+  every_driver: true
+  style: compact
+  min_abs_change: 0.05
+  weight: 0.8
+  text: >-
+    AOV {{ kpi.change }}: {% for d in drivers %}
+    {{ d.label | lower | replace('avg net price per item', 'item price') }} {{ d.change }}
+    {%- if not loop.last %}, {% endif %}{% endfor %}
+
+sales_record:  # the last full bucket of the trend is the best
+  type: record
+  style: compact
+  weight: 0.8
+  text: >-
+    Best {{ grain }} {{ since | replace('in the last ', 'in ') }}:
+    {{ bucket | replace('the week of', 'week of') }}, {{ value }} (was {{ previous.value }})
+
+category_slices:  # a category's slice of the AOV moved, and whether orders or spend moved it
+  type: slice_movers
+  top: 3
+  min_abs_delta: 2000
+  text: >-
+    {{ row.label }} {{ row.delta }} to the AOV,
+    {% if why == 'new' %}new{% elif why == 'gone' %}not sold any more{% else %}mostly {{ why }}{% endif %}
+
+top_entries:  # new in the top n, by the id of the item
+  type: top_entries
+  top: 2
+  text: "{{ row.member }} new in the top {{ n }} at #{{ rank }} (was {{ prior_rank }})"
+
+item_share:  # an item's share of net sales moved
+  type: movers
+  metrics: [share]
+  top: 2
+  min_abs_delta: { pct: 0.015 }
+  text: "{{ row.member }} {{ row.value }} of net sales, {{ row.delta }}"
+
+peak_hours:  # the busiest hours changed clearly
+  type: peaks
+  top: 3
+  margin: 0.15
+  labels: hour
+  text: "Busiest hours now {{ now }} (were {{ before }})"
+
+discount_rate_total:  # the discount rate of the whole period moved
+  type: total_change
+  metric: discount_rate
+  min_abs_delta: 0.02
+  text: "Discounts {{ value }} of gross sales, {{ delta }}"
+
+discount_cost:  # a code's discounts moved by a lot of money
+  type: movers
+  metrics: [discounts]
+  top: 1
+  min_abs_delta: { idr: 500000 }
+  skip: [Custom Amount, Other, No discount]
+  weight: 0.5
+  text: "{{ row.member }}: discounts {{ row.delta }} to {{ row.value }}"
+
+payment_share:  # a payment type's share of net sales moved
+  type: movers
+  metrics: [share]
+  top: 1
+  min_abs_delta: { pct: 0.05 }
+  text: "{{ row.member }} {{ row.value }} of net sales, {{ row.delta }}"

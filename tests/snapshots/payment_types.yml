@@ -8,7 +8,7 @@ facets:
   metric: null
   shape: rows
   csv: |
-    payment_type,is_total,is_other,share,orders,net_sales,n_orders,trading_days
-    BCA,False,False,0.693877551,1,68000,1,1
-    Cash,False,False,0.306122449,1,30000,1,1
-    Gopay,False,False,0,0,0,0,1
+    payment_type,is_total,is_other,share,orders,net_sales,prior_share,share_change,share_delta,prior_orders,orders_change,orders_delta,prior_net_sales,net_sales_change,net_sales_delta,prior_rank,n_orders,prior_n_orders,trading_days,prior_trading_days
+    BCA,False,False,0.693877551,1,68000,,,,,,,,,,,1,,1,
+    Cash,False,False,0.306122449,1,30000,,,,,,,,,,,1,,1,
+    Gopay,False,False,0,0,0,,,,,,,,,,,0,,1,

@@ -17,7 +17,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import jinja2
 
@@ -27,6 +27,7 @@ from hari_lari_analytics.reporting.compiler import Query, TopSpec, run_query
 from hari_lari_analytics.reporting.components import render_text
 from hari_lari_analytics.reporting.facets import Facet, _python, run_facets
 from hari_lari_analytics.reporting.insights import (
+    CHART_MAX,
     Insight,
     InsightContext,
     collect,
@@ -111,6 +112,9 @@ def _bound(value: Any, params: Mapping[str, Any]) -> Any:
 # --- what a build produces ------------------------------------------------------------------------
 
 
+InsightStatus = Literal["found", "quiet", "no_comparison"]
+
+
 @dataclass(frozen=True)
 class SlotRun:
     slot: BoundSlot
@@ -118,7 +122,14 @@ class SlotRun:
     hint: str
     note: str
     facets: list[Facet]
+    # the chart's own sentences: those of its rules and of its `insights_from`, the best per
+    # facet and key, at most CHART_MAX, best first
     insights: list[Insight]
+    # everything the rules found, before the cut: what the page's sentences are collected from
+    candidates: list[Insight] = field(default_factory=list)
+    # None: no rules, or no sales to speak about
+    status: InsightStatus | None = None
+    draw_insights: bool = False  # the report says `insights: chart`: draw them under the chart
 
 
 @dataclass(frozen=True)
@@ -208,9 +219,7 @@ def slot_texts(ref: BoundRef, facets: Sequence[Facet]) -> tuple[str, str, str]:
     try:
         title, hint, note = (render_text(t, params, meta, first) for t in templates)
     except jinja2.TemplateError:
-        title, hint, note = (
-            render_text(t, params, meta, first, strict=False) for t in templates
-        )
+        title, hint, note = (render_text(t, params, meta, first, strict=False) for t in templates)
     return title, hint, note
 
 
@@ -234,23 +243,68 @@ def unfiltered_note(ctx: QueryContext, slot: BoundSlot, in_force: Sequence[Appli
     return f"not filtered by {', '.join(missed)}" if missed else ""
 
 
-def run_slot(slot: BoundSlot, ctx: QueryContext, in_force: Sequence[AppliedFilter] = ()) -> SlotRun:
+def insight_status(
+    refs: Sequence[Any], facets: Sequence[Facet], found: Sequence[Insight]
+) -> InsightStatus | None:
+    """What a chart says about its rules: they found something, or nothing stands out, or they
+    cannot say because no comparison is valid. None for a chart without rules or without sales."""
+    if not refs:
+        return None
+    if found:
+        return "found"
+    live = [f.result.meta for f in facets if not f.result.meta.empty]
+    if not live:
+        return None
+    # a chart that asks for a comparison and has none says so, even when a rule that needs no
+    # comparison (a record) was looked at: silence there is not "nothing stands out"
+    if any(m.has_comparison for m in live) and not any(m.compare_ok for m in live):
+        return "no_comparison"
+    return "quiet"
+
+
+def run_slot(
+    slot: BoundSlot,
+    ctx: QueryContext,
+    in_force: Sequence[AppliedFilter] = (),
+    insights: str = "none",
+) -> SlotRun:
+    """Run a slot's component and its insight rules. `insights: chart` (the report's option) only
+    decides whether the sentences are drawn; the rules run either way."""
     ref = slot.ref
     facets = run_facets(ref.component, ctx, ref.params, ref.with_)
     title, hint, note = slot_texts(ref, facets)
     unfiltered = unfiltered_note(ctx, slot, in_force)
     if unfiltered:
         hint = f"{hint} · {unfiltered}" if hint else unfiltered
-    found = component_insights(
-        ref.bound.id, ref.bound.spec.insights, facets, InsightContext(ctx.calendar)
+    context = InsightContext(ctx.calendar)
+    found = component_insights(ref.bound.id, ref.bound.spec.insights, facets, context)
+    refs = list(ref.bound.spec.insights)
+    seen = list(facets)
+    for source in slot.sources:
+        source_facets = run_facets(source.component, ctx, source.params, source.with_)
+        found += component_insights(
+            source.bound.id, source.bound.spec.insights, source_facets, context
+        )
+        refs += source.bound.spec.insights
+        seen += source_facets
+    status = insight_status(refs, seen, found)
+    return SlotRun(
+        slot,
+        title,
+        hint,
+        note,
+        facets,
+        collect(found, CHART_MAX),
+        found,
+        status,
+        insights == "chart",
     )
-    return SlotRun(slot, title, hint, note, facets, found)
 
 
-def run_page(page: ReportPage, ctx: QueryContext) -> PageRun:
+def run_page(page: ReportPage, ctx: QueryContext, insights: str = "none") -> PageRun:
     chips, note = page_chrome(ctx, page)
-    slots = [run_slot(s, ctx, page.filters) for s in page.slots]
-    found = [i for s in slots for i in s.insights]
+    slots = [run_slot(s, ctx, page.filters, insights) for s in page.slots]
+    found = [i for s in slots for i in s.candidates]
     return PageRun(page, chips, note, slots, collect(found))
 
 
@@ -335,7 +389,9 @@ def run_report(
 ) -> ReportRun:
     """Run a report on the models of a run: its pages, text blocks and sheets, as data."""
     anchor = ctx.calendar.anchor
-    pages = [run_page(p, ctx) for p in expand(report, anchor, DataResolver(ctx))]
+    pages = [
+        run_page(p, ctx, report.spec.insights) for p in expand(report, anchor, DataResolver(ctx))
+    ]
     if not pages:
         raise BuildError(f"{report.source}: the report has no page (every repeat is empty)")
     bound = bind_refs(report)

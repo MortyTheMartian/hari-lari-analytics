@@ -16,7 +16,29 @@ def _item_variant(item: pd.Series, variant: pd.Series) -> pd.Series:
     return item.where(variant.isna(), item + "-" + variant.fillna(""))
 
 
-def add_dimensions(lines: pd.DataFrame) -> pd.DataFrame:
+def _live_variant_labels(df: pd.DataFrame, variants: pd.DataFrame) -> pd.Series:
+    """`adjusted_item_variant` by the ids of the lines (plan 9.8): a line whose variant is in
+    today's catalog and not deleted gets the adjusted item plus that variant's name (the item
+    alone when the variant has no name); any other line gets the adjusted item."""
+    live = variants.loc[~variants["is_deleted"].fillna(False).astype(bool)]
+    names = live["name"].astype("string").str.strip().replace("", pd.NA).str.title()
+    by_ids = {
+        (item_id, variant_id): None if pd.isna(name) else str(name)
+        for item_id, variant_id, name in zip(live["item_id"], live["id"], names, strict=True)
+    }
+    labels = []
+    for item, item_id, variant_id in zip(
+        df["adjusted_item"], df["item_id"], df["variant_id"], strict=True
+    ):
+        name = by_ids.get((item_id, variant_id))
+        labels.append(item if name is None else f"{item}-{name}")
+    return pd.Series(labels, index=df.index, dtype=object)
+
+
+def add_dimensions(lines: pd.DataFrame, item_variants: pd.DataFrame | None = None) -> pd.DataFrame:
+    """The derived dimensions. With the catalog of variants (`item_variants`, from the API
+    run) `adjusted_item_variant` follows the ids of the lines; without it (the CSV export, or
+    a run from before the table was extracted) it is the item and variant as sold."""
     df = lines.copy()
     ts = df["sale_ts"]
     df["sale_hour"] = ts.dt.floor("h")
@@ -30,7 +52,10 @@ def add_dimensions(lines: pd.DataFrame) -> pd.DataFrame:
     df["sale_year"] = ts.dt.year
     df["hour_of_day"] = ts.dt.hour
     df["item_variant"] = _item_variant(df["item"], df["variant"])
-    df["adjusted_item_variant"] = _item_variant(df["adjusted_item"], df["variant"])
+    if item_variants is not None and not item_variants.empty:
+        df["adjusted_item_variant"] = _live_variant_labels(df, item_variants)
+    else:
+        df["adjusted_item_variant"] = _item_variant(df["adjusted_item"], df["variant"])
     return df
 
 
@@ -66,7 +91,7 @@ def prepare_lines(
 ) -> tuple[pd.DataFrame, date]:
     """The pandas lines of a run: the dimensions and category groups added, the lines after the
     anchor day cut off. The tests compare the models (`fct_sales_lines`) with them."""
-    lines = add_dimensions(result.lines)
+    lines = add_dimensions(result.lines, result.item_variants)
     lines, group_notes = add_category_groups(lines, load_category_groups(category_groups))
     result.notes.extend(group_notes)
     lines = lines[lines["sale_ts"] < pd.Timestamp(anchor + timedelta(days=1))]

@@ -21,6 +21,8 @@ text_blocks:
     - text: "Change vs previous week ({{ anchor | days_ending(7, before=7) }})"
     - component: last_sale
     - text: "PDF and Excel lines: {{ drive_url }}"
+# each chart with rules draws its sentences at its foot (docs/components.md, "Insights")
+insights: chart
 deliver:
   drive: { folder: "{{ anchor }} (week {{ anchor_week }})", files: [pdf, xlsx] }
   telegram:
@@ -41,7 +43,7 @@ pages:
     pages:
       - id: overview
         title: Overview
-        grid: { columns: 12, rows: [1, 4] }
+        grid: { columns: 12, rows: [1.35, 4] }  # the key figures keep two lines for their sentences
         slots:
           - { component: period_kpis, row: 1, col: 1, span: 12 }
           - { component: sales_trend, row: 2, col: 1, span: 8 }
@@ -53,7 +55,7 @@ pages:
           - { component: category_contributive_aov, row: 1, col: 1, span: 12 }
       - id: details
         title: Items, hours & payments
-        grid: { columns: 12, rows: [7, 4] }
+        grid: { columns: 12, rows: [6.2, 4] }  # row 2 keeps two lines for the sentences
         slots:
           - { component: top_items, row: 1, col: 1, span: 7 }
           - { component: orders_by_hour, row: 1, col: 8, span: 5 }
