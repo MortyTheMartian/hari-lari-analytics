@@ -13,7 +13,7 @@ from hari_lari_analytics.orchestration.ledger import read_records, sent_record
 from hari_lari_analytics.orchestration.report_index import INDEX
 
 from .fakes import ADMIN, GROUP
-from .test_report_run import ANCHOR, TRACER, Env, report
+from .test_report_run import ANCHOR, NOW, TRACER, Env, report
 
 
 def records(env, dry=False):
@@ -80,6 +80,7 @@ def test_force_sends_again_and_records_it(tmp_path):
     env = Env(tmp_path)
     env.run()
     env.settings.force = True
+    env.services.now = lambda: NOW.replace(minute=5)  # a later run id: the records' order
     assert env.run() == 0
     sent = [r for r in records(env) if r.step == "report-tracer"]
     assert [r.force for r in sent] == [False, True]
