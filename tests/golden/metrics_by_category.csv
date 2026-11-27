@@ -1,0 +1,13 @@
+scope,adjusted_category,net_sales,items_sold,orders,penetration,category_aov,contributive_aov
+full,Cakes,30000,1,1,0.25,30000,7500
+full,Coffee,70000,2,2,0.5,35000,17500
+full,Custom Amount,15000,1,1,0.25,15000,3750
+full,Mains,70000,2,1,0.25,70000,17500
+full,Snacks (Focaccia),28000,1,1,0.25,28000,7000
+L14D,Cakes,30000,1,1,0.25,30000,7500
+L14D,Coffee,70000,2,2,0.5,35000,17500
+L14D,Custom Amount,15000,1,1,0.25,15000,3750
+L14D,Mains,70000,2,1,0.25,70000,17500
+L14D,Snacks (Focaccia),28000,1,1,0.25,28000,7000
+L6W,Coffee,70000,2,2,1,35000,35000
+L6W,Snacks (Focaccia),28000,1,1,0.5,28000,14000

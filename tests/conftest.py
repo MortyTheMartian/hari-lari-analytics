@@ -2,11 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from hari_lari_analytics.clean import clean_sales
-from hari_lari_analytics.dimensions import add_dimensions
-from hari_lari_analytics.load import find_inputs, load_aliases, load_library, load_sales
-
 FIXTURES = Path(__file__).parent / "fixtures"
+LAST = "test_zz_pandas_pipeline_unused.py"
 
 
 def pytest_addoption(parser):
@@ -17,19 +14,9 @@ def pytest_addoption(parser):
     )
 
 
-@pytest.fixture
-def cleaned():
-    library_path, sales_path = find_inputs(FIXTURES)
-    return clean_sales(
-        load_sales(sales_path),
-        load_library(library_path),
-        load_aliases(FIXTURES / "item_aliases.csv"),
-    )
-
-
-@pytest.fixture
-def lines(cleaned):
-    return add_dimensions(cleaned.lines)
+def pytest_collection_modifyitems(items):
+    """The check that no test imported the pandas pipeline runs after all the others."""
+    items.sort(key=lambda item: item.path.name == LAST)
 
 
 @pytest.fixture(scope="module")

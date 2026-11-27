@@ -1,0 +1,4 @@
+payment_type,gross_sales,discounts,refunds,net_sales,orders,items_sold,aov,first_sale_ts,last_sale_ts
+BCA,183000,0,0,183000,3,6,61000,2026-10-05T07:00:00,2026-10-13T11:00:00
+Cash,40000,10000,0,30000,1,1,30000,2026-10-05T08:00:00,2026-10-05T08:00:00
+Gopay,40000,0,40000,0,0,0,,,

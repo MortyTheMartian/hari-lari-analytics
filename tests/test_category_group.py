@@ -1,7 +1,5 @@
-import pandas as pd
 import pytest
 
-from hari_lari_analytics.dimensions import add_category_groups
 from hari_lari_analytics.load import InputError, load_category_groups
 
 from .conftest import FIXTURES
@@ -31,22 +29,6 @@ def test_duplicate_category_is_an_error(tmp_path):
 def test_unknown_level_1_is_an_error(tmp_path):
     with pytest.raises(InputError, match="must be one of"):
         load_category_groups(_write(tmp_path, "Coffee,beverage,\n"))
-
-
-def test_join_by_adjusted_category_and_warn_on_unmapped():
-    groups = load_category_groups(FIXTURES / "category_group.csv")
-    lines = pd.DataFrame({"adjusted_category": ["Coffee", "Pastries", "Non Coffee", "Other"]})
-    result, notes = add_category_groups(lines, groups)
-    assert result["category_group_level_1"].tolist() == ["drink", "food", "drink", "unmapped"]
-    assert result["category_group_level_2"].tolist()[:2] == ["coffee", "bakery"]
-    assert result["category_group_level_2"].isna().tolist() == [False, False, True, True]
-    assert len(notes) == 1 and "Other" in notes[0]
-
-
-def test_no_note_when_everything_is_mapped():
-    groups = load_category_groups(FIXTURES / "category_group.csv")
-    _, notes = add_category_groups(pd.DataFrame({"adjusted_category": ["HYGO"]}), groups)
-    assert notes == []
 
 
 def test_real_config_is_valid_and_covers_known_categories():

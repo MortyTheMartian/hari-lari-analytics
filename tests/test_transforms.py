@@ -19,7 +19,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.periods import report_periods
 from hari_lari_analytics.reporting import formats
 from hari_lari_analytics.reporting.compiler import Query, run_query
 from hari_lari_analytics.reporting.db import connect
@@ -37,6 +36,7 @@ from hari_lari_analytics.reporting.transforms import (
 from hari_lari_analytics.reporting.transforms.quality import small_n_mask
 from hari_lari_analytics.reporting.windows import Calendar
 
+from . import golden
 from .api_fixture import api_tables
 from .test_compiler import ANCHOR, PERIODS, real, real_run, rq, same  # noqa: F401  (real_run: a fixture)
 from .test_models import LAST_SALE, SEEDS
@@ -845,7 +845,7 @@ def test_orders_by_hour_per_trading_day_through_the_transforms(real_run, period)
     r = rq(real_run, model="fct_sales_lines", dimensions=["hour_of_day"], window=period,
            metrics=["orders"])  # fmt: skip
     out = run_pipeline(r, ["fill_domain", "per_trading_day"], ctx)
-    p = next(p for p in report_periods(ANCHOR) if p.key == period)
+    p = golden.periods(ANCHOR)[period]
     orders = lines[lines["counts_as_order"] & p.mask(lines["sale_ts"])]
     per_hour = orders.groupby("hour_of_day")["receipt_nr"].nunique()
     hours = range(per_hour.index.min(), per_hour.index.max() + 1)  # first to last, zeros between
