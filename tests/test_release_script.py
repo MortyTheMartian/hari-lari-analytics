@@ -155,7 +155,8 @@ def test_build_tags_the_image_with_the_commit_and_smoke_tests_it_before_the_push
     image = f"{IMAGES}:{release.head()}"
     docker = [c for c in release.log.read_text().splitlines() if c.startswith("docker ")]
     assert docker == [
-        f"docker build --platform linux/amd64 --tag {image} {release.repo}",
+        f"docker build --platform linux/amd64 --build-arg RELEASE={release.head()} --tag {image} "
+        f"{release.repo}",
         f"docker run --rm {image} validate",
         f"docker push {image}",
     ]

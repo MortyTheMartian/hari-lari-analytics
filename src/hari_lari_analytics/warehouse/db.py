@@ -193,8 +193,9 @@ def open_run(
 
 
 def run_time(run: ApiRun) -> datetime | None:
-    """When the run was extracted, in local clock time, from its manifest."""
-    value = run.manifest.get("run_at")
+    """When the run was extracted, in local clock time, from its manifest (`run_at` in a
+    manifest from before the landing zone)."""
+    value = run.manifest.get("started_at") or run.manifest.get("run_at")
     return datetime.fromisoformat(value).replace(tzinfo=None) if value else None
 
 

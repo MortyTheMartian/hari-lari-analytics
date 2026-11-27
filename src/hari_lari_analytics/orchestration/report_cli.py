@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import TextIO
 
 from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.core import landing
 from hari_lari_analytics.core.config import CONFIG_HELP, config_location
 from hari_lari_analytics.core.project import project
 from hari_lari_analytics.orchestration import delivery
@@ -385,13 +386,14 @@ def cmd_validate(args: argparse.Namespace, out: TextIO) -> int:
 
 
 def schema_checks() -> list[tuple[str, Path, str]]:
-    """The JSON Schema files of components, reports and the bundle, with the text they should
-    have: the report schema lists the packaged components."""
+    """The JSON Schema files of components, reports, the bundle and the landing manifest, with
+    the text they should have: the report schema lists the packaged components."""
     packaged = sorted(p.stem for p in components_dir().glob("*.yml"))
     return [
         ("component", components_module.schema_path(), components_module.schema_text()),
         ("report", reports_module.schema_path(), reports_module.schema_text(packaged)),
         ("bundle", bundle_schema.schema_path(), bundle_schema.schema_text()),
+        ("landing manifest", landing.schema_path(), landing.schema_text()),
     ]
 
 
@@ -443,11 +445,10 @@ def cmd_schema(args: argparse.Namespace, out: TextIO) -> int:
         for _, path, _ in checks:
             print(f"{path} is {'out of date' if path in stale else 'up to date'}", file=out)
         return 1 if stale else 0
-    components_module.write_schema()
-    print(f"Wrote {components_module.schema_path()}", file=out)
-    packaged = sorted(p.stem for p in components_dir().glob("*.yml"))
-    print(f"Wrote {reports_module.write_schema(packaged)}", file=out)
-    print(f"Wrote {bundle_schema.write_schema()}", file=out)
+    for _, path, text in checks:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        print(f"Wrote {path}", file=out)
     return 0
 
 

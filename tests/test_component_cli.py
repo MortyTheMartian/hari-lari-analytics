@@ -356,7 +356,7 @@ def test_new_refuses_a_bad_or_existing_id(capsys, folders):
 
 def test_schema(capsys, tmp_path, monkeypatch):
     code, out, _ = component_cli(capsys, "schema", "--check")
-    assert code == 0 and out.count("is up to date") == 3  # component, report and bundle
+    assert code == 0 and out.count("is up to date") == 4  # component, report, bundle, landing
     path = tmp_path / "component.schema.json"
     monkeypatch.setattr(components, "schema_path", lambda: path)
     code, out, _ = component_cli(capsys, "schema", "--check")

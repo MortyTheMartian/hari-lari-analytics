@@ -109,7 +109,7 @@ A dry run writes the same layout under a `dry-run/` prefix.
 
 ```text
 landing/<source>/<date>/           one source run: tables/<table>.parquet, manifest.json,
-                                   raw/*.json and request_log.csv
+                                   raw/*.json.gz and request_log.csv
 warehouse/<date>/                  warehouse.duckdb (every model), marts/<model>.parquet (exposed models)
 warehouse/latest.json              the newest good build
 reports/<report>/<anchor>/         PDF, PNG, XLSX, text, bundle.json
@@ -131,21 +131,27 @@ config/                            private business config (aliases, groups, mar
 - **The warehouse of a date** is replaced the same way; `latest.json` is written only after the
   data tests pass, so it always names a good build.
 - **Retention** (D26): landing tables and manifests, reports and the ledger are kept; the
-  bucket's lifecycle rules delete raw JSON after 90 days, `warehouse/<date>/` after 30 days (it is
-  rebuildable), everything under `dry-run/` after 14 days. Measured on the run of 25 Nov 2026:
+  bucket's lifecycle rules (`deploy/setup.sh bucket`) delete raw JSON after 90 days (it is
+  gzipped, `*.json.gz`, which is what the rule matches, so a manifest is never deleted),
+  `warehouse/<date>/` after 30 days (it is rebuildable; the rule's prefix `warehouse/2` spares
+  `latest.json`), everything under `dry-run/` after 14 days. Measured on the run of 25 Nov 2026:
   6.4 MB of raw JSON, 0.9 MB of Parquet, 8.9 MB for the warehouse file. The Moka pull is the
   full history since 1 Jan 2026 every day, so a run grows with the history.
 
-Today the bucket holds `raw/<date>/` (the Moka extraction, copied into `landing/moka/` by t12),
-`reports/<report>/<anchor>/`, and the sent-markers `sent/<report>/<anchor>.json`, which the
-ledger replaces but keeps honouring (t15). The config moves out of git and the image into
-`config/` in t11; `config/examples/` in git keeps the columns with demo values.
+The bucket also holds `raw/<date>/`, the Moka extraction before the landing zone; t12 copied
+those runs into `landing/moka/` with `scripts/copy_raw_to_landing.py`, which converts their
+manifests, so the history of the catalogue and stock snapshots is kept. The sent-markers
+`sent/<report>/<anchor>.json` are replaced by the ledger, which keeps honouring them (t15).
+Since t11 the config is not in git or the image: the jobs read `gs://hari-lari-data/config/`
+(`CONFIG_DIR`), and `config/examples/` in git keeps the columns with demo values.
 
 ### The landing manifest
 
 `landing/<source>/<date>/manifest.json` is the contract between a source and the warehouse
-(D26). Its model lives in `core`, so the warehouse never imports a source, and its JSON schema is generated
-into git like the report schemas (t12 validates against it). Every source writes the same
+(D26). Its model lives in `core/landing.py`, so the warehouse never imports a source, and its
+JSON schema is generated into git like the report schemas
+(`core/schema/landing_manifest.schema.json`, `hari-lari-report schema`). `image` is the tag
+`deploy/release.sh` bakes into the image (`RELEASE`), null outside one. Every source writes the same
 fields; what only one source knows goes under `source_info`.
 
 ```json

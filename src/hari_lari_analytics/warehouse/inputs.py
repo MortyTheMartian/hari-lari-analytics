@@ -39,6 +39,12 @@ class ApiRun:
     def name(self) -> str:
         return self.location.rstrip("/").rsplit("/", 1)[-1]
 
+    def check_messages(self, kind: str) -> list[str]:
+        """The `errors` or `warnings` of the extraction's own checks (top-level keys in a
+        manifest from before the landing zone)."""
+        checks = self.manifest.get("checks", self.manifest)
+        return list(checks.get(kind, []))
+
 
 def _is_gcs(location: str) -> bool:
     return location.startswith("gs://")

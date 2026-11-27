@@ -74,7 +74,7 @@ class Env:
         self.extract_calls += 1
         if self.extract_error:
             raise self.extract_error
-        run = Path(out) / "2026-10-14"
+        run = Path(out) / "moka" / "2026-10-14"
         (run / "tables").mkdir(parents=True, exist_ok=True)
         for name, table in api_tables().items():
             table.to_parquet(run / "tables" / f"{name}.parquet", index=False)
@@ -118,7 +118,7 @@ def test_the_outputs_are_stored_per_report_and_anchor_and_the_marker_written(env
         "tracer_2026-10-13.xlsx",
         "tracer_2026-10-13_overview.png",
     ]
-    assert (env.root / "raw" / "2026-10-14" / "tables").is_dir()
+    assert (env.root / "landing" / "moka" / "2026-10-14" / "tables").is_dir()
     marker = json.loads((env.root / "sent" / "tracer" / "2026-10-13.json").read_text())
     assert marker["report"] == "tracer" and marker["anchor"] == "2026-10-13"
     assert marker["to"] == ["group"] and marker["drive_url"].endswith("/id1")

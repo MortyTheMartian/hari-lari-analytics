@@ -84,7 +84,7 @@ step_build() { # [tag]
   tag="$(resolve_tag "${1:-}")"
   image="$IMAGE_REPO:$tag"
   g auth configure-docker "${REGION}-docker.pkg.dev"
-  docker build --platform linux/amd64 --tag "$image" "$ROOT"
+  docker build --platform linux/amd64 --build-arg "RELEASE=$tag" --tag "$image" "$ROOT"
   # The image must start and load its components and reports before it goes anywhere
   docker run --rm "$image" validate
   docker push "$image"

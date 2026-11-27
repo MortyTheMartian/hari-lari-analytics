@@ -8,7 +8,6 @@ import pytest
 from hari_lari_analytics.sources.moka.checks import last_week_bounds, run_checks
 from hari_lari_analytics.sources.moka.client import MokaClient
 from hari_lari_analytics.sources.moka.fetch import tables_from_payments
-from hari_lari_analytics.sources.moka.output import upload_dir
 from hari_lari_analytics.sources.moka.tables import Table, naive_timestamp
 from hari_lari_analytics.sources.moka.tokens import (
     DAY,
@@ -239,33 +238,6 @@ def test_orphan_lines_fail():
     t = tx("2026-11-22 18:00")
     errors, _ = run_checks(t, pd.DataFrame({"payment_id": ["0", "zzz"]}), NOW)
     assert errors == ["1 lines do not match a payment"]
-
-
-# ---- 1.9 output --------------------------------------------------------------------
-def test_upload_dir_copies_files_under_prefix(tmp_path):
-    (tmp_path / "tables").mkdir()
-    (tmp_path / "tables" / "a.parquet").write_bytes(b"x")
-    (tmp_path / "manifest.json").write_text("{}")
-    uploaded = []
-
-    class Blob:
-        def __init__(self, key):
-            self.key = key
-
-        def upload_from_filename(self, p):
-            uploaded.append(self.key)
-
-    class Bucket:
-        def blob(self, key):
-            return Blob(key)
-
-    class Client:
-        def bucket(self, name):
-            assert name == "b"
-            return Bucket()
-
-    upload_dir(tmp_path, "gs://b/raw/2026-11-23", client=Client())
-    assert sorted(uploaded) == ["raw/2026-11-23/manifest.json", "raw/2026-11-23/tables/a.parquet"]
 
 
 def test_client_retries_on_dropped_connection(tmp_path):

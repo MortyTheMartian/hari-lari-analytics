@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Checks": {
+      "additionalProperties": false,
+      "properties": {
+        "errors": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "warnings": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "title": "Checks",
+      "type": "object"
+    },
+    "TableEntry": {
+      "additionalProperties": false,
+      "description": "One landed table. `events` are the records of the window; `snapshot` is the state at\n`finished_at` (the catalogue, the stock levels).",
+      "properties": {
+        "kind": {
+          "enum": [
+            "events",
+            "snapshot"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "rows": {
+          "minimum": 0,
+          "title": "Rows",
+          "type": "integer"
+        },
+        "columns": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Columns",
+          "type": "object"
+        },
+        "latest_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latest At"
+        }
+      },
+      "required": [
+        "kind",
+        "file",
+        "rows",
+        "columns"
+      ],
+      "title": "TableEntry",
+      "type": "object"
+    },
+    "Window": {
+      "additionalProperties": false,
+      "properties": {
+        "since": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Since"
+        },
+        "until": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Until"
+        }
+      },
+      "title": "Window",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "manifest_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Manifest Version",
+      "type": "integer"
+    },
+    "source": {
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "title": "Source",
+      "type": "string"
+    },
+    "run_date": {
+      "format": "date",
+      "title": "Run Date",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^\\d{6}-[0-9a-z]{4}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "finished_at": {
+      "format": "date-time",
+      "title": "Finished At",
+      "type": "string"
+    },
+    "image": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Image"
+    },
+    "window": {
+      "$ref": "#/$defs/Window",
+      "default": {
+        "since": null,
+        "until": null
+      }
+    },
+    "tables": {
+      "additionalProperties": {
+        "$ref": "#/$defs/TableEntry"
+      },
+      "title": "Tables",
+      "type": "object"
+    },
+    "checks": {
+      "$ref": "#/$defs/Checks",
+      "default": {
+        "errors": [],
+        "warnings": []
+      }
+    },
+    "source_info": {
+      "additionalProperties": true,
+      "default": {},
+      "title": "Source Info",
+      "type": "object"
+    }
+  },
+  "required": [
+    "source",
+    "run_date",
+    "run_id",
+    "started_at",
+    "finished_at",
+    "tables"
+  ],
+  "title": "Landing manifest",
+  "type": "object",
+  "description": "landing/<source>/<run date>/manifest.json (docs/architecture.md)"
+}

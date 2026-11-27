@@ -18,6 +18,10 @@ RUN uv sync --frozen --no-dev --extra gcp
 
 ENV PATH="/app/.venv/bin:$PATH"
 
+# The image tag (deploy/release.sh), recorded in the landing manifests and the run ledger
+ARG RELEASE=""
+ENV RELEASE=$RELEASE
+
 # Phase 9.7: one job for every report. Cloud Scheduler starts it with `run --report <id>`, the
 # release's dry run with `run --scheduled --dry-run` (docs/components.md, "Running a report").
 ENTRYPOINT ["hari-lari-report"]

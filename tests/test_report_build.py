@@ -463,7 +463,7 @@ def test_schedules_lists_the_reports_that_have_one(capsys, tmp_path):
 
 def test_the_schemas_are_up_to_date(capsys):
     code, out, _ = cli(capsys, "schema", "--check")
-    assert code == 0 and out.count("is up to date") == 3
+    assert code == 0 and out.count("is up to date") == 4
 
 
 def test_the_report_command_is_the_reporting_cli():

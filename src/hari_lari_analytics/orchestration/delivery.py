@@ -14,7 +14,7 @@ A dry run does everything except sending: no Telegram message, no Drive upload, 
 admin alert, and every file goes under the `dry-run/` prefix. `--to <target>` sends every
 Telegram delivery to that one chat, and reads and writes no marker.
 
-Layout under the data root (local or `gs://`): `raw/<run date>/` (the extraction),
+Layout under the data root (local or `gs://`): `landing/moka/<run date>/` (the extraction),
 `reports/<report>/<anchor>/` (the outputs) and `sent/<report>/<anchor>.json` (the marker).
 """
 
@@ -30,6 +30,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.core.landing import LANDING
 from hari_lari_analytics.core.log import JsonLog
 from hari_lari_analytics.core.project import project
 from hari_lari_analytics.core.store import Store
@@ -87,7 +88,9 @@ class StepFailed(Exception):
 
 def token_expiry_notice(manifest: dict, now: datetime, warn_days: int = TOKEN_WARN_DAYS):
     """A reminder text when the Moka token expires within `warn_days`, else None (5.6)."""
-    raw = manifest.get("token_expires_at")
+    raw = manifest.get("source_info", {}).get("token_expires_at") or manifest.get(
+        "token_expires_at"
+    )  # the second: a manifest written before the landing zone (t12)
     if not raw:
         return None
     expires = datetime.fromisoformat(raw)
@@ -184,9 +187,10 @@ def data_store(settings: RunSettings) -> Store:
 
 
 def extract_step(run: Runner, store: Store) -> str:
-    """Extract into `raw/` of the store and send the token reminder; returns the run's location."""
+    """Extract into `landing/` of the store and send the token reminder; returns the run's
+    location."""
     with run.step("extract"):
-        extraction = run.services.extract(store.url("raw"))
+        extraction = run.services.extract(store.url(LANDING))
     with run.step("token", fatal=False, consequence="The token reminder was skipped."):
         notice = token_expiry_notice(
             extraction.manifest, run.services.now(), run.settings.token_warn_days
