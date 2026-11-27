@@ -22,6 +22,8 @@ ENV PATH="/app/.venv/bin:$PATH"
 ARG RELEASE=""
 ENV RELEASE=$RELEASE
 
-# Phase 9.7: one job for every report. Cloud Scheduler starts it with `run --report <id>`, the
-# release's dry run with `run --scheduled --dry-run` (docs/components.md, "Running a report").
-ENTRYPOINT ["hari-lari-report"]
+# One job for everything: Cloud Scheduler starts it with `tick --scheduler` (the daily tick),
+# the release's dry run with `tick --dry-run --all-scheduled`. hari-lari-pipeline hands every
+# other command (`run`, `validate`, ...) to hari-lari-report, which a Cloud Run job cannot swap
+# for another program.
+ENTRYPOINT ["hari-lari-pipeline"]

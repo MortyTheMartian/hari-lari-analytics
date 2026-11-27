@@ -55,10 +55,30 @@ find the group.
 One command runs any report of `src/hari_lari_analytics/presentation/reports/`: extract the Moka
 API, build the models and run the data checks, build the report, store the files, upload to
 Drive, send to Telegram and write the sent-marker. All reports share the Cloud Run job
-`hari-lari-weekly`; each report with a `schedule` has a Cloud Scheduler job
-`hari-lari-report-<id>` that starts it with `run --report <id>`. The weekly report's runs every
-Monday at 04:00 WITA. The release path creates, updates and deletes these scheduler jobs from
-the reports' YAML (see "Release path"), so a schedule change goes live with a release.
+`hari-lari-weekly`. Until the tick is released (t17), each report with a `schedule` has a Cloud
+Scheduler job `hari-lari-report-<id>` that starts it with `run --report <id>`; the weekly
+report's runs every Monday at 04:00 WITA. After it, one scheduler job starts the daily tick (see
+"The daily tick").
+
+### The daily tick (t16)
+
+`hari-lari-pipeline tick` is the job Cloud Scheduler starts as `hari-lari-tick`, at 04:00 and
+06:00 WITA (`tick.times` in `project.yml`). It extracts Moka unless it already landed today,
+builds the warehouse unless today's is up to date, and runs every report whose cron day fields
+match today (weekly: Mondays). The 06:00 tick does only what the 04:00 one left undone. A
+failing source or warehouse skips the reports that need it (alert: "the 06:00 tick tries
+again" or "this was the last tick today"); one failing report does not stop the others. After
+the 06:00 tick, a report still not sent is announced to its own chats as late, and the admin
+gets the command that sends it:
+
+```bash
+uv run hari-lari-pipeline tick --date 2026-11-30 --only weekly   # a late report, by hand
+uv run hari-lari-pipeline tick --dry-run --date 2026-11-30      # what Monday would do
+uv run hari-lari-pipeline tick --to admin --all-scheduled       # every scheduled report, privately
+uv run hari-lari-runs list --since 2026-11-30                   # what each tick did
+```
+
+`--to admin` and `--dry-run` never count as sent and never announce a late report.
 
 | Option | Meaning |
 | --- | --- |
@@ -204,7 +224,7 @@ cloud dry run succeeded. Do not run `gcloud builds submit` plus `run jobs update
 ```
 merge to main -> build image <commit> -> smoke test -> push -> dry run (hari-lari-weekly-dryrun)
               -> only if it succeeded: point hari-lari-weekly at <commit>
-              -> sync the scheduler jobs hari-lari-report-<id> with the reports of <commit>
+              -> sync the scheduler job hari-lari-tick with the tick times of <commit>
 ```
 
 * **Automatic:** `.github/workflows/release.yml` runs the script on every push to `main`. It
@@ -214,16 +234,18 @@ merge to main -> build image <commit> -> smoke test -> push -> dry run (hari-lar
 * **The image tag is the first 12 characters of the commit.** The live job keeps the tag it ran
   before as the label `previous-release`.
 * **The dry run** is the job `hari-lari-weekly-dryrun`: the same configuration as the live job,
-  always started with `run --scheduled --dry-run` (the script sets the arguments on every
+  always started with `tick --dry-run --all-scheduled` (the script sets the arguments on every
   release), so every scheduled report must build, and it sends nothing, writes under `dry-run/`
   and has no scheduler. If it fails, the live job still runs the old image and the workflow
   fails; read the execution log in Cloud Run.
-* **The scheduler jobs** follow the reports of the promoted image (`hari-lari-report schedules
-  --json`): one `hari-lari-report-<id>` per report with a schedule, paused when `enabled: false`,
-  deleted when the report loses its schedule. Other scheduler jobs are left alone. By hand:
-  `deploy/release.sh schedules [tag]`.
+* **The scheduler jobs** follow the promoted image. An image with the tick
+  (`hari-lari-pipeline schedule --json`) gets the one job `hari-lari-tick`, `0 4,6 * * *`
+  WITA, started with `tick --scheduler`, and the `hari-lari-report-*` jobs are deleted. An image
+  from before the tick gets its `hari-lari-report-<id>` jobs back and `hari-lari-tick` is
+  deleted. Other scheduler jobs are left alone. By hand: `deploy/release.sh schedules [tag]`.
 * **Rolling back:** Actions > Release > Run workflow > `rollback`, or by hand
-  `deploy/release.sh rollback` (previous release) or `deploy/release.sh rollback <tag>`.
+  `deploy/release.sh rollback` (previous release) or `deploy/release.sh rollback <tag>`. A
+  rollback also syncs the scheduler jobs of the image it goes back to, so it needs `docker`.
 * **Do not roll back across the cut-over (9.7):** an image older than `dc1499cb5270` runs the old
   command and does not understand the scheduler's `run --report weekly`.
 * **By hand:** `deploy/release.sh {build|dryrun|promote|rollback|schedules|all|status} [tag]`; without a tag

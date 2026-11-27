@@ -39,8 +39,15 @@ FAKE_DOCKER = """#!/usr/bin/env bash
 echo "docker $*" >> "$FAKE_LOG"
 [[ "$1" == "${FAKE_DOCKER_FAILS:-}" ]] && exit 1
 [[ "$*" == *"schedules --json"* ]] && cat "$FAKE_DIR/schedules.json"
+if [[ "$*" == *" schedule --json"* ]]; then
+  [[ -e "$FAKE_DIR/tick.json" ]] || exit "${FAKE_SCHEDULE_EXIT:-2}"  # an image before the tick
+  cat "$FAKE_DIR/tick.json"
+fi
 exit 0
 """
+
+TICK = {"job": "hari-lari-tick", "cron": "0 4,6 * * *", "timezone": "Asia/Makassar",
+        "args": ["tick", "--scheduler"]}  # fmt: skip
 
 WEEKLY_SCHEDULE = [{
     "report": "weekly", "cron": "0 4 * * 1", "timezone": "Asia/Makassar", "enabled": True,
@@ -133,7 +140,13 @@ def release(tmp_path) -> Release:
     result.job("hari-lari-weekly", knative(f"{IMAGES}:aaa111", release="aaa111"))
     result.job("hari-lari-weekly-dryrun", v2(f"{IMAGES}:aaa111"))
     (fake / "schedules.json").write_text(json.dumps(WEEKLY_SCHEDULE))
+    (fake / "tick.json").write_text(json.dumps(TICK))
     return result
+
+
+def before_the_tick(release: Release) -> None:
+    """The image is one from before the tick: `schedule` is not a command of it."""
+    (release.fake / "tick.json").unlink()
 
 
 def test_the_scripts_are_valid_bash():
@@ -190,12 +203,12 @@ def test_tags_that_cannot_be_labels_are_refused(release, tag):
     assert not release.log.exists()
 
 
-def test_dryrun_runs_every_scheduled_report_as_a_dry_run_and_waits_for_it(release):
+def test_dryrun_runs_a_dry_tick_with_every_scheduled_report_and_waits_for_it(release):
     done = release.run("dryrun", "bbb222")
     assert done.returncode == 0, done.stderr
     assert release.calls() == [
         f"run jobs update hari-lari-weekly-dryrun --region asia-southeast2 "
-        f"--image {IMAGES}:bbb222 --args=run,--scheduled,--dry-run "
+        f"--image {IMAGES}:bbb222 --args=tick,--dry-run,--all-scheduled "
         "--update-env-vars CONFIG_DIR=gs://hari-lari-data/config",
         "run jobs execute hari-lari-weekly-dryrun --region asia-southeast2 --wait",
     ]
@@ -248,7 +261,7 @@ def test_the_live_job_is_only_updated_after_a_successful_dry_run(release):
         first("run jobs update hari-lari-weekly-dryrun"),
         first("run jobs execute hari-lari-weekly-dryrun"),
         first("run jobs update hari-lari-weekly --region"),
-        first("scheduler jobs create http hari-lari-report-weekly"),
+        first("scheduler jobs create http hari-lari-tick"),
     ]
     assert steps == sorted(steps)
     assert len(release.live_updates()) == 1
@@ -259,6 +272,53 @@ def test_a_failed_dry_run_leaves_the_live_job_and_the_schedules_alone(release):
     assert done.returncode != 0
     assert release.live_updates() == []
     assert not any(c.startswith("scheduler ") for c in release.calls())
+
+
+# --- the scheduler jobs (9.7; the tick, t16) ------------------------------------------------------
+
+TICK_BODY = '{"overrides":{"containerOverrides":[{"args":["tick","--scheduler"]}]}}'
+
+
+def test_an_image_with_the_tick_gets_the_one_tick_job_and_the_report_jobs_go(release):
+    (release.fake / "schedulers").write_text(
+        "projects/p/locations/r/jobs/hari-lari-report-weekly\n"
+        "projects/p/locations/r/jobs/hari-lari-expenses\n"
+    )
+    done = release.run("schedules", "bbb222")
+    assert done.returncode == 0, done.stderr
+    assert f"docker run --rm {IMAGES}:bbb222 schedule --json" in release.log.read_text()
+    assert scheduler_calls(release) == [
+        "scheduler jobs list --location asia-southeast2 --format value(name)",
+        "scheduler jobs create http hari-lari-tick --location asia-southeast2 "
+        f"--schedule 0 4,6 * * * --time-zone Asia/Makassar --uri {RUN_URI} --http-method POST "
+        "--oauth-service-account-email hari-lari-scheduler@hari-lari.iam.gserviceaccount.com "
+        f"--message-body {TICK_BODY} --headers Content-Type=application/json",
+        "scheduler jobs describe hari-lari-tick --location asia-southeast2 --format value(state)",
+        "scheduler jobs delete hari-lari-report-weekly --location asia-southeast2",
+    ]
+    assert "scheduler job hari-lari-tick: 0 4,6 * * * Asia/Makassar" in done.stdout
+
+
+def test_a_rollback_to_an_image_before_the_tick_brings_its_report_jobs_back(release):
+    before_the_tick(release)
+    (release.fake / "schedulers").write_text("projects/p/locations/r/jobs/hari-lari-tick\n")
+    release.job(
+        "hari-lari-weekly",
+        knative(f"{IMAGES}:bbb222", release="bbb222", **{"previous-release": "aaa111"}),
+    )
+    done = release.run("rollback")
+    assert done.returncode == 0, done.stderr
+    calls = scheduler_calls(release)
+    assert any(c.startswith("scheduler jobs create http hari-lari-report-weekly ") for c in calls)
+    assert calls[-1] == "scheduler jobs delete hari-lari-tick --location asia-southeast2"
+
+
+def test_an_image_that_cannot_be_read_leaves_the_scheduler_alone(release):
+    before_the_tick(release)
+    done = release.run("schedules", "bbb222", FAKE_SCHEDULE_EXIT="125")
+    assert done.returncode != 0
+    assert "exit code 125" in done.stderr
+    assert scheduler_calls(release) == []
 
 
 # --- the scheduler jobs (9.7) ---------------------------------------------------------------------
@@ -275,6 +335,7 @@ def scheduler_calls(release: Release) -> list[str]:
 
 
 def test_a_new_scheduled_report_gets_a_scheduler_job_that_runs_it(release):
+    before_the_tick(release)
     done = release.run("schedules", "bbb222")
     assert done.returncode == 0, done.stderr
     assert f"docker run --rm {IMAGES}:bbb222 schedules --json" in release.log.read_text()
@@ -291,6 +352,7 @@ def test_a_new_scheduled_report_gets_a_scheduler_job_that_runs_it(release):
 
 
 def test_an_existing_scheduler_job_is_updated_and_a_paused_one_resumed(release):
+    before_the_tick(release)
     names = "projects/hari-lari/locations/asia-southeast2/jobs/hari-lari-report-weekly\n"
     (release.fake / "schedulers").write_text(names)
     (release.fake / "state-hari-lari-report-weekly").write_text("PAUSED\n")
@@ -302,6 +364,7 @@ def test_an_existing_scheduler_job_is_updated_and_a_paused_one_resumed(release):
 
 
 def test_a_disabled_schedule_is_paused(release):
+    before_the_tick(release)
     (release.fake / "schedules.json").write_text(json.dumps([{**WEEKLY_SCHEDULE[0],
                                                               "enabled": False}]))  # fmt: skip
     done = release.run("schedules", "bbb222")
@@ -313,6 +376,7 @@ def test_a_disabled_schedule_is_paused(release):
 
 
 def test_a_report_without_a_schedule_loses_its_job_and_other_jobs_stay(release):
+    before_the_tick(release)
     (release.fake / "schedulers").write_text(
         "projects/p/locations/r/jobs/hari-lari-report-weekly\n"
         "projects/p/locations/r/jobs/hari-lari-report-gone\n"
@@ -324,6 +388,7 @@ def test_a_report_without_a_schedule_loses_its_job_and_other_jobs_stay(release):
 
 
 def test_no_schedules_means_no_scheduler_job(release):
+    before_the_tick(release)
     (release.fake / "schedules.json").write_text("[]")
     assert release.run("schedules", "bbb222").returncode == 0
     assert scheduler_calls(release) == [

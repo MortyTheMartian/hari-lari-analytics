@@ -12,7 +12,7 @@ import os
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from importlib import resources
 from pathlib import Path
 from typing import Literal, get_args
@@ -106,6 +106,37 @@ class NumberFormat(_Strict):
         return self.number(value, decimals)
 
 
+class Tick(_Strict):
+    """The times of the daily tick: the first run and its retries (local clock time)."""
+
+    times: list[str] = Field(min_length=1)
+
+    @field_validator("times")
+    @classmethod
+    def _times(cls, times: list[str]) -> list[str]:
+        bad = [t for t in times if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", t)]
+        if bad:
+            raise ValueError(f"{', '.join(bad)}: a time is HH:MM, such as 04:00")
+        if sorted(set(times)) != times:
+            raise ValueError("list the times earliest first, each once")
+        if len({t[3:] for t in times}) > 1:
+            raise ValueError("the times must share their minute: one scheduler job runs them all")
+        return times
+
+    @property
+    def cron(self) -> str:
+        """The cron of the one scheduler job (`0 4,6 * * *`)."""
+        hours = ",".join(str(int(t[:2])) for t in self.times)
+        return f"{int(self.times[0][3:])} {hours} * * *"
+
+    def is_last(self, now: datetime) -> bool:
+        """Whether a tick that started at `now` (local) is the last of its day: it started less
+        than 15 minutes before the last time, or after it."""
+        last = time.fromisoformat(self.times[-1])
+        start = datetime.combine(now.date(), last) - timedelta(minutes=15)
+        return now.replace(tzinfo=None) >= start
+
+
 class Project(_Strict):
     currency: Currency
     numbers: NumberFormat
@@ -117,6 +148,7 @@ class Project(_Strict):
     # the Telegram chats a report may deliver to: a name per chat, and the Secret Manager secret
     # that holds its chat id (never the id: this file is public). `admin` is required.
     telegram_targets: dict[str, str]
+    tick: Tick
 
     @field_validator("telegram_targets")
     @classmethod

@@ -2995,7 +2995,6 @@
       "params": {},
       "schedule": {
         "cron": "0 4 * * 1",
-        "timezone": "Asia/Makassar",
         "enabled": true
       },
       "outputs": {

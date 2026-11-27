@@ -74,7 +74,8 @@ stored warehouse; it never sends anything:
 uv run hari-lari-warehouse build                              # data/landing -> data/warehouse/<today>/
 uv run hari-lari-report validate                              # every report and component, the schemas
 uv run hari-lari-report build --report tracer --anchor 2026-11-22   # PDF, PNG, text, XLSX, bundle.json
-uv run hari-lari-report schedules --json                      # the schedules, as deploy/ reads them
+uv run hari-lari-report schedules                             # the reports on the tick, by cron
+uv run hari-lari-pipeline tick --dry-run --date 2026-11-30    # the daily tick, without sending
 ```
 
 The outputs go to `data/output/reports/<report>/<anchor>/` (`--out` changes it); `--strict` fails
@@ -128,9 +129,10 @@ run as tests in `tests/test_authoring_examples.py`: a refund-rate metric with a 
 API, check the data, build the report, store the files, upload to Google Drive, send to
 Telegram); `--scheduled` runs every report with a `schedule` on one extraction. Useful options:
 `--dry-run` (sends nothing), `--to admin` (private run to the admin chat), `--anchor
-YYYY-MM-DD`, `--force`. In the cloud, the Cloud Run job `hari-lari-weekly` runs it, started by
-one Cloud Scheduler job per scheduled report (`hari-lari-report-weekly`: Mondays at 04:00 in
-Bali). The runbook (`docs/runbook.md`) explains the options, the files it writes and what each
+YYYY-MM-DD`, `--force`. In the cloud the daily tick runs them: `hari-lari-pipeline tick`
+extracts, builds the warehouse and runs every report due that day (the weekly one on Mondays),
+in the Cloud Run job `hari-lari-weekly`, started by the Cloud Scheduler job `hari-lari-tick` at
+04:00 and 06:00 in Bali (the 06:00 tick retries what failed). The runbook (`docs/runbook.md`) explains the options, the files it writes and what each
 alert means, and how a merge to `main` is released: `deploy/release.sh` builds the image, runs
 it as a cloud dry run, only then points the live job at it and syncs the scheduler jobs
 (GitHub Actions with Workload Identity Federation, see "Release path" there).

@@ -202,6 +202,26 @@ def build_warehouse(
     return info
 
 
+def up_to_date(root: Store, run_date: date, config: str | Path) -> BuildInfo | None:
+    """The stored warehouse of `run_date` if it was built by this image from the newest landing
+    run of each source and the current config files, else None (it needs a build)."""
+    key = f"{warehouse_key(run_date)}/{BUILD_FILE}"
+    if not root.exists(key):
+        return None
+    info = read_build(root, run_date)
+    try:
+        manifests = landed_runs(root.child(LANDING), run_date)
+    except InputError:
+        return None
+    landed = {s: (m.run_date, m.run_id) for s, m in manifests.items()}
+    if info.image != image_tag() or landed != {
+        s: (r.run_date, r.run_id) for s, r in info.landing.items()
+    }:
+        return None
+    with local_config(config, [file for file, _ in SEED_FILES.values()]) as config_dir:
+        return info if file_hashes(config_dir) == info.config else None
+
+
 def _store_context(
     con: duckdb.DuckDBPyConnection,
     manifests: dict[str, Manifest],

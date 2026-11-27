@@ -124,10 +124,9 @@ def test_the_deploy_files_use_the_project_time_zone():
     zone = project().timezone
     assert re.search(rf"^\s*TZ={zone}\s*$", (ROOT / "Dockerfile").read_text(), re.M)
     assert f"TZ={zone}" in (ROOT / "deploy" / "setup.sh").read_text()
-    weekly = yaml.safe_load(
-        (ROOT / "src/hari_lari_analytics/presentation/reports/weekly.yml").read_text()
-    )
-    assert weekly["schedule"]["timezone"] == zone  # the scheduler job's time zone
+    from hari_lari_analytics.orchestration.pipeline_cli import schedule
+
+    assert schedule()["timezone"] == zone  # the scheduler job of the tick
 
 
 # ---- number format: the old report's helpers, unchanged for today's settings ----------

@@ -162,12 +162,12 @@ step_job() { # 3.11, 5.x: the weekly job with its Telegram secrets and Drive fol
 }
 
 # 7A.8 The dry-run job: the live job's configuration, run with --dry-run, never scheduled. The
-# release script sets its image and its argument on every release. It is created with the image
+# release script sets its image and its arguments on every release. It is created with the image
 # of the live job.
 step_dryrun_job() {
   local image
   image="$(job_image_of "$JOB")"
-  deploy_job "$DRYRUN_JOB" "${image:-$IMAGE}" --args=--dry-run
+  deploy_job "$DRYRUN_JOB" "${image:-$IMAGE}" --args=tick,--dry-run,--all-scheduled
 }
 
 # 7A.8 Clean-up policy of the registry. Every merge to main pushes an image, so old ones go:

@@ -8,7 +8,7 @@ description: >-
   ended on Sunday.
 kicker: Hari Lari Cafe
 footer: Hari Lari Cafe · Moka POS sales
-schedule: { cron: "0 4 * * 1", timezone: Asia/Makassar }
+schedule: { cron: "0 4 * * 1" }
 outputs:
   pdf: true
   png: [cover]

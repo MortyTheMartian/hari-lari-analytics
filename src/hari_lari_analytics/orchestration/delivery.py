@@ -149,10 +149,16 @@ class Runner:
     record itself (`ledger.py`)."""
 
     def __init__(
-        self, settings: RunSettings, services: Services, log: JsonLog, subject: str
+        self,
+        settings: RunSettings,
+        services: Services,
+        log: JsonLog,
+        subject: str,
+        note: str | None = None,
     ) -> None:
         self.settings, self.services, self.log = settings, services, log
         self.subject = subject  # "report weekly", as the alerts name it
+        self.note = note  # a line for the alert, such as when the next tick retries
         self.timings: dict[str, float] = {}
         self.started_at = services.now()
         self.started = time.monotonic()
@@ -201,6 +207,7 @@ class Runner:
                 step,
                 error,
                 subject=self.subject,
+                note=self.note,
             )
         except Exception as inner:  # noqa: BLE001 - an alert must never hide the real error
             self.log.warning(f"could not send the admin alert: {scrub(str(inner))}", step=step)
@@ -255,11 +262,16 @@ def data_store(settings: RunSettings) -> Store:
 
 
 def extract_step(
-    settings: RunSettings, services: Services, log: JsonLog, subject: str, source: str = "moka"
+    settings: RunSettings,
+    services: Services,
+    log: JsonLog,
+    subject: str,
+    source: str = "moka",
+    note: str | None = None,
 ) -> RunResult:
     """Extract one source into `landing/` of the data store, send the token reminder, and
-    record `extract-<source>`. Raises StepFailed."""
-    run = Runner(settings, services, log, subject)
+    record `extract-<source>`. Raises StepFailed; `note` goes into its alert."""
+    run = Runner(settings, services, log, subject, note)
     try:
         with run.step("extract"):
             extraction = services.extract(data_store(settings).url(LANDING))
@@ -281,11 +293,11 @@ def extract_step(
 
 
 def warehouse_step(
-    settings: RunSettings, services: Services, log: JsonLog, subject: str
+    settings: RunSettings, services: Services, log: JsonLog, subject: str, note: str | None = None
 ) -> BuildInfo:
     """Build the warehouse of the run date in the data store and record `warehouse`. Raises
-    StepFailed (a missing config file, a failing error check)."""
-    run = Runner(settings, services, log, subject)
+    StepFailed (a missing config file, a failing error check); `note` goes into its alert."""
+    run = Runner(settings, services, log, subject, note)
     try:
         with run.step("warehouse"):
             info = build_warehouse(

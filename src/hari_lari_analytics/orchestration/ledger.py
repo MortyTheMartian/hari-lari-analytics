@@ -30,9 +30,11 @@ class _Strict(BaseModel):
 
 
 class Delivery(_Strict):
-    """One channel endpoint of a report: Drive, or a Telegram target by name."""
+    """One channel endpoint of a report: Drive, or a Telegram target by name. `late_notice` is
+    the message that tells a chat the report is late (it does not count as the report)."""
 
     channel: Literal["drive", "telegram"]
+    kind: Literal["report", "late_notice"] = "report"
     target: str | None = None
     status: Literal["ok", "failed", "dry_run"]
     folder: str | None = None
@@ -131,6 +133,6 @@ def delivered_targets(store: Store, report_id: str, anchor: date) -> set[str]:
         done |= {
             d.target
             for d in record.deliveries
-            if d.channel == "telegram" and d.status == "ok" and d.target
+            if d.channel == "telegram" and d.kind == "report" and d.status == "ok" and d.target
         }
     return done

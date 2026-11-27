@@ -282,6 +282,14 @@ up. The tick times are listed once, in `project.yml` (`tick: { times: ["04:00", 
 `deploy/` builds the scheduler's cron from them, and a tick knows from them whether it is the
 last of the day.
 
+- **Built in t16** (`orchestration/tick.py`, `hari-lari-pipeline tick`): as above. The tick
+  rebuilds the warehouse when a landing run, a config file or the image changed. Cloud Run
+  retries a failed task once, so a report's chats are told it is late only once per anchor.
+  `hari-lari-pipeline` is the image's entrypoint and hands every other command to
+  `hari-lari-report`, because a Cloud Run job overrides only the arguments. Measured on 27 Nov
+  2026, locally: a dry tick due on Monday 30 Nov took 2 min 23 s (extraction 118 s, warehouse
+  2 s, weekly 21 s); the same tick due on Tuesday 1 Dec, after it, 3 s (nothing to do).
+
 ### When a report is due
 
 A report with a `schedule` is due on a date when the day-of-month, month and day-of-week fields
@@ -308,6 +316,10 @@ gives the report's sources. An `@query` source names the models it reads (`lines
 `fct_sales_lines`; `notes` reads the data checks, no model). `hari-lari-report list` and the
 semantic manifest show each report's sources, and a test pins them: weekly and stock_alert need
 `moka`.
+
+Not built yet: while `moka` is the only source, the tick treats every report as needing every
+source (`report_sources` in `orchestration/tick.py`). The derivation, its listing and its test
+come with the second source.
 
 ### Failure policy
 

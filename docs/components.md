@@ -1494,8 +1494,7 @@ filters:
 ```yaml
 schedule:
   cron: "0 6 * * *"            # five fields: minute hour day month weekday
-  timezone: Asia/Makassar      # optional; defaults to the time zone of project.yml
-  enabled: true                # optional; false keeps the scheduler job paused
+  enabled: true                # optional; false keeps the report off the daily tick
 deliver:
   when: [{ insight: low_margin_items }]   # optional; any one condition sends
   drive: { folder: "{{ anchor }} (week {{ anchor_iso_week }})", files: [pdf, xlsx] }
@@ -1503,10 +1502,14 @@ deliver:
     - { to: managers, text: daily_flash }
 ```
 
-**Schedule.** One per report; a report without one runs only on demand. The loader checks the
-cron expression and the time zone. The anchor is the report's `anchor` parameter, by default the
-rule of `project.yml` (yesterday), so the daily flash at 06:00 covers yesterday and the weekly
-report on Monday at 04:00 ends on Sunday.
+**Schedule.** One per report; a report without one runs only on demand. Since the daily tick
+(t16, D28), the day fields of the cron decide the days a report is due (standard cron: when both
+the day of month and the day of week are restricted, either may match), in the time zone of
+`project.yml`; the tick decides the time (`tick.times` in `project.yml`). The loader refuses a
+minute or hour that is not a single number (`0 */6 * * *` would promise runs that never happen)
+and the old `timezone` key. The anchor is the report's `anchor` parameter, by default the rule
+of `project.yml` (yesterday), computed from the due date, so the weekly report due on Monday
+ends on Sunday.
 
 **Telegram.** Each entry names a target and what to send: `text` (a text block of
 `outputs.telegram`), optionally `photo` (a page of `outputs.png`, with the text as its caption)
@@ -1550,28 +1553,44 @@ if one of its conditions holds, which turns a report into an alert:
 When no condition holds, the outputs are still built and stored, nothing is sent, no sent-marker
 is written, the log says which conditions were checked, and the run succeeds.
 
-**Sent-marker.** One per report and anchor, `sent/<report>/<anchor>.json`, written after the last
-delivery of a real run to the report's own targets; a run whose marker exists sends nothing
-unless `--force` is given (plan 5.3). The stored outputs go to `reports/<report>/<anchor>/`.
+**Already sent.** A real run to the report's own targets writes a `sent` record in the run
+ledger (t15, docs/architecture.md, "The run ledger"); a run for which one exists sends nothing
+unless `--force` is given (plan 5.3). The old sent-marker, `sent/<report>/<anchor>.json`, is
+still written and read until phase B is confirmed, for a rollback. The stored outputs go to
+`reports/<report>/<anchor>/`.
 
 ### Running a report
 
 One command runs any report, locally and in Cloud Run:
 
 ```text
+hari-lari-pipeline tick [--date YYYY-MM-DD] [--only <report>] [--dry-run] [--to admin] [--force]
+                        [--all-scheduled] [--scheduler]   # the daily tick (t16)
+hari-lari-pipeline schedule [--json]          # the tick's scheduler job, as deploy/ reads it
 hari-lari-report run --report weekly [--anchor YYYY-MM-DD] [--dry-run] [--to admin] [--force]
                      [--warehouse <date|path>]
 hari-lari-report run --scheduled --dry-run    # every report with a schedule, on one extraction
 hari-lari-report build --report weekly [--warehouse <date|path>] [--anchor ...] [--out DIR]
                        [--strict]  # 8.5
 hari-lari-report validate                     # every report and component, the JSON Schemas
-hari-lari-report schedules [--json]           # the schedules, as deploy/ reads them
+hari-lari-report schedules [--json]           # the reports on the tick and their cron
 hari-lari-report schema [--check]             # the JSON Schemas of reports and components
 ```
 
 `build`, `validate`, `schedules` and `schema` exist since 8.5; `run` and `--scheduled` since the
-cut-over (9.7), in `orchestration/delivery.py`, with the scheduler sync in `deploy/release.sh
-schedules`. The job itself has no arguments: every start names what to run.
+cut-over (9.7), in `orchestration/delivery.py`; `hari-lari-pipeline tick` since t16, in
+`orchestration/tick.py`, with the scheduler sync in `deploy/release.sh schedules`. The job
+itself has no arguments: every start names what to run. `hari-lari-pipeline` is the image's
+entrypoint and hands every command but `tick` and `schedule` to `hari-lari-report`.
+
+`tick` is what Cloud Scheduler starts, at 04:00 and 06:00 (docs/architecture.md, "A day"): it
+extracts each source that has not landed today, builds the warehouse when a landing run, the
+config or the image changed, and runs every report due on `--date` (default today), each on its
+own. A second tick on the same day does only what is left. `--only` limits it to one report,
+`--all-scheduled` makes every report with a schedule due (the release's dry run), `--scheduler`
+marks a start by Cloud Scheduler (the ledger's trigger, and the late notice after the last
+tick). A report not sent on its due date is sent by hand with
+`hari-lari-pipeline tick --date <due date> --only <report>`.
 
 `build` never sends anything. It opens a stored warehouse read-only (t14): `--warehouse` names
 a run date (`warehouse/<date>/` under `--data-root`, default `$DATA_ROOT`, else `data`) or the
@@ -1604,14 +1623,14 @@ alert and exits 1, as in plan 5.4.
   so a release is only promoted when every scheduled report builds.
 
 **In Google Cloud.** All reports share one Cloud Run job, so the release path keeps promoting
-exactly the live job and its dry-run twin. Each report with a schedule gets one Cloud Scheduler
-job, `hari-lari-report-<id>`, which starts that Cloud Run job with the arguments
-`run --report <id>` (a run with container overrides of the Cloud Run Admin API; the scheduler's
-account needs `roles/run.jobsExecutorWithOverrides` on the job instead of `run.invoker`). The
-release workflow syncs them from `hari-lari-report schedules --json` after a successful dry run
-and promotion: it creates or updates a scheduler job per report, pauses it when `enabled` is
-false and deletes a `hari-lari-report-*` job whose report is gone. It leaves any other scheduler
-job alone. A schedule change therefore goes live with the image that contains it. For this the
+exactly the live job and its dry-run twin. Since t16 one Cloud Scheduler job, `hari-lari-tick`,
+starts that Cloud Run job with the arguments `tick --scheduler` at the tick times of
+`project.yml` (`0 4,6 * * *`; a run with container overrides of the Cloud Run Admin API, so the
+scheduler's account needs `roles/run.jobsExecutorWithOverrides` on the job instead of
+`run.invoker`). The release workflow syncs it from `hari-lari-pipeline schedule --json` after a
+successful dry run and promotion, and deletes the `hari-lari-report-<id>` jobs of 9.7 (one per
+scheduled report, with `run --report <id>`). A rollback to an image from before the tick
+brings those back and deletes `hari-lari-tick`. Any other scheduler job is left alone. For this the
 release service account gets `roles/cloudscheduler.admin` on the project (Cloud Scheduler has no
 per-job roles) and `iam.serviceAccountUser` on the scheduler's account.
 

@@ -447,7 +447,7 @@ def test_validate_names_the_slots_a_filter_does_not_reach(capsys, tmp_path):
 
 
 def test_schedules_lists_the_reports_that_have_one(capsys, tmp_path):
-    scheduled = tracer_spec(schedule={"cron": "0 7 * * 1", "timezone": "Asia/Jakarta"})
+    scheduled = tracer_spec(schedule={"cron": "0 7 * * 1"})
     (tmp_path / "tracer.yml").write_text(yaml.safe_dump(scheduled))
     other = {**tracer_spec(id="quiet"), "outputs": {}, "text_blocks": {}, "deliver": {}}
     (tmp_path / "quiet.yml").write_text(yaml.safe_dump(other))
@@ -455,7 +455,7 @@ def test_schedules_lists_the_reports_that_have_one(capsys, tmp_path):
     found = json.loads(capsys.readouterr().out)
     assert code == 0
     assert [(s["report"], s["cron"], s["timezone"], s["enabled"]) for s in found] == [
-        ("tracer", "0 7 * * 1", "Asia/Jakarta", True)
+        ("tracer", "0 7 * * 1", "Asia/Makassar", True)  # the project's: one tick, one zone
     ]
     code = report_cli.main(["--reports", str(tmp_path), "schedules"])
     assert "tracer" in capsys.readouterr().out and code == 0

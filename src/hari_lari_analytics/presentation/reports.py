@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import re
-import zoneinfo
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -87,27 +86,29 @@ class FilterSpec(_Strict):
 
 
 class ScheduleSpec(_Strict):
+    """When the daily tick runs a report: the day fields of `cron` decide the days it is due;
+    the minute and the hour are one number each and are not read (the tick decides the time)."""
+
     cron: str
-    timezone: str | None = None
     enabled: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_timezone(cls, data: object) -> object:
+        if isinstance(data, dict) and "timezone" in data:
+            raise ValueError(
+                "timezone: remove the key; every report runs on the daily tick, in the time "
+                "zone of project.yml"
+            )
+        return data
 
     @field_validator("cron")
     @classmethod
     def _cron(cls, cron: str) -> str:
-        problem = cron_problem(cron)
+        problem = cron_problem(cron) or _time_problem(cron)
         if problem:
             raise ValueError(problem)
         return cron
-
-    @field_validator("timezone")
-    @classmethod
-    def _zone(cls, name: str | None) -> str | None:
-        if name is not None:
-            try:
-                zoneinfo.ZoneInfo(name)
-            except (zoneinfo.ZoneInfoNotFoundError, ValueError):
-                raise ValueError(f"{name!r} is not a time zone") from None
-        return name
 
 
 class ComponentRef(_Strict):
@@ -353,6 +354,50 @@ def cron_problem(cron: str) -> str | None:
             if any(not low <= v <= high for v in values) or (last and values[0] > values[1]):
                 return f"{cron!r}: {label}: {part!r} is outside {low}-{high}"
     return None
+
+
+def _time_problem(cron: str) -> str | None:
+    minute, hour = cron.split()[:2]
+    if minute.isdigit() and hour.isdigit():
+        return None
+    return (
+        f"{cron!r}: the minute and the hour must each be one number; the daily tick decides "
+        "the time, so a list or a range would promise runs that never happen"
+    )
+
+
+def _cron_values(text: str, low: int, high: int, names: dict[str, int]) -> set[int]:
+    """The numbers a valid cron field matches."""
+
+    def number(token: str) -> int:
+        return names.get(token.lower(), int(token) if token.isdigit() else low)
+
+    values: set[int] = set()
+    for part in text.split(","):
+        body, _, step = part.partition("/")
+        if body == "*":
+            first, last = low, high
+        else:
+            start, _, end = body.partition("-")
+            first = number(start)
+            last = number(end) if end else (high if step else first)
+        values.update(range(first, last + 1, int(step) if step else 1))
+    return values
+
+
+def cron_matches(cron: str, day: date) -> bool:
+    """Whether the day fields of a valid cron expression match `day`: the month, and the day of
+    month and day of week as standard cron does (when both are restricted, either may match; a
+    field that starts with `*` counts as unrestricted)."""
+    _, _, monthday, month, weekday = cron.split()
+    month_field, weekday_field = _CRON_FIELDS[3], _CRON_FIELDS[4]
+    if day.month not in _cron_values(month, *month_field[1:]):
+        return False
+    on_monthday = day.day in _cron_values(monthday, 1, 31, {})
+    on_weekday = day.isoweekday() % 7 in {v % 7 for v in _cron_values(weekday, *weekday_field[1:])}
+    if monthday.startswith("*") or weekday.startswith("*"):
+        return on_monthday and on_weekday
+    return on_monthday or on_weekday
 
 
 # --- loaded reports -------------------------------------------------------------------------------

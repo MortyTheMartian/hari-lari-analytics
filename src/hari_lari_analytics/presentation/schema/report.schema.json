@@ -694,22 +694,11 @@
     },
     "ScheduleSpec": {
       "additionalProperties": false,
+      "description": "When the daily tick runs a report: the day fields of `cron` decide the days it is due;\nthe minute and the hour are one number each and are not read (the tick decides the time).",
       "properties": {
         "cron": {
           "title": "Cron",
           "type": "string"
-        },
-        "timezone": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Timezone"
         },
         "enabled": {
           "default": true,

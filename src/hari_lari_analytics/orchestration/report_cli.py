@@ -125,9 +125,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 
 def add_run_parser(commands) -> None:
-    env = os.environ.get
     run = commands.add_parser(
-        "run", help="extract, build, store and deliver a report (the job of every schedule)"
+        "run", help="extract, build, store and deliver a report (by hand; the tick runs them daily)"
     )
     which = run.add_mutually_exclusive_group(required=True)
     which.add_argument("--report", help="a report id, or the path of its file")
@@ -140,36 +139,42 @@ def add_run_parser(commands) -> None:
         "of project.yml)",
     )  # fmt: skip
     run.add_argument(
-        "--dry-run", action="store_true",
-        help="do everything except sending; files go under dry-run/",
-    )  # fmt: skip
-    run.add_argument(
-        "--to", choices=sorted(project().telegram_targets),
-        help="send every Telegram delivery to this chat instead; no sent-marker",
-    )  # fmt: skip
-    run.add_argument("--force", action="store_true", help="send even if it was already sent")
-    run.add_argument(
         "--warehouse",
         help="an existing warehouse instead of a new extraction and build: a run date, or the "
         "path or gs:// URL of a warehouse.duckdb or of its folder",
     )  # fmt: skip
-    run.add_argument("--data-root", help=DATA_ROOT_HELP)
-    run.add_argument("--config", help=CONFIG_HELP)
-    run.add_argument(
+    add_job_options(run)
+
+
+def add_job_options(parser: argparse.ArgumentParser) -> None:
+    """The options of a run that may send (`run`, and `hari-lari-pipeline tick`)."""
+    env = os.environ.get
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="do everything except sending; files go under dry-run/",
+    )  # fmt: skip
+    parser.add_argument(
+        "--to", choices=sorted(project().telegram_targets),
+        help="send every Telegram delivery to this chat instead; not recorded as sent",
+    )  # fmt: skip
+    parser.add_argument("--force", action="store_true", help="send even if it was already sent")
+    parser.add_argument("--data-root", help=DATA_ROOT_HELP)
+    parser.add_argument("--config", help=CONFIG_HELP)
+    parser.add_argument(
         "--drive-folder-id", default=env("DRIVE_FOLDER_ID"),
         help="the Drive folder the report folders go into",
     )  # fmt: skip
     # The extraction: the same options and environment variables as hari-lari-extract
-    run.add_argument("--since", default=DEFAULT_SINCE, help="first day of the extraction")
-    run.add_argument(
+    parser.add_argument("--since", default=DEFAULT_SINCE, help="first day of the extraction")
+    parser.add_argument(
         "--token-store", choices=["file", "secret"], default=env("TOKEN_STORE", "file")
     )
-    run.add_argument(
+    parser.add_argument(
         "--token-file", type=Path,
         default=Path(env("MOKA_TOKEN_FILE", "extraction/moka/.token.json")),
     )  # fmt: skip
-    run.add_argument("--gcp-project", default=env("GCP_PROJECT"))
-    run.add_argument("--token-secret", default=env("MOKA_TOKEN_SECRET", "moka-oauth-token"))
+    parser.add_argument("--gcp-project", default=env("GCP_PROJECT"))
+    parser.add_argument("--token-secret", default=env("MOKA_TOKEN_SECRET", "moka-oauth-token"))
 
 
 # --- run ------------------------------------------------------------------------------------------
@@ -394,7 +399,7 @@ def schema_checks() -> list[tuple[str, Path, str]]:
 
 
 def schedules(reports: dict[str, Report]) -> list[dict]:
-    """The reports that have a schedule, as `deploy/` reads them: what to start and when."""
+    """The reports on the daily tick: the cron whose day fields say when each is due."""
     found = []
     for report in sorted(reports.values(), key=lambda r: r.id):
         s = report.spec.schedule
@@ -404,7 +409,7 @@ def schedules(reports: dict[str, Report]) -> list[dict]:
             {
                 "report": report.id,
                 "cron": s.cron,
-                "timezone": s.timezone or project().timezone,
+                "timezone": project().timezone,
                 "enabled": s.enabled,
                 "args": ["run", "--report", report.id],
             }
