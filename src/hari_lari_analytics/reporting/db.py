@@ -24,15 +24,16 @@ import pandas as pd
 import yaml
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from hari_lari_analytics.load import (
+from hari_lari_analytics.project import Project, project
+from hari_lari_analytics.reporting.checks import CheckReport, check
+from hari_lari_analytics.reporting.inputs import (
+    ApiRun,
     InputError,
     load_aliases,
     load_calendar_events,
     load_category_groups,
+    load_run,
 )
-from hari_lari_analytics.load_api import ApiRun, load_run
-from hari_lari_analytics.project import Project, project
-from hari_lari_analytics.reporting.checks import CheckReport, check
 from hari_lari_analytics.reporting.model_specs import model_sql
 
 LAYER_RANK = {"raw": 0, "seed": 0, "stg": 1, "int": 2, "dim": 3, "fct": 4}
@@ -104,7 +105,7 @@ SEED_SOURCES = {
 
 @dataclass(frozen=True)
 class Seeds:
-    """The validated config files (see `load.py`), as DataFrames."""
+    """The validated config files (see `inputs.py`), as DataFrames."""
 
     item_aliases: pd.DataFrame
     category_groups: pd.DataFrame

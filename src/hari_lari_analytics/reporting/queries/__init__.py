@@ -14,9 +14,9 @@ from typing import Any
 import duckdb
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from hari_lari_analytics.load_api import ApiRun
 from hari_lari_analytics.reporting.checks import CheckReport
 from hari_lari_analytics.reporting.compiler import Query, QueryError, run_query
+from hari_lari_analytics.reporting.inputs import ApiRun
 from hari_lari_analytics.reporting.registry import Registry, default_registry
 from hari_lari_analytics.reporting.result import Result
 from hari_lari_analytics.reporting.windows import Calendar

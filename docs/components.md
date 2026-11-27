@@ -137,11 +137,12 @@ src/hari_lari_analytics/
   project.py          # load and validate project.yml; project() is the setting of the process
 src/hari_lari_analytics/reporting/
   __init__.py
+  inputs.py           # read an extraction run and validate the config CSVs (the seeds)
   db.py               # open DuckDB, load seeds, build the models in layer order
   model_specs.py      # load and validate models.yml
   checks.py           # run checks.yml; a broken check fails the build
   registry.py         # load and validate metrics.yml, dimensions.yml, kpi_tree.yml
-  windows.py          # window resolver, built on periods.py
+  windows.py          # periods and the window resolver
   compiler.py         # semantic query -> SQL -> Result
   result.py           # Result and ResultMeta
   transforms/
@@ -249,7 +250,7 @@ key fails with the file name and the key) and `project()` hands the settings to 
 | `currency` | the code (`IDR`) and the decimals of an amount | the format helpers, the PDF, the caption |
 | `numbers` | thousands and decimal separator; `compact`, the short forms of large numbers (`2.50M`, `85k`) | `idr`, `pct`, `compact`, `headline`, `change_text` |
 | `timezone` | the time zone of the business | the extraction, the anchor, the weekly job; the Dockerfile, `deploy/setup.sh` and the scheduler must use the same, and a test checks the first two |
-| `first_weekday` | the first day of the week (`monday` ... `sunday`) | `sale_week` in the models (`week_start` macro, from `run_context`) and in the pandas lines, the complete weeks of `L<n>W`, `WTD`, the buckets of the windows, "last week" in the extraction check |
+| `first_weekday` | the first day of the week (`monday` ... `sunday`) | `sale_week` in the models (`week_start` macro, from `run_context`), the complete weeks of `L<n>W`, `WTD`, the buckets of the windows, "last week" in the extraction check |
 | `min_n` | the default sample-size rule | the registry (`Registry.default_min_n`) |
 | `anchor` | the last day of a report when none is given: `yesterday` or `today` | `hari-lari-report` |
 | `reference_date` | the date on which the loader compiles components without data | `check_calendar()` in `components.py` |
@@ -273,17 +274,17 @@ the names that appear in the text: a name in a comment or a string is not a depe
 is not a table. It refuses a reference to a higher layer and builds the models in dependency
 order. A model that DuckDB cannot parse fails with its name and DuckDB's message. Two helpers
 are registered on the connection: the Python function `title_case`, Python's `str.title`, so
-variants are capitalised exactly as in the pandas pipeline, and the macro `week_start(date)`,
+variants are capitalised as Python does it, and the macro `week_start(date)`,
 the first day of the week of `project.yml`.
 
 - **`seed_*`**: `config/item_aliases.csv`, `config/category_group.csv`,
-  `config/calendar_events.csv`, and later the margin, target and fee files. The existing Python
-  loaders in `load.py` validate each file before it is registered, so a bad CSV fails with the
-  same messages as today.
+  `config/calendar_events.csv`, and later the margin, target and fee files. The loaders in
+  `inputs.py` validate each file before it is registered, so a bad CSV fails with a message
+  that names the file and the row.
 - **`stg_*`**: one per Parquet table. They select and rename only the needed columns, cast
   types, drop the `+07:00` offset from timestamps (naive Bali clock time) and drop personal
   data (`customer_name`, `customer_phone`, `customer_email`, `collected_by`, `served_by`, ...).
-- **`int_*`**: the cleaning rules of `load_api.py` and `clean.py`: refund payments as negative
+- **`int_*`**: the cleaning rules (METRICS.md): refund payments as negative
   lines, the item and category resolution by `item_id` with the alias fallback, `Custom Amount`,
   variant capitalisation, fully refunded receipts. Plus the order attributes and the item
   lifecycle.
@@ -298,10 +299,8 @@ the first day of the week of `project.yml`.
   `item_variants` table (from before it was extracted) keeps the label of the time of the sale.
   `item_variant` (the raw label of the Excel lines) stays as sold. An accepted edge: a deleted
   variant beside live, named variants of the same item is its own row "X" next to "X-Small".
-  The pandas lines (`dimensions.add_dimensions`, which the parity tests compare with) apply the
-  same rule.
-- **`fct_sales_lines`**: line grain. The columns of today's cleaned lines (the result of
-  `load_api_sales` plus `add_dimensions` and `add_category_groups`), so every existing metric
+- **`fct_sales_lines`**: line grain. The columns of the cleaned lines of the former pandas pipeline,
+  so every existing metric
   and dimension keeps its name: ids, `receipt_nr`, `sale_ts`, the time truncations,
   `adjusted_item`, `adjusted_item_variant`, `adjusted_category`, the category groups,
   `quantity`, the four money columns, `discount_code`, `payment_type`, `is_refund`,
@@ -329,8 +328,8 @@ the first day of the week of `project.yml`.
   and `has_promotion`. `fct_orders` and `fct_sales_lines` carry the event of their day. The
   compiler uses the calendar to fill empty time buckets and to count trading days.
 
-The parity rule of plan 7.3: on the saved fixture and on a real run, `fct_sales_lines` equals the
-pandas lines row for row.
+The parity rule of plan 7.3: on the saved fixture, `fct_sales_lines` equals the lines of the
+former pandas pipeline row for row, frozen in `tests/golden/` (plan t5).
 
 **`models.yml`** (plan 7A.3) describes every model, one entry per SQL file; a missing or extra
 entry fails the load. The compiler, the registry, the checks and the JSON Schema read it, so a new
@@ -395,7 +394,7 @@ totals:                                         # sum, min, max or count of mode
 ```
 
 Besides these, the checks cover fractional Rupiah amounts and lines without a payment (both
-were errors in `load_api.py`), unique payments, items, categories and days, the relationships
+were errors in the pandas pipeline), unique payments, items, categories and days, the relationships
 of the lines to every dimension, and the totals of all four money columns and the quantity.
 
 ## Semantic layer
@@ -649,8 +648,9 @@ where a value is missing, for example the category AOV of a category without ord
 ## Windows
 
 `windows.py` turns a window name and the anchor into a `Window` (start, end inclusive, default
-grain, title, label, trading days) plus an optional comparison `Window`. It wraps `periods.py`,
-so L14D, L6W and L3M keep their tests.
+grain, title, label, trading days) plus an optional comparison `Window`. Each name is a
+`Period` with its own prior period; L14D, L6W and L3M are checked against the periods of the
+former pandas pipeline (`tests/golden/periods.csv`).
 
 | Window | Range | Default grain |
 | --- | --- | --- |
@@ -1123,10 +1123,15 @@ an option may choose a role (`role: small`), never a size.
 A visual is a registered Python function:
 
 ```python
-@visual("table", options=TableOptions, accepts=("rows", "single"), min_size=(0.25, 0.20),
-        check=table_needs, text=table_text)
-def table(area: Area, result: Result, options: TableOptions, ctx: DrawContext) -> None:
-    ...
+@visual(
+    "table",
+    options=TableOptions,
+    accepts=("rows", "single"),
+    min_size=(0.25, 0.20),
+    check=table_needs,
+    text=table_text,
+)
+def table(area: Area, result: Result, options: TableOptions, ctx: DrawContext) -> None: ...
 ```
 
 - `area` is the figure and the rectangle the visual may use (the inside of its slot's card, in
@@ -1818,12 +1823,12 @@ No step needed Python beyond what the framework provides. With `facet: { by: per
 
 ## Testing
 
-- **Models** (plan 7.3): `fct_sales_lines` equals the pandas lines on the fixture and on a real
-  run; row counts match phase 2.
+- **Models** (plan 7.3): `fct_sales_lines` equals the golden lines of the former pandas pipeline
+  on the fixture and 14 variations of it (`tests/golden/`).
 - **Checks** (7.5): each check type fails on a fixture built to break it.
 - **Registries and KPI tree** (7.6, 7.7): every metric and dimension of METRICS.md is defined;
   every identity holds on a real run.
-- **Windows** (7.8): the existing `test_periods.py` cases pass through the resolver, plus new
+- **Windows** (7.8): the periods of the old report pass through the resolver, plus new
   cases for WTD, MTD, `last_n_*`, `last_year` and `block_7d`.
 - **Compiler** (7.9): hand-computed results on a small fixture for totals, prior-only rows, top
   N with "Other", bins, filters, filtered metrics, series, trading days and invalid queries;
@@ -1839,8 +1844,8 @@ No step needed Python beyond what the framework provides. With `facet: { by: per
 - **CLI and snapshots** (7.14): every command on a Parquet copy of the fixture run and the
   fixture components; a golden result per packaged component.
 - **Tracer check** (7.15, the exit of phase 7): the packaged `full_history_kpis` and
-  `category_contributive_aov` run through the loader, compiler and facet engine on the run of
-  2026-11-22 and equal today's report built by the old pandas pipeline from the same run: the
+  `category_contributive_aov` run through the loader, compiler and facet engine on the
+  fixture and equal the golden numbers of the former pandas pipeline (`tests/golden/`): the
   cover's full-history KPIs, and the categories table with its total and hint in L14D, L6W and
   L3M; the CLI prints the same numbers.
 - **Visuals and layouts** (8.2, 8.4): every visual renders on the fixture; no text overflows.
@@ -1881,8 +1886,8 @@ cut-over. There was no pixel diff: the numbers had to match, the drawing could i
   ones go to `reports/weekly/<anchor>/`.
 - `--to admin`, `--force`, `--dry-run` and `--anchor` kept the meaning they had in the old
   command.
-- The reports read API runs only. The back-office CSV loader stays for a parity test and goes
-  after four good Mondays (6.7), with the pandas pipeline that the model tests compare against.
+- The reports read API runs only. The back-office CSV loader and the pandas pipeline were
+  deleted in plan t6; the model tests compare with their frozen results (`tests/golden/`).
 
 ## Out of scope
 

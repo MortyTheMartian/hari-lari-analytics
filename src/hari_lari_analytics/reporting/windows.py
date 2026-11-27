@@ -1,8 +1,8 @@
 """Windows: date ranges relative to the anchor, their comparison, time buckets and trading days.
 
 A window name is one of `L<n>D`, `L<n>W`, `L<n>M` (so `L14D`, `L6W`, `L3M`), the same as
-`last_n_days(n)`, `last_n_weeks(n)` and `last_n_months(n)`, or `WTD`, `MTD` and `full`. The
-ranges come from `periods.py`, so the old report and the framework agree. The comparison is
+`last_n_days(n)`, `last_n_weeks(n)` and `last_n_months(n)`, or `WTD`, `MTD` and `full`, each a
+`Period` anchored on the last sale date with its own prior period. The comparison is
 `prior` (the period's own prior: the same length directly before, or the same weekdays a week
 earlier for windows shorter than a week, WTD and MTD), `last_year` (364 days earlier, so
 weekdays line up; 12 months earlier for month windows, MTD and `full`) or `none`. A comparison
@@ -18,8 +18,6 @@ from typing import Literal
 
 import duckdb
 
-from hari_lari_analytics import periods
-from hari_lari_analytics.periods import Period, shift_months
 from hari_lari_analytics.project import project
 
 Grain = Literal["day", "week", "month", "block_7d"]
@@ -139,22 +137,156 @@ def parse_window(name: str) -> tuple[str, int | None]:
     return unit, n
 
 
+# ---- periods: the date ranges of the window names, each with its prior period ----------
+
+
+@dataclass(frozen=True)
+class Period:
+    key: str
+    title: str
+    start: date
+    end: date  # inclusive
+    grain: str  # "sale_date", "sale_week" or "sale_month"
+    prior_start: date
+    prior_end: date
+
+
+def _month_start(d: date, months_back: int) -> date:
+    index = d.year * 12 + d.month - 1 - months_back
+    return date(index // 12, index % 12 + 1, 1)
+
+
+def _month_end(d: date) -> date:
+    return _month_start(d, -1) - timedelta(days=1)
+
+
+def shift_months(d: date, months: int) -> date:
+    """The same day `months` months later (negative: earlier), cut to the month's last day.
+
+    A month's last day maps to the last day of the target month (28 Feb 2029 -> 29 Feb 2028).
+    """
+    start = _month_start(d, -months)
+    last = _month_end(start).day
+    return start.replace(day=last if d == _month_end(d) else min(d.day, last))
+
+
+def _plural(n: int, unit: str) -> str:
+    return unit if n == 1 else f"{n} {unit}s"
+
+
+def last_n_days(anchor: date, n: int) -> Period:
+    """The n days up to the anchor, against the n days before.
+
+    A window shorter than a week is compared with the same weekdays a week earlier instead, so
+    a Saturday is compared with the Saturday before.
+    """
+    start = anchor - timedelta(days=n - 1)
+    back = timedelta(days=7 if n < 7 else n)
+    return Period(
+        key=f"L{n}D",
+        title=f"Last {_plural(n, 'day')}",
+        start=start,
+        end=anchor,
+        grain="sale_date",
+        prior_start=start - back,
+        prior_end=anchor - back,
+    )
+
+
+def last_n_weeks(anchor: date, n: int) -> Period:
+    """The last n complete weeks up to the anchor date (the week starts on `first_weekday` of
+    project.yml: Monday–Sunday by default)."""
+    week = project()
+    end = anchor if anchor == week.week_end(anchor) else week.week_start(anchor) - timedelta(days=1)
+    start = end - timedelta(days=7 * n - 1)
+    return Period(
+        key=f"L{n}W",
+        title=f"Last {_plural(n, 'complete week')}",
+        start=start,
+        end=end,
+        grain="sale_week",
+        prior_start=start - timedelta(days=7 * n),
+        prior_end=start - timedelta(days=1),
+    )
+
+
+def last_n_months(anchor: date, n: int) -> Period:
+    """The last n complete calendar months up to the anchor date."""
+    last_month = anchor if _month_end(anchor) == anchor else _month_start(anchor, 1)
+    start = _month_start(last_month, n - 1)
+    return Period(
+        key=f"L{n}M",
+        title=f"Last {_plural(n, 'complete month')}",
+        start=start,
+        end=_month_end(last_month),
+        grain="sale_month",
+        prior_start=_month_start(start, n),
+        prior_end=start - timedelta(days=1),
+    )
+
+
+def week_to_date(anchor: date) -> Period:
+    """The anchor's week up to the anchor, against the same weekdays a week earlier."""
+    start = project().week_start(anchor)
+    return Period(
+        key="WTD",
+        title="Week to date",
+        start=start,
+        end=anchor,
+        grain="sale_date",
+        prior_start=start - timedelta(days=7),
+        prior_end=anchor - timedelta(days=7),
+    )
+
+
+def month_to_date(anchor: date) -> Period:
+    """The anchor's month up to the anchor, against the same days of the month before.
+
+    The comparison stops at the end of the month before when that month is shorter.
+    """
+    start = anchor.replace(day=1)
+    prior_start = _month_start(anchor, 1)
+    return Period(
+        key="MTD",
+        title="Month to date",
+        start=start,
+        end=anchor,
+        grain="sale_date",
+        prior_start=prior_start,
+        prior_end=prior_start.replace(day=min(anchor.day, _month_end(prior_start).day)),
+    )
+
+
+def full_history(anchor: date, first_sale: date) -> Period:
+    """From the first sale to the anchor; its prior period always lies before the first sale."""
+    days = timedelta(days=(anchor - first_sale).days + 1)
+    return Period(
+        key="full",
+        title="Full history",
+        start=first_sale,
+        end=anchor,
+        grain="sale_month",
+        prior_start=first_sale - days,
+        prior_end=first_sale - timedelta(days=1),
+    )
+
+
 def _period(name: str, calendar: Calendar) -> Period:
     kind, n = parse_window(name)
     anchor = calendar.anchor
     match kind:
         case "days":
-            return periods.last_n_days(anchor, n)
+            return last_n_days(anchor, n)
         case "weeks":
-            return periods.last_n_weeks(anchor, n)
+            return last_n_weeks(anchor, n)
         case "months":
-            return periods.last_n_months(anchor, n)
+            return last_n_months(anchor, n)
         case "WTD":
-            return periods.week_to_date(anchor)
+            return week_to_date(anchor)
         case "MTD":
-            return periods.month_to_date(anchor)
+            return month_to_date(anchor)
         case _:
-            return periods.full_history(anchor, calendar.first_sale or anchor)
+            return full_history(anchor, calendar.first_sale or anchor)
 
 
 def _prior_label(kind: str, n: int | None) -> str:

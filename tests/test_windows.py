@@ -2,7 +2,6 @@ from datetime import date, timedelta
 
 import pytest
 
-from hari_lari_analytics.periods import shift_months
 from hari_lari_analytics.reporting.db import connect
 from hari_lari_analytics.reporting.windows import (
     Bucket,
@@ -12,6 +11,7 @@ from hari_lari_analytics.reporting.windows import (
     buckets,
     parse_window,
     resolve,
+    shift_months,
 )
 
 from . import golden
@@ -29,7 +29,7 @@ def _ranges(w):
     return (w.current.start, w.current.end), (w.comparison.start, w.comparison.end)
 
 
-# the cases of test_periods.py, through the resolver
+# the periods of the weekly report's sections
 @pytest.mark.parametrize(
     "name, anchor, current, prior",
     [

@@ -44,10 +44,10 @@ The reports read the Parquet tables of a Moka API extraction run (`hari-lari-ext
 default the latest run in `data/extract/`. No export has to be downloaded by hand, and the item
 library is not needed: items are matched by their Moka id.
 
-The two back-office exports (item library and sales _Item Details_) were the first source. Their
-loader (`load.py`, `clean.py`) stays only for a parity test: for the 948 receipts and 1,700 lines
-up to 31 Oct 2026 both sources give identical lines (`tests/test_load_api.py`, when the real
-data is present). It goes once the API source has had four good Mondays (plan 6.7).
+The two back-office exports (item library and sales _Item Details_) were the first source, read
+by a pandas pipeline. For the 948 receipts and 1,700 lines up to 31 Oct 2026 both sources gave
+identical lines. The pipeline was retired after four good Mondays; its results on the test
+fixture are kept in `tests/golden/`, and the models are tested against them.
 
 ## Run
 
@@ -138,17 +138,15 @@ item names to today's names and, where needed, overrides the category:
 
 | Column              | Meaning                                                  |
 | ------------------- | -------------------------------------------------------- |
-| `sales_item`        | Item name exactly as it appears in the sales export      |
+| `sales_item`        | Item name exactly as it was sold                         |
 | `adjusted_item`     | Today's item name (empty: keep the sales name)           |
-| `adjusted_category` | Category override (empty: take it from the item library) |
+| `adjusted_category` | Category override (empty: take it from the Moka catalog) |
 | `note`              | Free text, ignored by the program                        |
 
 The alias file wins when it lists a sales name; every other item follows its Moka id to today's
 name and category (see [METRICS.md](METRICS.md)). So the file only needs rows for what an id
 cannot tell: deleted items merged into a live one, add-ons that reuse an old item id, and
-categories that Moka still has as `Uncategorized`. A renamed item needs no row. The CSV loader
-matches by name and needs a row for every rename (`tests/fixtures/item_aliases_full_2026-11.csv`
-is the full list, for its parity test).
+categories that Moka still has as `Uncategorized`. A renamed item needs no row.
 
 ## Using it for your own cafe
 
@@ -204,9 +202,8 @@ uv run ruff check . && uv run ruff format --check .
 
 Code lives in `src/hari_lari_analytics/`: `extract/` (the Moka API extraction), `reporting/`
 (the models, components, reports, outputs and the report job; `docs/components.md`), and
-`deliver/` (Telegram and Drive). `report_excel.py` writes the sheets of the Excel lines. The old
-pandas pipeline (`load.py`, `clean.py`, `load_api.py`, `dimensions.py`, `metrics.py`,
-`periods.py`) stays as the oracle of the model tests until plan 6.7.
+`deliver/` (Telegram and Drive). `docs/architecture.md` describes the modules the code is moving
+to.
 
 ## License
 

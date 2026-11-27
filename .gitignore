@@ -1,6 +1,5 @@
 # Real data and generated reports never leave this machine
-data/input/*
-!data/input/.gitkeep
+data/input/
 data/output/*
 data/extract/
 data/jobs/

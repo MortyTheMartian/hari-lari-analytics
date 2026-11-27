@@ -70,7 +70,7 @@ derived, plus `total.<metric>`: penetration, share). Give `label`, `description`
 for neutral) and `additivity` (`full`, `order_grain`, `none`; a ratio is `none`). Set `min_n` only
 when the default rule (30 of the model's `sample_size` count) is wrong for it. The loader checks
 every reference and says which metric and model fail. Add a test with a hand-computed value to
-`tests/test_metrics.py`, and describe a business definition in `METRICS.md`.
+`tests/test_registry.py`, and describe a business definition in `METRICS.md`.
 
 A new column a metric needs comes from the SQL of a model in `models/` (`models.yml` has the
 metadata: primary key, time column, whether it is exposed); a new way to group is a dimension

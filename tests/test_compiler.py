@@ -20,10 +20,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.load_api import ApiRun
 from hari_lari_analytics.reporting.checks import check
 from hari_lari_analytics.reporting.compiler import Query, QueryError, compile_query, run_query
 from hari_lari_analytics.reporting.db import connect, open_run
+from hari_lari_analytics.reporting.inputs import ApiRun
 from hari_lari_analytics.reporting.queries import (
     QueryContext,
     SourceQuery,

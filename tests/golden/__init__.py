@@ -1,6 +1,7 @@
-"""The results of the pandas pipeline on the fixture, frozen as CSV files by `make_golden.py`
-(plan t5): the expected `fct_sales_lines` of each case, the report periods, and the numbers
-of the cover, the periods, the categories and the payment types.
+"""The results of the former pandas pipeline on the fixture, frozen as CSV files (plan t5): the
+expected `fct_sales_lines` of each case, the report periods, and the numbers of the cover, the
+periods, the categories and the payment types. Nothing writes them any more: a deliberate change
+to the lines or periods is made in these files by hand.
 
 Values are stored as text: an empty cell is NULL, booleans are `true` and `false`, dates and
 timestamps are ISO timestamps, whole numbers have no decimals and other floats are `repr`.
@@ -76,7 +77,7 @@ def assert_lines(actual: pd.DataFrame, case: str = "fixture", columns: list[str]
 
 @dataclass(frozen=True)
 class Period:
-    """A report period (L14D, L6W, L3M) of an anchor, as `periods.report_periods` gave it."""
+    """A report period (L14D, L6W, L3M) of an anchor, as the pandas pipeline had it."""
 
     key: str
     title: str

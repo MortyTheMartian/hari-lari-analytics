@@ -4,8 +4,8 @@ A component's sheet holds its result in the output convention (dimension columns
 `prior_*`, `*_change`, `*_delta`, the sample sizes), as numbers that Excel can compute with,
 under the labels of the registry and with a number format per metric format. A component with
 facets by dimension or period writes them under one another with a `Facet` column first. The
-`lines_export` source writes the lines table and its column guide, the same as the legacy
-Excel file (`report_excel.py`), without personal data and without the line note.
+`lines_export` source writes the lines as a filterable table, ready for pivoting, and a column
+guide, without personal data and without the line note.
 """
 
 from __future__ import annotations
@@ -16,11 +16,12 @@ from pathlib import Path
 
 import pandas as pd
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.table import Table, TableStyleInfo
 
-from hari_lari_analytics.report_excel import write_lines_sheets
 from hari_lari_analytics.reporting import formats
 from hari_lari_analytics.reporting.facets import Facet
 from hari_lari_analytics.reporting.queries import SourceQuery
+from hari_lari_analytics.reporting.queries.lines_export import COLUMNS
 from hari_lari_analytics.reporting.result import Result
 
 FORMATS = {
@@ -142,6 +143,49 @@ def write_component_sheet(writer: pd.ExcelWriter, name: str, facets: Sequence[Fa
         if fmt:
             for (cell,) in ws.iter_rows(min_row=2, min_col=index, max_col=index):
                 cell.number_format = fmt
+
+
+PIVOT_TIPS = [
+    "Gross / Discounts / Refunds / Net Sales IDR, Items Sold (= Quantity): use Sum.",
+    "Orders: tick 'Add this data to the Data Model' when inserting the PivotTable, filter "
+    "'Counts As Order' = TRUE, then use 'Distinct Count' of Receipt Nr. Never sum orders "
+    "across categories or items: one receipt can contain several.",
+    "Average Order Value = Net Sales IDR / Orders.",
+    "% Category Order Penetration = orders containing the category / all orders in the same "
+    "filter. It is easiest to read in the PDF report.",
+    "Category AOV = net sales of the category / orders containing the category. "
+    "Contributive AOV = penetration × Category AOV = net sales of the category / all orders; "
+    "it adds up to the Average Order Value over all categories.",
+]
+
+
+def write_lines_sheets(writer: pd.ExcelWriter, lines: pd.DataFrame) -> None:
+    """The lines table and its column guide as two sheets of an open workbook (openpyxl)."""
+    columns = [c for c, *_ in COLUMNS]
+    data = lines[columns].rename(columns={c: h for c, h, *_ in COLUMNS})
+    data = data.sort_values(["Sale Timestamp", "Receipt Nr"]).reset_index(drop=True)
+
+    data.to_excel(writer, sheet_name="Sales Lines", index=False)
+    ws = writer.sheets["Sales Lines"]
+    last = f"{get_column_letter(len(COLUMNS))}{len(data) + 1}"
+    table = Table(displayName="SalesLines", ref=f"A1:{last}")
+    table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium7", showRowStripes=True)
+    ws.add_table(table)
+    ws.freeze_panes = "B2"
+    for index, (_, header, number_format, _) in enumerate(COLUMNS, start=1):
+        letter = get_column_letter(index)
+        ws.column_dimensions[letter].width = max(12, len(header) + 4)
+        if number_format:
+            for (cell,) in ws.iter_rows(min_row=2, min_col=index, max_col=index):
+                cell.number_format = number_format
+
+    guide = pd.DataFrame([(h, d) for _, h, _, d in COLUMNS], columns=["Column", "Description"])
+    guide.to_excel(writer, sheet_name="Column Guide", index=False)
+    tips = pd.DataFrame({"How to pivot": PIVOT_TIPS})
+    tips.to_excel(writer, sheet_name="Column Guide", index=False, startrow=len(guide) + 2)
+    guide_ws = writer.sheets["Column Guide"]
+    guide_ws.column_dimensions["A"].width = 28
+    guide_ws.column_dimensions["B"].width = 90
 
 
 def is_lines_export(query: object) -> bool:
