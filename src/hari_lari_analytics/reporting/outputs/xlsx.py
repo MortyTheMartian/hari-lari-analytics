@@ -163,7 +163,7 @@ def write_lines_sheets(writer: pd.ExcelWriter, lines: pd.DataFrame) -> None:
     """The lines table and its column guide as two sheets of an open workbook (openpyxl)."""
     columns = [c for c, *_ in COLUMNS]
     data = lines[columns].rename(columns={c: h for c, h, *_ in COLUMNS})
-    data = data.sort_values(["Sale Timestamp", "Receipt Nr"]).reset_index(drop=True)
+    data = data.sort_values(["Sale Timestamp", "Receipt Nr"], kind="stable").reset_index(drop=True)
 
     data.to_excel(writer, sheet_name="Sales Lines", index=False)
     ws = writer.sheets["Sales Lines"]

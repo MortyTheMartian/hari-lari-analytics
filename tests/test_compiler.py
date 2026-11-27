@@ -461,6 +461,17 @@ def test_the_lines_export_has_the_excel_columns_and_never_the_note(con):
     )
 
 
+def test_the_lines_export_orders_the_lines_of_one_receipt_and_second_by_their_key(con):
+    r = execute(parse_query({"source": "lines_export"}), QueryContext.create(con))
+    expected = con.execute(
+        "select item from fct_sales_lines order by sale_ts, receipt_nr, payment_id, line_uuid"
+    ).fetchall()
+    assert r.df["item"].tolist() == [item for (item,) in expected]
+    assert r.df.loc[r.df["receipt_nr"] == "R004", "item"].tolist() == [
+        "Nasi Campur", "Nasi Campur", "Mystery Cake"
+    ]  # fmt: skip
+
+
 def test_the_data_notes(con):
     run = ApiRun("data/extract/2026-10-13", {}, {"warnings": ["last sale is old"]})
     ctx = QueryContext.create(con, run=run, checks=check(con))

@@ -76,6 +76,7 @@ EXPORT_COLUMNS = [c for c, *_ in COLUMNS]
 @query("lines_export")
 def lines_export(ctx: QueryContext, options: NoOptions) -> Result:
     df = ctx.con.execute(
-        f"select {', '.join(EXPORT_COLUMNS)} from fct_sales_lines order by sale_ts, receipt_nr"
+        f"select {', '.join(EXPORT_COLUMNS)} from fct_sales_lines "
+        "order by sale_ts, receipt_nr, payment_id, line_uuid"
     ).df()
     return Result(df, ResultMeta(shape="rows", window=None, empty=df.empty))
