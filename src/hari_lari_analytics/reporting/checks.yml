@@ -5,7 +5,17 @@
 
 models:
   stg_transactions:
+    sample_columns: [receipt_nr, refund_amount]
     not_null: [payment_id, receipt_nr, sale_ts]
+    expressions:
+      - expr: >-
+          not is_refund or coalesce(refund_amount, 0) = (
+              select coalesce(sum(l.refunds), 0) from int_signed_lines l
+              where l.payment_id = stg_transactions.payment_id)
+        severity: warn
+        message: >-
+          refunds whose line amounts differ from the refund amount Moka reports (a partial
+          refund?); the line amounts are used
 
   stg_transaction_lines:
     sample_columns: [payment_no, item]

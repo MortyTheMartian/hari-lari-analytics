@@ -18,6 +18,8 @@ below in SQL. Amounts are whole Indonesian Rupiah (IDR).
   and Discounts 0, the amount in Refunds and the negative amount in Net Sales, so
   `Gross − Discounts − Refunds = Net Sales` holds on every line. The refunded item, variant
   and category are those of the line itself, and the reason comes from `transaction_refunds`.
+  A data note says so when the refunded line amounts differ from the refund amount in Moka
+  (partial refunds have not been seen yet).
 - **Fully refunded receipts** (a receipt with a refund line and net sales ≤ 0) do not count as
   orders. Their lines stay in the data, so the sales amounts still add up.
 - **Identical lines are kept.** The same item can appear twice on one receipt as separate lines.

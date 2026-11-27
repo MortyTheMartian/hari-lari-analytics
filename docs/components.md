@@ -394,8 +394,10 @@ totals:                                         # sum, min, max or count of mode
 ```
 
 Besides these, the checks cover fractional Rupiah amounts and lines without a payment (both
-were errors in the pandas pipeline), unique payments, items, categories and days, the relationships
-of the lines to every dimension, and the totals of all four money columns and the quantity.
+were errors in the pandas pipeline), a refund whose lines differ from Moka's refund amount (a
+warning, as the pandas pipeline's run note was), unique payments, items, categories and days, the
+relationships of the lines to every dimension, and the totals of all four money columns and the
+quantity.
 
 ## Semantic layer
 
