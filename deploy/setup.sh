@@ -275,14 +275,15 @@ step_report_scheduler() {
   echo "Done: the release can now sync the ${SCHEDULE_PREFIX}* scheduler jobs."
 }
 
-# t18. After a token refresh the job disables the older versions of moka-oauth-token (Secret
-# Manager bills every enabled version beyond the free six). Listing and disabling need
-# secretmanager.versions.list and .disable, which secretVersionAdder does not have and
-# secretVersionManager does. Only on this one secret. Without the grant the job still saves the
-# token and logs a warning ("could not disable the older versions"); it never fails because of it.
+# t18. After a token refresh the job destroys the older versions of moka-oauth-token (Secret
+# Manager bills every enabled or disabled version beyond the free six; only a destroyed one is
+# free). Listing and destroying need secretmanager.versions.list and .destroy, which
+# secretVersionAdder does not have and secretVersionManager does (it can also enable and
+# disable). Only on this one secret. Without the grant the job still saves the token and logs a
+# warning ("could not destroy the older versions"); it never fails because of it.
 step_token_versions() {
   grant_secret moka-oauth-token roles/secretmanager.secretVersionManager
-  echo "Done: the job can disable the older versions of moka-oauth-token after a refresh."
+  echo "Done: the job can destroy the older versions of moka-oauth-token after a refresh."
 }
 
 step_alert() { # 3.13
