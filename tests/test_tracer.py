@@ -15,9 +15,11 @@ import pandas as pd
 import pytest
 
 from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.core.store import LocalStore
 from hari_lari_analytics.orchestration import cli
 from hari_lari_analytics.presentation.components import load_components
 from hari_lari_analytics.presentation.facets import run_facets
+from hari_lari_analytics.warehouse.build import build_warehouse
 from hari_lari_analytics.warehouse.db import open_run
 
 from . import golden
@@ -93,17 +95,29 @@ def test_category_contributive_aov(ctx, components, metrics, period):
     assert hint.endswith("Δ vs prior period") == metrics.loc[period, "compare_ok"]
 
 
-@pytest.mark.parametrize("which", ["fixture", pytest.param("real", marks=real)])
-def test_the_cli_prints_the_numbers_of_the_facets(which, run_dir, components, capsys):
+REAL_LANDING = Path("data/landing")
+real_landed = pytest.mark.skipif(
+    not (REAL_LANDING / "moka" / "2026-11-22").is_dir() or not REAL_RUN.is_dir(),
+    reason="needs the real extraction run, landed and as it was extracted",
+)
+
+
+@pytest.mark.parametrize("which", ["fixture", pytest.param("real", marks=real_landed)])
+def test_the_cli_prints_the_numbers_of_the_facets(
+    which, run_dir, warehouse, components, capsys, tmp_path
+):
     if which == "fixture":
-        run, config, anchor = run_dir, FIXTURES, LAST_SALE
+        run, config, anchor, stored = run_dir, FIXTURES, LAST_SALE, warehouse
     else:
         run, config, anchor = REAL_RUN, Path("config"), REAL_ANCHOR
+        root = LocalStore(tmp_path)
+        info = build_warehouse(root, REAL_ANCHOR, "config", landing=LocalStore(REAL_LANDING))
+        stored = root.root / info.database
     component = components["category_contributive_aov"]
     [facet] = run_facets(component, _ctx(run, config, anchor), {"period": "L6W"})
     expected = facet.result
-    args = ["run", "category_contributive_aov", "--period", "L6W", "--csv", "--run", str(run),
-            "--config", str(config), "--anchor", anchor.isoformat()]  # fmt: skip
+    args = ["run", "category_contributive_aov", "--period", "L6W", "--csv",
+            "--warehouse", str(stored), "--anchor", anchor.isoformat()]  # fmt: skip
     assert cli.main(args) == 0
     df = pd.read_csv(io.StringIO(capsys.readouterr().out))
     rows = df[~df["is_total"]]

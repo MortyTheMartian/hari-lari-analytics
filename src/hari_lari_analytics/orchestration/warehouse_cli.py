@@ -10,23 +10,17 @@ config, builds the models, runs the data checks and writes `warehouse/<date>/` a
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from datetime import date
 
 from hari_lari_analytics.core.config import CONFIG_HELP, ConfigError, config_location
 from hari_lari_analytics.core.landing import LANDING
 from hari_lari_analytics.core.project import project
-from hari_lari_analytics.core.store import make_store
+from hari_lari_analytics.core.store import DATA_ROOT_HELP, data_root, make_store
 from hari_lari_analytics.warehouse.build import build_warehouse
 from hari_lari_analytics.warehouse.inputs import InputError
 
 DRY_RUN = "dry-run"
-
-
-def data_root(value: str | None) -> str:
-    """The data root: the value, else $DATA_ROOT, else `data`."""
-    return value or os.environ.get("DATA_ROOT") or "data"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -40,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--dry-run", action="store_true",
                    help="write under dry-run/ of the data root, never the live latest.json "
                         "(the landing runs are still read from the data root)")  # fmt: skip
-    b.add_argument("--data-root", help="a folder or gs:// URL (default: $DATA_ROOT, else data)")
+    b.add_argument("--data-root", help=DATA_ROOT_HELP)
     b.add_argument("--config", help=CONFIG_HELP)
     return p
 

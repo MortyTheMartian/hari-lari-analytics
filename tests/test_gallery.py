@@ -125,16 +125,14 @@ def gallery_error(message):
     return LayoutError(message)
 
 
-def test_cli_builds_the_gallery(run_dir, tmp_path, capsys):
+def test_cli_builds_the_gallery(warehouse, tmp_path, capsys):
     code = report_cli.main(
         [
             "--components",
             str(FIXTURE_COMPONENTS),
             "gallery",
-            "--run",
-            str(run_dir),
-            "--config",
-            str(FIXTURES),
+            "--warehouse",
+            str(warehouse),
             "--anchor",
             ANCHOR.isoformat(),
             "--out",

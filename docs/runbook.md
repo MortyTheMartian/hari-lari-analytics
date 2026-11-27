@@ -68,14 +68,15 @@ the reports' YAML (see "Release path"), so a schedule change goes live with a re
 | `--to admin` | A private run: every Telegram delivery goes to the admin chat. Not marked as sent, so it never blocks the real send. Still uploads to Drive. |
 | `--anchor YYYY-MM-DD` | Last day of the report (default: yesterday in Bali). |
 | `--force` | Send even if this report was already sent for this anchor. |
-| `--run <run>` | Use an existing extraction (a folder or `gs://...`) instead of extracting again. |
-| `--data-root` | Local folder or `gs://bucket`; env `DATA_ROOT`. |
+| `--warehouse <date\|path>` | Use an existing warehouse instead of extracting and building again: a run date (`warehouse/<date>/` in the data root), or the path or `gs://` URL of a `warehouse.duckdb`. |
+| `--data-root` | Local folder or `gs://bucket`; env `DATA_ROOT`, else `data`. |
 
 Files in the data root:
 
 | Path | What |
 | --- | --- |
-| `raw/<run date>/` | The extraction: Parquet tables, `manifest.json`, raw JSON |
+| `landing/moka/<run date>/` | The extraction: Parquet tables, `manifest.json`, gzipped raw JSON |
+| `warehouse/<run date>/`, `warehouse/latest.json` | The models built from it (`warehouse.duckdb`), the marts, `build.json` |
 | `reports/<report>/<anchor>/` | The PDF, the PNG pages, the Excel workbook, the Telegram texts, `bundle.json` |
 | `sent/<report>/<anchor>.json` | The sent-marker. Its existence means "this report went out for this anchor" |
 | `reports/<anchor>/`, `sent/<anchor>.json` | The same, written by the old weekly command before the cut-over (9.7); the weekly report also respects that old marker |
@@ -86,10 +87,11 @@ Files in the data root:
 ```bash
 # locally (secrets through gcloud; the Moka token from Secret Manager needs
 # `gcloud auth application-default login` once)
-uv run --extra gcp hari-lari-report run --report weekly --dry-run --data-root data/jobs \
+uv run --extra gcp hari-lari-report run --report weekly --dry-run \
   --token-store secret --gcp-project hari-lari
-# on an extraction you already have, without calling Moka
-uv run hari-lari-report run --report weekly --dry-run --run data/extract --data-root data/jobs
+# on a warehouse you already have, without calling Moka
+uv run hari-lari-warehouse build            # data/landing -> data/warehouse/<today>/
+uv run hari-lari-report run --report weekly --dry-run --warehouse "$(date +%F)"
 # in the cloud
 gcloud run jobs execute hari-lari-weekly --region asia-southeast2 --project hari-lari \
   --args=run,--report,weekly,--dry-run   # or ...,--to,admin   or ...,--anchor,2026-11-29,--force
@@ -148,14 +150,14 @@ The CSV files the models read (`item_aliases.csv`, `category_group.csv`,
 `calendar_events.csv`) are private: they are neither in git nor in the image. The jobs read them
 from `gs://hari-lari-data/config/` (their variable `CONFIG_DIR`, set by `deploy/setup.sh` and on
 every release); locally the default is `config/`, which git ignores. Each file is required: a
-missing one fails the run at step `model` with the admin alert. `config/examples/` in git has the
+missing one fails the run at step `warehouse` with the admin alert. `config/examples/` in git has the
 same columns with demo values.
 
 To change one, edit it in `config/`, build the report locally on it, then upload it; the next
 run reads it, no release needed:
 
 ```bash
-uv run hari-lari-report build --report weekly --run data/extract
+uv run hari-lari-warehouse build && uv run hari-lari-report build --report weekly
 gcloud storage cp config/*.csv gs://hari-lari-data/config/
 ```
 

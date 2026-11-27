@@ -40,9 +40,11 @@ uv sync
 
 ## Data source
 
-The reports read the Parquet tables of a Moka API extraction run (`hari-lari-extract run`), by
-default the latest run in `data/extract/`. No export has to be downloaded by hand, and the item
-library is not needed: items are matched by their Moka id.
+The reports read a stored warehouse: `hari-lari-extract run` lands a Moka API extraction in
+`data/landing/moka/<date>/`, and `hari-lari-warehouse build` builds the models from it and the
+config into `data/warehouse/<date>/warehouse.duckdb`, which every report and component opens
+read-only (`--warehouse`, default the newest build). No export has to be downloaded by hand,
+and the item library is not needed: items are matched by their Moka id.
 
 The two back-office exports (item library and sales _Item Details_) were the first source, read
 by a pandas pipeline. For the 948 receipts and 1,700 lines up to 31 Oct 2026 both sources gave
@@ -52,7 +54,8 @@ fixture are kept in `tests/golden/`, and the models are tested against them.
 ## Run
 
 ```bash
-uv run hari-lari-report build --report weekly                       # latest extraction, up to yesterday
+uv run hari-lari-extract run && uv run hari-lari-warehouse build    # land today's data, build the models
+uv run hari-lari-report build --report weekly                       # newest warehouse, up to yesterday
 uv run hari-lari-report build --report weekly --anchor 2026-11-15   # re-run an earlier week
 ```
 
@@ -64,10 +67,11 @@ it looked then. It defaults to yesterday in Bali (the Monday report covers up to
 ## Reports (component framework)
 
 Reports are YAML files over the components in `src/hari_lari_analytics/presentation/`
-(`docs/components.md` explains the whole framework). `hari-lari-report` builds them from an
-extraction run; it never sends anything:
+(`docs/components.md` explains the whole framework). `hari-lari-report` builds them from the
+stored warehouse; it never sends anything:
 
 ```bash
+uv run hari-lari-warehouse build                              # data/landing -> data/warehouse/<today>/
 uv run hari-lari-report validate                              # every report and component, the schemas
 uv run hari-lari-report build --report tracer --anchor 2026-11-22   # PDF, PNG, text, XLSX, bundle.json
 uv run hari-lari-report schedules --json                      # the schedules, as deploy/ reads them

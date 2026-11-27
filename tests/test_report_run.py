@@ -1,11 +1,12 @@
-"""`hari-lari-report run` (plan 9.7): one report or every scheduled one, from the extraction to
-the sent-marker, with fakes for Moka, Telegram and Drive. The report is the tracer of
-`tests/fixtures/reports/`, on the fixture run (4 orders, 5 to 13 October 2026)."""
+"""`hari-lari-report run` (plan 9.7): one report or every scheduled one, from the extraction and
+the warehouse build to the sent-marker, with fakes for Moka, Telegram and Drive. The report is
+the tracer of `tests/fixtures/reports/`, on the fixture run (4 orders, 5 to 13 October 2026)."""
 
 from __future__ import annotations
 
 import io
 import json
+import shutil
 from datetime import date, datetime
 from pathlib import Path
 
@@ -29,7 +30,7 @@ from hari_lari_analytics.presentation.components import load_components
 from hari_lari_analytics.presentation.reports import load_reports, parse_report
 from hari_lari_analytics.sources.moka.run import RunResult
 
-from .api_fixture import api_tables
+from .api_fixture import land_fixture
 from .conftest import FIXTURES
 from .fakes import ADMIN, GROUP, DriveSession, Telegram
 
@@ -74,11 +75,7 @@ class Env:
         self.extract_calls += 1
         if self.extract_error:
             raise self.extract_error
-        run = Path(out) / "moka" / "2026-10-14"
-        (run / "tables").mkdir(parents=True, exist_ok=True)
-        for name, table in api_tables().items():
-            table.to_parquet(run / "tables" / f"{name}.parquet", index=False)
-        return RunResult(str(run), self.manifest)
+        return RunResult(land_fixture(LocalStore(out)), self.manifest)
 
     def run(self, the_report=None) -> int:
         return run_report_job(the_report or report(), self.settings, self.services, self.log_())
@@ -133,17 +130,35 @@ def test_drive_gets_the_listed_files_in_the_folder_of_the_template(env):
 def test_every_step_is_logged_with_its_duration(env):
     env.run()
     done = {e["step"] for e in env.log() if "seconds" in e}
-    assert {"check", "extract", "model", "report", "upload", "drive", "deliver"} <= done
+    steps = {"check", "extract", "warehouse", "model", "report", "upload", "drive", "deliver"}
+    assert steps <= done
     assert env.log()[-1]["step"] == "end"
 
 
-def test_an_existing_run_is_not_extracted_again(env, run_dir):
-    env.settings.run = str(run_dir)
+def test_an_existing_warehouse_is_not_extracted_or_built_again(env, warehouse):
+    env.settings.warehouse = str(warehouse)
+    assert env.run() == 0
+    assert env.extract_calls == 0 and not (env.root / "warehouse").exists()
+    marker = json.loads((env.root / "sent/tracer/2026-10-13.json").read_text())
+    assert marker["warehouse"] == str(warehouse)
+
+
+def test_the_warehouse_of_a_run_date_is_read_from_the_data_root(env, warehouse):
+    shutil.copytree(warehouse.parent.parent.parent, env.root)
+    env.settings.warehouse = "2026-10-14"
     assert env.run() == 0
     assert env.extract_calls == 0
-    assert json.loads((env.root / "sent/tracer/2026-10-13.json").read_text())["extraction"] == str(
-        run_dir
-    )
+    env.settings.warehouse, env.settings.force = "2026-10-20", True
+    assert env.run() == 1
+    assert "No warehouse of 2026-10-20" in env.telegram.text(ADMIN, "sendMessage")
+
+
+def test_the_report_reads_the_warehouse_the_job_built(env):
+    assert env.run() == 0
+    built = json.loads((env.root / "warehouse" / "latest.json").read_text())
+    assert built["date"] == "2026-10-14" and built["landing"]["moka"]["run_date"] == "2026-10-14"
+    bundle = json.loads((env.root / "reports/tracer/2026-10-13/bundle.json").read_text())
+    assert bundle["report"]["run"] == "2026-10-14"
 
 
 # --- dry run, --to, the marker --------------------------------------------------------------------
@@ -221,23 +236,23 @@ def test_a_failed_send_reaches_the_admin_and_keeps_the_outputs(tmp_path):
     assert (env.root / "reports" / "tracer" / "2026-10-13").is_dir()
 
 
-def test_a_failing_data_check_fails_the_model_step(env, monkeypatch):
+def test_a_failing_data_check_fails_the_warehouse_step(env, monkeypatch):
     from hari_lari_analytics.orchestration import delivery
     from hari_lari_analytics.warehouse.checks import CheckReport, DataCheckError
 
     def broken(*args, **kwargs):
         raise DataCheckError(CheckReport([]))
 
-    monkeypatch.setattr(delivery, "open_run", broken)
+    monkeypatch.setattr(delivery, "build_warehouse", broken)
     assert env.run() == 1
-    assert "step: model" in env.telegram.text(ADMIN, "sendMessage")
+    assert "step: warehouse" in env.telegram.text(ADMIN, "sendMessage")
 
 
-def test_a_missing_config_file_fails_the_model_step_with_the_admin_alert(tmp_path):
+def test_a_missing_config_file_fails_the_warehouse_step_with_the_admin_alert(tmp_path):
     env = Env(tmp_path, config=str(tmp_path / "no-config"))
     assert env.run() == 1
     alert = env.telegram.text(ADMIN, "sendMessage")
-    assert "step: model" in alert and "has no item_aliases.csv" in alert
+    assert "step: warehouse" in alert and "has no item_aliases.csv" in alert
     assert env.telegram.sent(GROUP) == []
 
 
@@ -251,8 +266,12 @@ def test_a_drive_failure_sends_the_text_without_the_link_line(tmp_path):
 
 
 def test_a_marker_failure_warns_but_does_not_fail(env, monkeypatch):
+    write_text = env.settings.store.write_text
+
     def broken(key, text):
-        raise OSError("disk full")
+        if key.startswith("sent/"):
+            raise OSError("disk full")
+        write_text(key, text)
 
     monkeypatch.setattr(env.settings.store, "write_text", broken)
     assert env.run() == 0  # a non-zero exit would make Cloud Run send the report twice
@@ -356,11 +375,11 @@ def test_the_packaged_weekly_report_is_scheduled_on_monday_at_four():
     assert drive.folder == "{{ anchor }} (week {{ anchor_week }})"  # the existing week folders
 
 
-def test_the_run_command_dry_runs_a_report_on_an_existing_run(run_dir, tmp_path, capsys):
+def test_the_run_command_dry_runs_a_report_on_an_existing_warehouse(warehouse, tmp_path, capsys):
     code = report_cli.main([
         "--reports", str(FIXTURES / "reports"),
-        "run", "--report", "tracer", "--dry-run", "--run", str(run_dir),
-        "--anchor", "2026-10-13", "--config", str(FIXTURES), "--data-root", str(tmp_path),
+        "run", "--report", "tracer", "--dry-run", "--warehouse", str(warehouse),
+        "--anchor", "2026-10-13", "--data-root", str(tmp_path),
     ])  # fmt: skip
     assert code == 0
     assert (tmp_path / "dry-run" / "reports" / "tracer" / "2026-10-13" / "bundle.json").exists()

@@ -1559,9 +1559,11 @@ unless `--force` is given (plan 5.3). The stored outputs go to `reports/<report>
 One command runs any report, locally and in Cloud Run:
 
 ```text
-hari-lari-report run --report weekly [--anchor YYYY-MM-DD] [--dry-run] [--to admin] [--force] [--run <run>]
+hari-lari-report run --report weekly [--anchor YYYY-MM-DD] [--dry-run] [--to admin] [--force]
+                     [--warehouse <date|path>]
 hari-lari-report run --scheduled --dry-run    # every report with a schedule, on one extraction
-hari-lari-report build --report weekly --run <run> [--anchor ...] [--out DIR] [--strict]  # 8.5
+hari-lari-report build --report weekly [--warehouse <date|path>] [--anchor ...] [--out DIR]
+                       [--strict]  # 8.5
 hari-lari-report validate                     # every report and component, the JSON Schemas
 hari-lari-report schedules [--json]           # the schedules, as deploy/ reads them
 hari-lari-report schema [--check]             # the JSON Schemas of reports and components
@@ -1571,9 +1573,12 @@ hari-lari-report schema [--check]             # the JSON Schemas of reports and 
 cut-over (9.7), in `orchestration/delivery.py`, with the scheduler sync in `deploy/release.sh
 schedules`. The job itself has no arguments: every start names what to run.
 
-`build` never sends anything. It opens the latest run in `--run` (default `data/extract`) up to
-the anchor (`--anchor`, else the report's `params.anchor`, else the rule of `project.yml`),
-builds the models and checks, runs the report and writes the outputs to
+`build` never sends anything. It opens a stored warehouse read-only (t14): `--warehouse` names
+a run date (`warehouse/<date>/` under `--data-root`, default `$DATA_ROOT`, else `data`) or the
+path or `gs://` URL of a `warehouse.duckdb`, and the default is `warehouse/latest.json`;
+`hari-lari-warehouse build` writes them (docs/architecture.md, "The warehouse"). The anchor is
+`--anchor`, else the report's `params.anchor`, else the rule of `project.yml`; an anchor other
+than the warehouse's rebuilds the models in memory from its stored tables. It runs the report and writes the outputs to
 `data/output/reports/<report>/<anchor>/` (`--out` changes the folder): `<id>_<anchor>.pdf`,
 `<id>_<anchor>_<page>.png` for each page of `outputs.png`, `<block>.txt` for each text block,
 `<id>_<anchor>.xlsx` and `bundle.json`, and prints their paths. A text that overflows its slot
@@ -1584,8 +1589,8 @@ path of a YAML file. `--reports <folder>` and `--components <folder>`, before th
 at other folders (the tests use `tests/fixtures/reports/`).
 
 `run` does what the old weekly command did, for any report: check the sent-marker, extract
-(unless `--run` names an existing run), the Moka token reminder, build the models and run the
-checks, build the outputs, store them, evaluate `when`, upload to Drive, send to Telegram and
+into `landing/` and build the warehouse (unless `--warehouse` names an existing one), the Moka
+token reminder, open the warehouse, build the outputs, store them, evaluate `when`, upload to Drive, send to Telegram and
 write the marker. Each step is timed and logged as JSON, and a failing step sends the admin
 alert and exits 1, as in plan 5.4.
 
@@ -1701,9 +1706,9 @@ Adding a component, with the developer CLI `hari-lari-component` (`orchestration
    with. A parameter without a default needs a value for the snapshot:
    `--param category=Coffee`. The id must be new and snake_case, and the copy must load.
 2. Edit the YAML; the editor autocompletes it from the JSON Schema.
-3. `hari-lari-component run orders_heatmap --period L6W --sql` builds the models of the latest
-   run in `--run` (default `data/extract`; a run folder or `gs://` works too) up to `--anchor`
-   (default: the run's last payment), runs the component with its transforms and facets, and
+3. `hari-lari-component run orders_heatmap --period L6W --sql` opens a stored warehouse
+   (`--warehouse`, as for `hari-lari-report build`; default `warehouse/latest.json` under
+   `data/`) up to `--anchor` (default: the warehouse's anchor), runs the component with its transforms and facets, and
    prints per facet the rendered title and hint, the window, comparison, shape and trading
    days, the result table and with `--sql` the statement and its bound parameters. `--csv`
    prints CSV instead (one `facet` column for facets by dimension or period; the SQL then goes
@@ -1743,7 +1748,7 @@ snapshot and compares the result, per facet, as CSV (floats to 10 significant di
 diff exactly which components it moves; a snapshot without a component fails too. A parameter
 without a default is given in the snapshot (`category_trend` has `category: Coffee`).
 
-**The gallery (8.7).** `hari-lari-report gallery [--run] [--anchor] [--out] [--no-png]` builds a
+**The gallery (8.7).** `hari-lari-report gallery [--warehouse] [--anchor] [--out] [--no-png]` builds a
 report from the components instead of a file: one page per component that has a visual, its
 slot as wide as the page and as high as the visual's `min_size` asks (at least the 3 of 6 parts
 of a preview), with PDF and a PNG per page in `data/output/gallery/`. It is the catalogue of what

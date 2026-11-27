@@ -234,7 +234,9 @@ stored; reports open it read-only instead of extracting and rebuilding (t13, t14
   the history since January), so one file serves every anchor.
 - **Measured** on the landing run of 27 Nov 2026: the build takes about 2 s, the file is
   9.4 MB, and its models and marts give the same row counts and net sales as the in-memory
-  build of the same run.
+  build of the same run. The weekly report built on it (t14) has the same `bundle.json` as
+  the one built from the landing run (only the build time in the footer differs); its model
+  step takes 0.05 s instead of 0.65 s, and the report's 25 to 30 s are the rendering.
 - **Personal data.** Employees get a pseudonymous key; no employee name reaches a bundle, an
   Excel file or a mart unless the owner decides otherwise; staff costs live in private config
   only (t29).

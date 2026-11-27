@@ -13,8 +13,11 @@ seed_ tables (`open_warehouse`).
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
 
@@ -32,7 +35,7 @@ from hari_lari_analytics.core.landing import (
     run_key,
 )
 from hari_lari_analytics.core.project import Project, project
-from hari_lari_analytics.core.store import Store
+from hari_lari_analytics.core.store import Store, make_store
 from hari_lari_analytics.warehouse.checks import (
     Check,
     CheckReport,
@@ -253,6 +256,53 @@ def read_build(root: Store, run_date: date | str) -> BuildInfo:
 
 
 # --- reading a stored warehouse ----------------------------------------------------------------
+
+WAREHOUSE_HELP = (
+    "the warehouse to read: a run date (warehouse/<date>/ under the data root), or the path or "
+    "gs:// URL of a warehouse.duckdb or of its folder (default: warehouse/latest.json)"
+)
+
+
+def warehouse_url(root: Store, ref: str | None = None) -> str:
+    """The URL of the `warehouse.duckdb` that `ref` names (see `WAREHOUSE_HELP`)."""
+    if ref is None:
+        latest = read_latest(root)
+        if latest is None:
+            raise InputError(
+                f"No warehouse in {root.url(WAREHOUSE)} (no latest.json): "
+                "run hari-lari-warehouse build"
+            )
+        return root.url(latest.database)
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", ref):
+        return root.url(read_build(root, ref).database)
+    return ref if ref.endswith(".duckdb") else f"{ref.rstrip('/')}/{DB_FILE}"
+
+
+def local_warehouse(url: str, folder: Path) -> Path:
+    """A local path of the file at `url`: itself, or a download into `folder` for gs://."""
+    if url.startswith("gs://"):
+        parent, _, name = url.rpartition("/")
+        store = make_store(parent)
+        if not store.exists(name):
+            raise InputError(f"No warehouse file {url}")
+        store.download(name, folder / name)
+        return folder / name
+    if not Path(url).is_file():
+        raise InputError(f"No warehouse file {url}")
+    return Path(url)
+
+
+@contextmanager
+def read_warehouse(
+    root: Store, ref: str | None = None, anchor: date | None = None, settings: Project | None = None
+) -> Iterator[RunDb]:
+    """Open the warehouse `ref` names (`warehouse_url`) for the duration of the block."""
+    with tempfile.TemporaryDirectory() as tmp:
+        db = open_warehouse(local_warehouse(warehouse_url(root, ref), Path(tmp)), anchor, settings)
+        try:
+            yield db
+        finally:
+            db.con.close()
 
 
 def open_warehouse(

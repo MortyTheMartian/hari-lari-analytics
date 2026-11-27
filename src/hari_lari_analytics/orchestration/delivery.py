@@ -1,8 +1,9 @@
 """Running a report (plan 9.7): `hari-lari-report run`, the job behind every scheduled report.
 
-`run_report_job` checks the sent-marker, extracts (unless an existing run is named), sends the
-Moka token reminder, builds the models and runs the data checks, builds the outputs, stores them,
-evaluates `deliver.when`, uploads to Drive, sends to Telegram and writes the marker. Each step is
+`run_report_job` checks the sent-marker, extracts and builds the warehouse (unless a warehouse
+is named), sends the Moka token reminder, opens the warehouse read-only, builds the outputs,
+stores them, evaluates `deliver.when`, uploads to Drive, sends to Telegram and writes the
+marker. Each step is
 timed and logged as JSON; a failing step sends the admin alert, logs an ERROR (which also
 triggers the Cloud Monitoring email) and ends the run with exit code 1.
 
@@ -15,7 +16,8 @@ admin alert, and every file goes under the `dry-run/` prefix. `--to <target>` se
 Telegram delivery to that one chat, and reads and writes no marker.
 
 Layout under the data root (local or `gs://`): `landing/moka/<run date>/` (the extraction),
-`reports/<report>/<anchor>/` (the outputs) and `sent/<report>/<anchor>.json` (the marker).
+`warehouse/<run date>/` (the models), `reports/<report>/<anchor>/` (the outputs) and
+`sent/<report>/<anchor>.json` (the marker).
 """
 
 from __future__ import annotations
@@ -47,8 +49,13 @@ from hari_lari_analytics.presentation.reports import (
     resolve_anchor,
 )
 from hari_lari_analytics.sources.moka.run import RunResult
+from hari_lari_analytics.warehouse.build import (
+    build_warehouse,
+    local_warehouse,
+    open_warehouse,
+    warehouse_url,
+)
 from hari_lari_analytics.warehouse.checks import CheckReport
-from hari_lari_analytics.warehouse.db import open_run
 
 TOKEN_WARN_DAYS = 45
 
@@ -64,7 +71,8 @@ class RunSettings:
     dry_run: bool = False
     force: bool = False
     to: str | None = None  # every Telegram delivery to this target instead (a private check)
-    run: str | None = None  # an existing run (folder or gs://) instead of a new extraction
+    # an existing warehouse (a run date, or a path or gs:// URL) instead of extract and build
+    warehouse: str | None = None
     drive_folder_id: str | None = None
     token_warn_days: int = TOKEN_WARN_DAYS
 
@@ -200,6 +208,24 @@ def extract_step(run: Runner, store: Store) -> str:
     return extraction.location
 
 
+def warehouse_step(run: Runner, store: Store) -> str:
+    """Build the warehouse of today's run date in the store; returns its URL."""
+    with run.step("warehouse"):
+        today = project().today(run.services.now())
+        info = build_warehouse(store, today, run.settings.config, now=run.services.now())
+    return store.url(info.database)
+
+
+def prepare(run: Runner, store: Store) -> str:
+    """The warehouse a report reads: the one named in the settings (its URL), else a new
+    extraction and build."""
+    if run.settings.warehouse is None:
+        extract_step(run, store)
+        return warehouse_step(run, store)
+    with run.step("warehouse"):
+        return warehouse_url(run.settings.store, run.settings.warehouse)
+
+
 # --- one report -----------------------------------------------------------------------------------
 
 
@@ -232,15 +258,14 @@ def run_report_job(
                 )  # fmt: skip
                 return 0
 
-        location = settings.run or extract_step(run, store)
-
-        with run.step("model"):
-            db = open_run(location, settings.config, anchor)
-            ctx = QueryContext.create(db.con, run=db.run, checks=db.checks)
-        for warning in db.checks.warnings:
-            log.warning(f"data check: {warning.describe()}", step="model")
+        location = prepare(run, store)
 
         with tempfile.TemporaryDirectory() as tmp:
+            with run.step("model"):
+                db = open_warehouse(local_warehouse(location, Path(tmp)), anchor)
+                ctx = QueryContext.create(db.con, run=db.run, checks=db.checks)
+            for warning in db.checks.warnings:
+                log.warning(f"data check: {warning.describe()}", step="model")
             with run.step("report"):
                 built = build_report(report, ctx, Path(tmp))
             for overflow in built.overflows:
@@ -267,8 +292,8 @@ def run_report_job(
                 for delivery in report.spec.deliver.telegram:
                     _send(run, delivery, built, drive_url)
 
-        if uses_marker:
-            _write_marker(run, store, report, anchor, drive_url, location)
+            if uses_marker:
+                _write_marker(run, store, report, anchor, drive_url, location)
     except StepFailed:
         log.error(
             f"report {report.id} failed", step="end", report=report.id,
@@ -419,7 +444,7 @@ def _write_marker(
             "sent_at": run.services.now().isoformat(timespec="seconds"),
             "to": sorted({d.to for d in report.spec.deliver.telegram}),
             "drive_url": drive_url,
-            "extraction": location,
+            "warehouse": location,
         }
         store.write_text(key, json.dumps(payload, indent=2))
 
@@ -430,9 +455,9 @@ def _write_marker(
 def run_scheduled(
     reports: Sequence[Report], settings: RunSettings, services: Services, log: JsonLog | None = None
 ) -> int:
-    """Run every report that has a schedule, one after the other on one extraction. Returns 1
-    if any of them failed. The release's dry run uses this, so every scheduled report must
-    build before a release is promoted."""
+    """Run every report that has a schedule, one after the other on one extraction and
+    warehouse. Returns 1 if any of them failed. The release's dry run uses this, so every
+    scheduled report must build before a release is promoted."""
     log = log or JsonLog()
     scheduled = [r for r in sorted(reports, key=lambda r: r.id) if r.spec.schedule is not None]
     log.info(
@@ -441,15 +466,13 @@ def run_scheduled(
     )  # fmt: skip
     if not scheduled:
         return 0
-    location = settings.run
-    if location is None:
-        run = Runner(settings, services, log, "scheduled reports")
-        try:
-            location = extract_step(run, data_store(settings))
-        except StepFailed:
-            log.error("scheduled reports failed", step="end", seconds_by_step=run.timings)
-            return 1
-    shared = replace(settings, run=location)
+    run = Runner(settings, services, log, "scheduled reports")
+    try:
+        location = prepare(run, data_store(settings))
+    except StepFailed:
+        log.error("scheduled reports failed", step="end", seconds_by_step=run.timings)
+        return 1
+    shared = replace(settings, warehouse=location)
     failed = [r.id for r in scheduled if run_report_job(r, shared, services, log) != 0]
     if failed:
         log.error(f"scheduled report(s) failed: {', '.join(failed)}", step="end")

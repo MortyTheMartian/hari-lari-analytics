@@ -1,13 +1,14 @@
 """Where the jobs keep their files: a local folder or `gs://bucket[/prefix]`.
 
-The layout under the root is in docs/architecture.md ("Storage layout"); a `dry-run/` prefix goes
-in front of all of it for a dry run. Until the cut-over of phase B the report job also writes
-`raw/<run date>/` (the extraction), `reports/<report>/<anchor>/` and the sent-markers
-`sent/<report>/<anchor>.json` (`sent/<anchor>.json` for the weekly job before 9.7).
+The layout under the root is in docs/architecture.md ("Storage layout"): `landing/`,
+`warehouse/`, `reports/`, `runs/`; a `dry-run/` prefix goes in front of all of it for a dry
+run. The sent-markers `sent/<report>/<anchor>.json` (`sent/<anchor>.json` for the weekly job
+before 9.7) are still written and read until the ledger replaces them (t15).
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Protocol
 
@@ -134,3 +135,12 @@ def make_store(root: str | Path) -> Store:
         bucket, _, prefix = root[len("gs://") :].partition("/")
         return GcsStore(bucket, prefix)
     return LocalStore(root)
+
+
+DATA_ROOT_HELP = "a folder or gs://bucket[/prefix] (default: $DATA_ROOT, else data)"
+
+
+def data_root(value: str | None = None) -> str:
+    """The data root of the bucket layout (docs/architecture.md): the value, else $DATA_ROOT,
+    else `data`."""
+    return value or os.environ.get("DATA_ROOT") or "data"

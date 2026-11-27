@@ -35,7 +35,7 @@ todos:
   llm: gpt-5.6-terra-medium
   status: completed
 - id: t9-release-a
-  content: "[agent] Merge phase A on a Tuesday to Thursday (never between Saturday 18:00 and Monday 05:00 WITA), watch the release workflow to the promotion, and compare the next Monday's bundle.json in gs://hari-lari-data/reports/weekly/<anchor>/ with a local build on the same run. [owner] Confirm the Monday report looked as before. Blocked by t8-import-contract. Result 27 Nov 2026: merged as bd35ece; dry run succeeded; live job promoted ff86fcaac81d -> bd35ece9d9f7; the weekly scheduler is still Monday 04:00 WITA. 27 Nov: a send of the released report to the owner's Telegram worked. Still open: Monday's bundle compare, and the owner confirms the report looked as before."
+  content: "[agent] Merge phase A on a Tuesday to Thursday (never between Saturday 18:00 and Monday 05:00 WITA), watch the release workflow to the promotion, and compare the next Monday's bundle.json in gs://hari-lari-data/reports/weekly/<anchor>/ with a local build on the same run. [owner] Confirm the Monday report looked as before. Blocked by t8-import-contract. Result 27 Nov 2026: merged as bd35ece; dry run succeeded; live job promoted ff86fcaac81d -> bd35ece9d9f7; the weekly scheduler is still Monday 04:00 WITA. 27 Nov: a send of the released report to the owner's Telegram worked. Still open: Monday's bundle compare, and the owner confirms the report looked as before. Note 27 Nov: phase B (t11 to t17) is planned for today, so Monday 30 Nov's run is the tick; the bundle compare then covers phases A and B together (the bundle from the tick against a local build on the same landing run), and Monday's confirmation closes t9 and t17 at once."
   llm: gpt-5.6-terra-medium
   status: pending
 - id: t10-design-b
@@ -67,7 +67,7 @@ todos:
   llm: claude-sonnet-5-5-high
   status: pending
 - id: t17-cutover-b
-  content: "[agent] Release phase B midweek: cloud dry run, one tick to the admin chat (--to admin), then switch from hari-lari-report-weekly to hari-lari-tick; update docs/runbook.md for the new flow (absorbs old 6.6: re-running a day, re-authorising tokens, what each alert means). [owner] Read the admin-chat report on the phone and confirm the switch. Local check: gcloud scheduler jobs list shows hari-lari-tick only (plus the expense tracker's own job); the first daily ledger records appear. Blocked by t16-tick."
+  content: "[agent] Release phase B midweek: cloud dry run, one tick to the admin chat (--to admin), then switch from hari-lari-report-weekly to hari-lari-tick; update docs/runbook.md for the new flow (absorbs old 6.6: re-running a day, re-authorising tokens, what each alert means). [owner] Read the admin-chat report on the phone and confirm the switch. Local check: gcloud scheduler jobs list shows hari-lari-tick only (plus the expense tracker's own job); the first daily ledger records appear. Planned 27 Nov 2026 (Friday, with t11 to t16 the same day, see 'Rules for this plan'): Monday 30 Nov, 04:00 WITA, is the first scheduled tick, so the Monday report is built by the phase B pipeline; the owner reads it on the phone at 04:10 and reports 'Monday ok' or what was wrong, and `deploy/release.sh rollback` returns the live job to the previous image. Blocked by t16-tick."
   llm: claude-sonnet-5-5-high
   status: pending
 - id: t18-cost-hygiene
@@ -211,6 +211,7 @@ graph TD
 ## Rules for this plan
 
 - **No release between Saturday 18:00 and Monday 05:00 WITA**, and every release goes through the cloud dry run (7A.8). After phase B every day is a run day, so the rule becomes: release Tuesday to Thursday, and watch the next tick.
+- **Exception for phase B (decided 27 Nov 2026, a Friday).** Everything up to t18 (t11 to t17, including t17-cutover-b) is done today, 27 Nov, before the freeze starts on Saturday 18:00 WITA, so the first run of the weekly report on Monday 30 Nov, 04:00 WITA, is already the daily tick on the end state of phase B (config from the bucket, landing, warehouse, ledger, `hari-lari-tick`) and no longer the old `hari-lari-report-weekly` job. This is a deliberate departure from "release Tuesday to Thursday": it trades a midweek release for one Monday that tests phases A and B together. The fallback if t17 is not verified by Saturday 18:00: keep `hari-lari-report-weekly` as the Monday job, leave the tick unscheduled (or `--dry-run` only) and release phase B on Tuesday to Thursday as the rule says. t18's token and lifecycle checks follow; reading the bill waits for the first month on the tick.
 - **Statuses stay one line.** What was done, measured and found goes into the pull request description and the commit messages, not into this file.
 - **Each phase ends with a check on real data**, named in its last todo.
 
@@ -323,7 +324,7 @@ Approximate list prices; t18 replaces the estimate with the real bill.
 
 ## Risks
 
-- **The restructure breaks the Monday report:** phase A changes no output and is checked by identical bundles and pixel-identical pages (t6, t7); B and C release midweek after a dry run and a run to the admin chat (t17).
+- **The restructure breaks the Monday report:** phase A changes no output and is checked by identical bundles and pixel-identical pages (t6, t7); B and C release midweek after a dry run and a run to the admin chat (t17). Phase B is the exception (27 Nov 2026): released on a Friday so that Monday 30 Nov already runs on it; the cloud dry run, the admin-chat tick and the rollback command are the safety net, and if they are not clean by Saturday 18:00 the old weekly job stays (see 'Rules for this plan').
 - **The refactor grows without paying off:** every phase after A ends with one visible payoff; phase D measures whether a new source fits without touching the report engine.
 - **dbt adds more weight than it saves:** the spike (t26) is a go or no-go with measured build time, image size and CI time.
 - **Labour data is personal:** pseudonymous keys, no names in bundles, Excel or marts unless the owner decides, staff costs only in private config (t29).
