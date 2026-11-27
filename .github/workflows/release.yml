@@ -13,6 +13,10 @@ name: Release
 on:
   push:
     branches: [main]
+    # Docs-only changes should not rebuild/publish the image.
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
   workflow_dispatch:
     inputs:
       action:
