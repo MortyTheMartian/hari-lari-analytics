@@ -8,7 +8,9 @@ build. Decisions D1 and D2 stand as agreed; D3 and D4 changed and D5 to D10 are 
 on 24 Nov 2026 (task 7.1b). Phase 7 builds the core, phase 8 the
 presentation, phase 9 proves the framework and ports today's report, phase 10 builds the driving
 reports. On 25 Nov 2026 (task 7A.9) the reports gained filters, a schedule and a delivery, and
-one command runs any report; D11 to D14 record the decisions.
+one command runs any report; D11 to D14 record the decisions. All decisions are in
+[decisions.md](decisions.md); where this framework sits in the platform is in
+[architecture.md](architecture.md).
 
 ## Goal
 
@@ -1894,28 +1896,5 @@ cut-over. There was no pixel diff: the numbers had to match, the drawing could i
 
 ## Decisions
 
-D1 and D2 were agreed on 24 Nov 2026 with the first version. D3 to D10 were agreed on the same
-day after the revision (plan task 7.1b), each as proposed. D11 to D14 were agreed on 25 Nov 2026
-(plan task 7A.9), D15 to D19 on the same day (plan tasks 8.0 and 8.3).
-
-| # | Question | Decision |
-| --- | --- | --- |
-| D1 | Where the definitions live | agreed: inside the package (`src/hari_lari_analytics/reporting/`) |
-| D2 | Data source of the component report | agreed: sales from API runs only; the hand-maintained `config/*.csv` files (aliases, category groups, later margins) stay and are loaded as `seed_*` tables |
-| D3 | Layout definitions | agreed: a 12-column grid in the report YAML, with a minimum size per visual and an overflow test (replaces the rectangles in `layouts.yml`) |
-| D4 | Where Python lives | agreed: one query compiler; Python only for transforms, visuals, insight rule types and `@query` sources; none in components or reports (replaces the Jinja SQL pattern per chart with an optional `post` step) |
-| D5 | Explaining changes | agreed: a KPI tree in `kpi_tree.yml` and a `decompose` transform with log-mean (LMDI) attribution |
-| D6 | Outputs | agreed: PDF, PNG, Telegram text and XLSX from one report; the Telegram caption becomes a report output and replaces `deliver/caption.py` at the cut-over |
-| D7 | Sample size | agreed: a default rule of 30 orders per row or period, overridable per metric; rows below it are greyed out with their `n`, and insights skip them |
-| D8 | Build or adopt | agreed: own framework, with dbt's model layers and MetricFlow's metric kinds as concepts only; no dbt installation; models stay plain SQL run by DuckDB in-process |
-| D9 | Acceptance of the port | agreed: parity of each ported component's numbers with `report_data.Section`; no pixel diff, so the drawing may improve |
-| D10 | Joining category groups | agreed: by adjusted category name; `category_id` in `config/category_group.csv` is informational, because Moka reuses category ids |
-| D11 | Meaning of a report or page filter | agreed: two keys, `where` and `focus`, with their query meaning; a filter replaces the component's own on the same dimension, and a slot can opt out |
-| D12 | Running several scheduled reports | agreed: one Cloud Run job for all reports, one Cloud Scheduler job per report that passes `run --report <id>`; the release path still promotes one live job and its dry-run twin |
-| D13 | Who keeps the scheduler jobs in line with the YAML | agreed: the release workflow, after the dry run and promotion; the release service account gets `cloudscheduler.admin` on the project |
-| D14 | Telegram chats a report can deliver to | agreed: named targets in `project.yml`, each mapped to the Secret Manager secret of its chat id; `admin` is required; a new chat (managers, a stock-alert group) needs no code |
-| D15 | Visual contract | agreed: options say what to show, never how; colours are theme tokens and text sizes text roles; one formatting module reads `project.yml`; a neutral change (`up_is_good: null`) is drawn in the text colour |
-| D16 | Where display strings are made | agreed: one presentation step (`present.py`) turns a result into display cells (value, text, tone, small-sample flag, n); the matplotlib visuals and the JSON bundle both use it |
-| D17 | Small samples in a visual | agreed for now: the value and its change in grey with `n=…`, the change never coloured; to revisit after reading the first reports |
-| D18 | Calendar events on time visuals | agreed: the compiler puts the events of both windows in `meta.events`; visuals and the bundle read them from the result |
-| D19 | The `record` insight | agreed: only when the latest bucket is the best of the series (the lowest for a metric where down is good); "since opening" only when the series starts at the first sale |
+The decisions D1 to D19 of this design are in [decisions.md](decisions.md), together with the
+platform's decisions from D20 and the status of each.

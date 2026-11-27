@@ -1,6 +1,6 @@
 ---
 name: Hari Lari go-live
-overview: "Put the Moka extraction and weekly report live in Google Cloud: Monday 04:00 WITA download, build the reports, send them to a new Telegram group. Then build a reporting framework in which a new component or report is mostly YAML: checked models, a semantic layer (metrics, dimensions, KPI tree), one query compiler with composable transforms, driver decomposition, rule-based insights, grid layouts and four outputs (PDF, PNG, Telegram text, Excel). Prove it on new components, port today's report with number parity, then build driving reports from a backlog ranked by the decision each one supports, starting with recipe margins from config/item_margins.csv. Finally, make the repository publishable: business config out of git, a fictional demo café for tests and docs, a publish guard and a one-time history rewrite. After a comparison with Lightdash, refine the architecture (phase 7A) and keep a cheap frontend possible: every report also writes a JSON bundle that an optional read-only, scale-to-zero frontend can render (phase 12)."
+overview: "CLOSED on 26 Nov 2026 after phase 9.8; the open items continue in docs/hari_lari_analytics_platform.plan.md. Put the Moka extraction and weekly report live in Google Cloud: Monday 04:00 WITA download, build the reports, send them to a new Telegram group. Then build a reporting framework in which a new component or report is mostly YAML: checked models, a semantic layer (metrics, dimensions, KPI tree), one query compiler with composable transforms, driver decomposition, rule-based insights, grid layouts and four outputs (PDF, PNG, Telegram text, Excel). Prove it on new components, port today's report with number parity, then build driving reports from a backlog ranked by the decision each one supports, starting with recipe margins from config/item_margins.csv. Finally, make the repository publishable: business config out of git, a fictional demo café for tests and docs, a publish guard and a one-time history rewrite. After a comparison with Lightdash, refine the architecture (phase 7A) and keep a cheap frontend possible: every report also writes a JSON bundle that an optional read-only, scale-to-zero frontend can render (phase 12)."
 todos:
   - id: p0-decisions
     content: "Phase 0: decide project, deliverables, members, alert target, anchor rule (You)"
@@ -24,8 +24,8 @@ todos:
     content: "Phase 5: hari-lari-weekly orchestration - dry-run, idempotent send, error alerts, logging"
     status: completed
   - id: p6-golive
-    content: "Phase 6: dry run, private run, enable scheduler, first live Monday, runbook"
-    status: pending
+    content: "Phase 6: dry run, private run, enable scheduler, first live Monday, runbook (6.1 to 6.4 done; moved: 6.5 to t1-monday, 6.6 to t17-cutover-b, 6.7 to t6-retire-pandas of the platform plan)"
+    status: cancelled
   - id: p7-core
     content: "Phase 7: framework core - models with order and item attributes, calendar events, data checks, semantic layer and KPI tree, windows, query compiler, transforms, decompose, component loader, facets, dev CLI, tracer check"
     status: completed
@@ -42,29 +42,31 @@ todos:
     content: "Phase 9.8: insights on the report pages - sentences on their charts (insights: chart|none, insights_from, new rule types, prior_rank), rules for the weekly components, item identity by id"
     status: completed
   - id: p10-direction
-    content: "Phase 10.0-10.2: owner feedback after four live Mondays, weekly v2 with a 'this week' driver page, targets"
-    status: pending
+    content: "Phase 10.0-10.2: owner feedback after four live Mondays, weekly v2 with a 'this week' driver page, targets (moved to t44-owner-feedback and t45-weekly-v2 of the platform plan)"
+    status: cancelled
   - id: p10-margins
-    content: "Phase 10.4-10.7: recipe margins from config/item_margins.csv (Excel workbook), margin components, discount cost, menu engineering"
-    status: pending
+    content: "Phase 10.4-10.7: recipe margins from config/item_margins.csv (Excel workbook), margin components, discount cost, menu engineering (moved to t32-margins and t33-margin-views of the platform plan)"
+    status: cancelled
   - id: p10-backlog
-    content: "Phase 10: remaining backlog by decision - unpriced add-ons, card fees, profit with the expense tracker, staffing, stock order list per supplier, menu mix, data quality, daily flash"
-    status: pending
+    content: "Phase 10: remaining backlog by decision - unpriced add-ons, card fees, profit with the expense tracker, staffing, stock order list per supplier, menu mix, data quality, daily flash (moved: profit to t34 and t35, staffing to t31, daily flash to t43, the rest to the backlog of the platform plan)"
+    status: cancelled
   - id: p11-publish
-    content: "Phase 11: make the repo publishable - purge the token backup ref now, business config out of git (CONFIG_DIR, bucket), demo café data, fictional names in tests, clean docs, identifiers as settings, publish guard, history rewrite, go public"
-    status: pending
+    content: "Phase 11: make the repo publishable - purge the token backup ref now, business config out of git (CONFIG_DIR, bucket), demo café data, fictional names in tests, clean docs, identifiers as settings, publish guard, history rewrite, go public (moved: 11.1 to t2-token-purge, 11.2 to t11-private-config, the rest to t39 to t42 of the platform plan)"
+    status: cancelled
   - id: p12-frontend
-    content: "Phase 12 (optional): read-only reporting frontend at near-zero cost - decide hosting and sign-in, bundle history, marts export, mobile frontend over the JSON bundle, Telegram or Google sign-in, optional query endpoint on the same compiler, tests"
-    status: pending
+    content: "Phase 12 (optional): read-only reporting frontend at near-zero cost - decide hosting and sign-in, bundle history, marts export, mobile frontend over the JSON bundle, Telegram or Google sign-in, optional query endpoint on the same compiler, tests (moved: 12.1 to t15-ledger, 12.2 to t13-warehouse-build, the rest to t36 to t38 and the backlog of the platform plan)"
+    status: cancelled
   - id: sync-doc
-    content: Sync docs/go-live-plan.md with the status, suggested LLM and the revised phases 7 to 12, including 7A
-    status: pending
+    content: Sync docs/go-live-plan.md with the status, suggested LLM and the revised phases 7 to 12, including 7A (dropped; both go-live plans are archived)
+    status: cancelled
 isProject: false
 ---
 
 # Hari Lari go-live: weekly Moka report in Google Cloud plus a reporting framework for driving reports
 
-This is the Cursor version of [docs/go-live-plan.md](hari-lari-analytics/docs/go-live-plan.md), with a status and a suggested LLM for every task. All paths are relative to `hari-lari-analytics/`.
+> **Closed on 26 Nov 2026 after phase 9.8.** Phases 0 to 9 are done (6.5, the first live Monday, is t1-monday of the new plan). Everything open continues in [the platform plan](../hari_lari_analytics_platform.plan.md), whose table "Carried over from the go-live plan" maps the old numbers to the new todos. This file stays as the record of how the framework was built.
+
+This is the Cursor version of [docs/go-live-plan.md](go-live-plan.md), with a status and a suggested LLM for every task. All paths are relative to `hari-lari-analytics/`.
 
 ## Legend
 
