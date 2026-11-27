@@ -12,16 +12,17 @@ import tempfile
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from hari_lari_analytics.clean import (
-    MODIFIER_COLUMNS,
-    UNCATEGORIZED,
-    CleanResult,
-    fully_refunded_receipts,
-)
 from hari_lari_analytics.load import InputError
+
+if TYPE_CHECKING:
+    from hari_lari_analytics.clean import CleanResult
+
+# The pandas mapping (`api_sales_lines` and the helpers below it) imports `clean` when it runs,
+# so that reading a run does not load the pandas pipeline.
 
 REQUIRED_TABLES = ["transactions", "transaction_lines", "items"]
 OPTIONAL_TABLES = [
@@ -137,6 +138,8 @@ def _read_local(run_dir: Path, names: list[str]) -> tuple[dict[str, pd.DataFrame
 
 def api_sales_lines(tables: dict[str, pd.DataFrame], aliases: pd.DataFrame) -> CleanResult:
     """Turn the API tables into cleaned sales lines (see the module docstring)."""
+    from hari_lari_analytics.clean import CleanResult, fully_refunded_receipts
+
     notes: list[str] = []
     df = _lines_frame(tables, notes)
     df["counts_as_order"] = ~df["receipt_nr"].isin(fully_refunded_receipts(df))
@@ -150,6 +153,8 @@ def api_sales_lines(tables: dict[str, pd.DataFrame], aliases: pd.DataFrame) -> C
 
 
 def _lines_frame(tables: dict[str, pd.DataFrame], notes: list[str]) -> pd.DataFrame:
+    from hari_lari_analytics.clean import UNCATEGORIZED
+
     tx = tables["transactions"]
     lines = tables["transaction_lines"]
 
@@ -237,6 +242,8 @@ def _modifiers(tables: dict[str, pd.DataFrame], df: pd.DataFrame) -> pd.DataFram
     with several modifiers lists them joined by ' + ', in the order of the option id, so the
     ids, names and option names line up; `modifier_price` is the sum of their unit prices.
     """
+    from hari_lari_analytics.clean import MODIFIER_COLUMNS
+
     empty = pd.DataFrame(pd.NA, index=df.index, columns=MODIFIER_COLUMNS, dtype=object)
     empty["modifier_price"] = empty["modifier_price"].astype("Int64")
     mods = tables.get("transaction_line_modifiers")
@@ -307,6 +314,8 @@ def _resolve_items(
 
     Today's spelling and category of the adjusted name always come from the live items.
     """
+    from hari_lari_analytics.clean import UNCATEGORIZED
+
     current = items.set_index("id")
     live = items.loc[~items["is_deleted"]].drop_duplicates("name")
     live_category = live.set_index("name")["category.name"]

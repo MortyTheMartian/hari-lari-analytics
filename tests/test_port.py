@@ -7,12 +7,12 @@ deleted at the cut-over (9.7b).
 
 The drawing may differ, so only the results are compared. Each test runs on the fixture run and,
 when it is present, on the real run of 2026-11-22; on the fixture, L14D has no comparison and
-L3M has no sales, so the empty and the comparison-less cases are covered too.
+L3M has no sales, so the empty and the comparison-less cases are covered too. The fixture's
+lines, periods and cover numbers are the golden ones of the pandas pipeline (`tests/golden/`).
 """
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -24,8 +24,6 @@ import pytest
 from matplotlib.text import Text
 
 from hari_lari_analytics.load_api import ApiRun
-from hari_lari_analytics.metrics import compute_metrics
-from hari_lari_analytics.periods import Period, report_periods
 from hari_lari_analytics.reporting.builder import run_report
 from hari_lari_analytics.reporting.checks import check
 from hari_lari_analytics.reporting.components import load_components
@@ -37,22 +35,21 @@ from hari_lari_analytics.reporting.reports import load_reports
 from hari_lari_analytics.reporting.result import Result
 from hari_lari_analytics.reporting.visuals.theme import DEFAULT_THEME
 
+from . import golden
 from .api_fixture import api_tables
-from .test_models import LAST_SALE, REAL_RUN, SEEDS, _comparable
+from .test_models import LAST_SALE, REAL_RUN, SEEDS
 
 COMPONENTS = load_components()
 PERIODS = ["L14D", "L6W", "L3M"]
-# PORT_RUN and PORT_ANCHOR check the port on another extraction (plan 9.6)
-PORT_RUN = Path(os.environ.get("PORT_RUN", REAL_RUN))
-REAL_ANCHOR = date.fromisoformat(os.environ.get("PORT_ANCHOR", "2026-11-22"))
-real = pytest.mark.skipif(not PORT_RUN.is_dir(), reason="needs the real extraction run")
+REAL_ANCHOR = date(2026, 11, 22)
+real = pytest.mark.skipif(not REAL_RUN.is_dir(), reason="needs the real extraction run")
 
 
 @dataclass
 class Port:
     ctx: QueryContext
     lines: pd.DataFrame
-    periods: dict[str, Period]
+    periods: dict[str, golden.Period]
 
     @property
     def first(self) -> date:
@@ -78,16 +75,22 @@ class Port:
 
 def _port(con, run: ApiRun, anchor: date) -> Port:
     lines = con.execute("select * from fct_sales_lines").df()
-    periods = {p.key: p for p in report_periods(anchor)}
-    return Port(QueryContext.create(con, run=run, checks=check(con)), lines, periods)
+    return Port(QueryContext.create(con, run=run, checks=check(con)), lines, golden.periods(anchor))
+
+
+@pytest.fixture(scope="module")
+def fixture_port() -> Port:
+    run = ApiRun("data/extract/2026-10-14", {}, {"warnings": ["last sale is old"]})
+    port = _port(connect(api_tables(), SEEDS, LAST_SALE), run, LAST_SALE)
+    golden.assert_lines(port.lines)
+    return port
 
 
 @pytest.fixture(scope="module", params=["fixture", pytest.param("real", marks=real)])
-def port(request) -> Port:
+def port(request, fixture_port) -> Port:
     if request.param == "fixture":
-        run = ApiRun("data/extract/2026-10-14", {}, {"warnings": ["last sale is old"]})
-        return _port(connect(api_tables(), SEEDS, LAST_SALE), run, LAST_SALE)
-    db = open_run(PORT_RUN, Path("config"), REAL_ANCHOR)
+        return fixture_port
+    db = open_run(REAL_RUN, Path("config"), REAL_ANCHOR)
     return _port(db.con, db.run, REAL_ANCHOR)
 
 
@@ -102,8 +105,9 @@ def values(column: pd.Series) -> list:
 # --- the cover ----------------------------------------------------------------------------------
 
 
-def test_full_history_cards_amounts_and_last_sale(port):
-    t = compute_metrics(port.lines).iloc[0]
+def test_full_history_cards_amounts_and_last_sale(fixture_port):
+    port = fixture_port
+    t = golden.numbers("metrics").set_index("scope").loc["full"]
     cards = port.run("full_history_kpis")
     assert [f.metric for f in cards] == ["net_sales", "orders", "aov", "items_sold"]
     row = cards[0].result.df.iloc[0]
@@ -112,7 +116,7 @@ def test_full_history_cards_amounts_and_last_sale(port):
     amounts = port.result("full_history_amounts").df.iloc[0]
     assert same([amounts.gross_sales, amounts.discounts, amounts.refunds],
                 [t.gross_sales, t.discounts, t.refunds])  # fmt: skip
-    assert port.result("last_sale").df.iloc[0].last_sale_ts == port.lines["sale_ts"].max()
+    assert port.result("last_sale").df.iloc[0].last_sale_ts == t.last_sale_ts
 
 
 def test_period_cards(port):
@@ -120,7 +124,7 @@ def test_period_cards(port):
     assert [f.key for f in facets] == PERIODS
     for facet in facets:
         period, r = port.periods[facet.key], facet.result
-        assert facet.label == period.title and r.meta.window.current.label == period.label()
+        assert facet.label == period.title and r.meta.window.current.label == period.label
         assert r.meta.compare_ok == port.prior_ok(facet.key)
         assert r.meta.empty == port.empty(facet.key)
         assert same([r.total["net_sales"]], [port.in_period(facet.key)["net_sales"].sum()])
@@ -146,9 +150,7 @@ def test_the_lines_export_has_the_lines_of_the_excel_file(port):
     df = port.result("lines_export").df
     assert list(df.columns) == [c for c, *_ in COLUMNS]
     columns = list(df.columns)
-    pd.testing.assert_frame_equal(
-        _comparable(df, columns), _comparable(port.lines, columns), check_dtype=False
-    )
+    pd.testing.assert_frame_equal(golden.as_text(df), golden.as_text(port.lines, columns))
 
 
 # --- the weekly report (9.4): pages and chrome ----------------------------------------------------
@@ -170,9 +172,9 @@ def _today_pages(port: Port) -> list[tuple[str, list[tuple[str, str]], str]]:
                                (f"{first:%d %b %Y} – {anchor:%d %b %Y}", "line")], "")]  # fmt: skip
     for key in PERIODS:
         period = port.periods[key]
-        chips = [(period.title, "fill"), (period.label(), "line")]
+        chips = [(period.title, "fill"), (period.label, "line")]
         if port.prior_ok(key):
-            chips.append((f"vs {period.prior_label()}", "muted"))
+            chips.append((f"vs {period.prior_label}", "muted"))
             note = ""
         else:
             chips.append(("no comparison", "muted"))

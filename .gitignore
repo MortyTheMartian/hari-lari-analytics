@@ -9,6 +9,8 @@ data/weekly/
 *.csv
 !config/*.csv
 !tests/fixtures/*.csv
+!tests/golden/*.csv
+!tests/golden/lines/*.csv
 *.xlsx
 *.pdf
 *Zone.Identifier

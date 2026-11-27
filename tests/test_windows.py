@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from hari_lari_analytics.periods import report_periods, shift_months
+from hari_lari_analytics.periods import shift_months
 from hari_lari_analytics.reporting.db import connect
 from hari_lari_analytics.reporting.windows import (
     Bucket,
@@ -14,9 +14,9 @@ from hari_lari_analytics.reporting.windows import (
     resolve,
 )
 
+from . import golden
 from .api_fixture import api_tables
-from .conftest import FIXTURES
-from .test_models import LAST_SALE, SEEDS, _pandas_lines
+from .test_models import LAST_SALE, SEEDS
 
 FIRST_SALE = date(2026, 7, 23)
 
@@ -44,8 +44,9 @@ def test_the_report_periods_resolve_as_before(name, anchor, current, prior):
     w = resolve(name, _cal(anchor))
     as_dates = tuple(tuple(map(date.fromisoformat, r)) for r in (current, prior))
     assert _ranges(w) == as_dates
-    period = {p.key: p for p in report_periods(anchor)}[name]
-    assert (w.current.title, w.current.label) == (period.title, period.label())
+    period = golden.periods(anchor)[name]
+    assert (w.current.title, w.current.label) == (period.title, period.label)
+    assert (w.comparison.label, w.comparison.start) == (period.prior_label, period.prior_start)
 
 
 def test_long_and_short_names_are_the_same_window():
@@ -152,16 +153,12 @@ def test_trading_days_per_window():
     assert resolve("L1D", _cal(anchor, trading)).current.trading_days == 1
 
 
-def test_the_trading_days_are_the_days_with_an_order_in_the_pandas_lines():
-    lines = _pandas_lines(
-        api_tables(), FIXTURES / "item_aliases.csv", FIXTURES / "category_group.csv", LAST_SALE
-    )
-    orders = lines[lines["counts_as_order"]]
+def test_the_trading_days_are_the_golden_days_with_an_order():
     cal = Calendar.from_db(connect(api_tables(), SEEDS, LAST_SALE))
     assert cal.trading_dates == {date(2026, 10, 5), date(2026, 10, 12), date(2026, 10, 13)}
-    for period in report_periods(LAST_SALE):
-        expected = orders.loc[period.mask(orders["sale_ts"]), "sale_date"].nunique()
-        assert resolve(period.key, cal).current.trading_days == expected
+    expected = golden.numbers("metrics").set_index("scope")["trading_days"]
+    for key in golden.periods(LAST_SALE):
+        assert resolve(key, cal).current.trading_days == expected[key], key
 
 
 def test_calendar_from_the_models():

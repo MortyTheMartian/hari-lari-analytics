@@ -11,7 +11,6 @@ import pytest
 import yaml
 
 from hari_lari_analytics import periods
-from hari_lari_analytics.dimensions import add_dimensions
 from hari_lari_analytics.extract.checks import last_week_bounds
 from hari_lari_analytics.project import (
     ENV_VAR,
@@ -24,7 +23,6 @@ from hari_lari_analytics.project import (
 )
 from hari_lari_analytics.reporting import windows
 from hari_lari_analytics.reporting.components import check_calendar
-from hari_lari_analytics.reporting.db import connect
 from hari_lari_analytics.reporting.formats import (
     change_text,
     compact,
@@ -35,9 +33,7 @@ from hari_lari_analytics.reporting.formats import (
 )
 from hari_lari_analytics.reporting.registry import RegistryError, load_registry
 
-from .api_fixture import api_tables
-from .conftest import FIXTURES
-from .test_models import LAST_SALE, SEEDS, _assert_same_lines, _pandas_lines
+from .test_models import golden_case
 
 ROOT = Path(__file__).parent.parent
 PACKAGED = ROOT / "src" / "hari_lari_analytics" / "project.yml"
@@ -274,23 +270,13 @@ def test_last_week_of_the_extraction_check_follows_the_first_weekday():
         assert last_week_bounds(now) == (datetime(2026, 11, 15), datetime(2026, 11, 22))
 
 
-def test_the_pandas_lines_have_their_week_start_on_the_first_weekday(lines):
-    assert (lines["sale_week"].dt.day_of_week == 0).all()
-    with use_project(SUNDAY):
-        sunday_weeks = add_dimensions(lines)["sale_week"]
-    assert (sunday_weeks.dt.day_of_week == 6).all()
-    assert (sunday_weeks <= lines["sale_week"]).all() and (sunday_weeks != lines["sale_week"]).any()
-    assert add_dimensions(lines)["sale_week"].equals(lines["sale_week"])
-
-
-@pytest.mark.parametrize("settings", [None, SUNDAY, make(first_weekday="friday")])
-def test_the_models_and_the_pandas_lines_agree_on_the_weeks(settings):
-    with use_project(settings):
-        expected = _pandas_lines(
-            api_tables(), FIXTURES / "item_aliases.csv", FIXTURES / "category_group.csv", LAST_SALE
-        )
-        con = connect(api_tables(), SEEDS, LAST_SALE, settings)
-    _assert_same_lines(con, expected)  # all columns, sale_week included
+@pytest.mark.parametrize(
+    "case, first_weekday",
+    [("fixture", None), ("first_weekday_sunday", "sunday"), ("first_weekday_friday", "friday")],
+)
+def test_the_models_have_the_golden_weeks(case, first_weekday):
+    settings = make(first_weekday=first_weekday) if first_weekday else None
+    con = golden_case(case)  # all columns, sale_week included
     first = (settings or project()).first_isoweekday
     for model, column in [("fct_sales_lines", "sale_week"), ("fct_orders", "sale_week"),
                           ("dim_calendar", "week_start")]:  # fmt: skip

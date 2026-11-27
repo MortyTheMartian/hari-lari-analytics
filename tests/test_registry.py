@@ -1,16 +1,12 @@
 import json
 import re
-from datetime import date, datetime
-from pathlib import Path
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.load import load_aliases
-from hari_lari_analytics.load_api import load_api_sales
-from hari_lari_analytics.metrics import compute_metrics, contributive_aov
-from hari_lari_analytics.reporting.db import connect, open_run
+from hari_lari_analytics.reporting.db import connect
 from hari_lari_analytics.reporting.registry import (
     Aggregate,
     RegistryError,
@@ -20,10 +16,10 @@ from hari_lari_analytics.reporting.registry import (
     render_expression,
 )
 
+from . import golden
 from .api_fixture import api_tables
-from .conftest import FIXTURES
 from .semantic import evaluate
-from .test_models import LAST_SALE, REAL_RUN, SEEDS, _pandas_lines
+from .test_models import LAST_SALE, SEEDS
 
 MODELS = ["fct_sales_lines", "fct_orders"]
 REG = default_registry()
@@ -128,52 +124,40 @@ def test_filtered_metrics_work_on_lines_and_orders(con):
     pd.testing.assert_frame_equal(*(df.reset_index(drop=True) for df in by_day))
 
 
-def _parity(con, lines: pd.DataFrame) -> None:
-    """The registry metrics equal the pandas metrics of today's report."""
+def test_parity_with_the_golden_pandas_metrics(con):
+    """The registry metrics equal the pandas metrics of today's report, frozen on the fixture."""
     columns = ["gross_sales", "discounts", "refunds", "net_sales", "orders", "items_sold",
                "aov", "first_sale_ts", "last_sale_ts"]  # fmt: skip
-    expected = compute_metrics(lines).iloc[0]
+    expected = golden.numbers("metrics").set_index("scope").loc["full"]
     for model in MODELS:
         row = evaluate(con, REG, model, columns).iloc[0]
         assert row[columns[:-3]].tolist() == expected[columns[:-3]].tolist(), model
         assert row["aov"] == pytest.approx(expected["aov"], rel=1e-12)
         assert row[columns[-2:]].tolist() == expected[columns[-2:]].tolist(), model
 
-    cats = contributive_aov(lines).set_index("adjusted_category")
+    cats = golden.numbers("metrics_by_category")
+    cats = cats[cats["scope"] == "full"].set_index("adjusted_category")
     actual = evaluate(
         con, REG, "fct_sales_lines",
         ["net_sales", "items_sold", "orders", "penetration", "category_aov", "contributive_aov"],
         by="adjusted_category",
     )  # fmt: skip
-    actual = actual[~actual["is_total"]].set_index("adjusted_category").loc[cats.index]
+    actual = actual[~actual["is_total"]].set_index("adjusted_category")
+    assert sorted(actual.index) == sorted(cats.index)
+    actual = actual.loc[cats.index]
     for column in ["net_sales", "items_sold", "orders", "penetration", "contributive_aov"]:
         np.testing.assert_allclose(actual[column], cats[column], rtol=1e-12, err_msg=column)
     np.testing.assert_allclose(
-        actual["category_aov"].astype(float), cats["category_aov"].astype(float), rtol=1e-12
+        actual["category_aov"].astype(float), cats["category_aov"], rtol=1e-12
     )
 
-    by_payment = compute_metrics(lines, ["payment_type"]).set_index("payment_type")
+    by_payment = golden.numbers("metrics_by_payment_type").set_index("payment_type")
     actual = evaluate(con, REG, "fct_orders", ["net_sales", "orders"], by="payment_type")
-    actual = actual[~actual["is_total"]].set_index("payment_type").loc[by_payment.index]
+    actual = actual[~actual["is_total"]].set_index("payment_type")
+    assert sorted(actual.index) == sorted(by_payment.index)
+    actual = actual.loc[by_payment.index]
     assert actual["orders"].tolist() == by_payment["orders"].tolist()
     assert actual["net_sales"].tolist() == by_payment["net_sales"].tolist()
-
-
-def test_parity_with_the_pandas_metrics_on_the_fixture(con):
-    lines = _pandas_lines(
-        api_tables(), FIXTURES / "item_aliases.csv", FIXTURES / "category_group.csv", LAST_SALE
-    )
-    _parity(con, lines)
-
-
-@pytest.mark.skipif(not REAL_RUN.is_dir(), reason="needs the real extraction run (kept out of git)")
-def test_parity_with_the_pandas_metrics_on_the_real_run():
-    from hari_lari_analytics.dimensions import prepare_lines
-
-    anchor = date(2026, 11, 22)
-    _, result = load_api_sales(REAL_RUN, load_aliases(Path("config/item_aliases.csv")))
-    lines, _ = prepare_lines(result, Path("config/category_group.csv"), anchor)
-    _parity(open_run(REAL_RUN, Path("config"), anchor).con, lines)
 
 
 def test_expressions_render_references_totals_and_trading_days():

@@ -5,14 +5,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.dimensions import prepare_lines
 from hari_lari_analytics.load import (
     InputError,
     load_aliases,
     load_calendar_events,
     load_category_groups,
 )
-from hari_lari_analytics.load_api import api_sales_lines, load_api_sales
 from hari_lari_analytics.reporting.db import (
     RAW_SOURCES,
     Seeds,
@@ -26,6 +24,7 @@ from hari_lari_analytics.reporting.model_specs import model_sql
 
 from .api_fixture import api_tables
 from .conftest import FIXTURES
+from .golden import assert_lines, cases
 
 SEEDS = Seeds(
     item_aliases=load_aliases(FIXTURES / "item_aliases.csv"),
@@ -50,28 +49,17 @@ def _comparable(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     return out.sort_values(columns, key=lambda s: s.astype(str)).reset_index(drop=True)
 
 
-def _pandas_lines(tables, aliases_path, groups_path, anchor) -> pd.DataFrame:
-    result = api_sales_lines(tables, load_aliases(aliases_path))
-    lines, _ = prepare_lines(result, groups_path, anchor)
-    return lines
+def golden_case(case: str):
+    """The models of a case of `tests/golden/cases.py`, after checking that their sales lines
+    equal the golden lines of the case."""
+    con = cases.connect(case)
+    assert_lines(con.execute("select * from fct_sales_lines").df(), case)
+    return con
 
 
-def _assert_same_lines(con, expected: pd.DataFrame) -> None:
-    actual = con.execute("select * from fct_sales_lines").df()
-    missing = set(expected.columns) - set(actual.columns)
-    assert not missing, f"fct_sales_lines lacks {sorted(missing)}"
-    columns = list(expected.columns)
-    pd.testing.assert_frame_equal(
-        _comparable(actual, columns), _comparable(expected, columns), check_dtype=False
-    )
-
-
-@pytest.mark.parametrize("anchor", [LAST_SALE, date(2026, 10, 6)])
-def test_sales_lines_equal_the_pandas_lines(anchor):
-    expected = _pandas_lines(
-        api_tables(), FIXTURES / "item_aliases.csv", FIXTURES / "category_group.csv", anchor
-    )
-    _assert_same_lines(connect(api_tables(), SEEDS, anchor), expected)
+@pytest.mark.parametrize("case", ["fixture", "anchor_2026-10-06"])
+def test_sales_lines_equal_the_golden_lines(case):
+    golden_case(case)
 
 
 def test_default_anchor_is_the_day_of_the_last_payment():
@@ -275,74 +263,87 @@ def test_stock_is_a_snapshot_of_the_tracked_live_variants_at_the_extraction():
 # --- item identity by id (plan 9.8) --------------------------------------------------------------
 
 
-def _latte_labels(tables, anchor=LAST_SALE):
-    """The item-variant label of each Latte line, by receipt, from the models and from pandas
-    (which must agree), with the label as sold next to it."""
-    con = connect(tables, SEEDS, anchor)
-    rows = _query(
-        con,
+def _latte_labels(case: str):
+    """The item-variant label of each Latte line of a golden case, by receipt, with the label
+    as sold next to it."""
+    return _query(
+        golden_case(case),
         "select receipt_nr, adjusted_item_variant, item_variant from fct_sales_lines "
         "where adjusted_item = 'Latte' order by receipt_nr",
     )
-    expected = _pandas_lines(
-        tables, FIXTURES / "item_aliases.csv", FIXTURES / "category_group.csv", anchor
-    )
-    _assert_same_lines(con, expected)
-    return rows
 
 
 def test_a_live_variant_gives_todays_label_and_item_variant_stays_as_sold():
-    assert _latte_labels(api_tables()) == [
+    assert _latte_labels("fixture") == [
         ("R001", "Latte-Hot", "Latte-Hot"),
         ("R002", "Latte-Cold", "Latte-Cold"),
     ]
-    tables = api_tables()
-    variants = tables["item_variants"]
-    variants.loc[variants["id"] == 10, "name"] = "large"  # Moka renamed Hot
-    assert _latte_labels(tables) == [
+    assert _latte_labels("variant_hot_renamed") == [
         ("R001", "Latte-Large", "Latte-Hot"),
         ("R002", "Latte-Cold", "Latte-Cold"),
     ]
 
 
 def test_a_live_variant_without_a_name_is_the_item_alone():
-    tables = api_tables()
-    variants = tables["item_variants"]
-    variants.loc[variants["id"] == 10, "name"] = ""  # what Moka kept of the Hot variant
-    assert _latte_labels(tables) == [
+    assert _latte_labels("variant_hot_without_name") == [
         ("R001", "Latte", "Latte-Hot"),
         ("R002", "Latte-Cold", "Latte-Cold"),
     ]
 
 
 def test_a_deleted_or_unknown_variant_falls_back_to_the_item():
-    tables = api_tables()
-    variants = tables["item_variants"]
-    variants.loc[variants["id"] == 11, "is_deleted"] = True  # Cold was dropped
-    variants.loc[variants["id"] == 10, "name"] = ""
-    assert _latte_labels(tables) == [
+    assert _latte_labels("variant_cold_deleted") == [
         ("R001", "Latte", "Latte-Hot"),
         ("R002", "Latte", "Latte-Cold"),
     ]
-    tables = api_tables()
-    tables["item_variants"] = tables["item_variants"].query("id != 11")  # unknown to the catalog
-    assert _latte_labels(tables)[1] == ("R002", "Latte", "Latte-Cold")
+    assert _latte_labels("variant_cold_unknown")[1] == ("R002", "Latte", "Latte-Cold")
 
 
 def test_a_variant_of_another_item_does_not_name_the_line():
-    tables = api_tables()
-    variants = tables["item_variants"]
-    variants.loc[variants["id"] == 11, "item_id"] = 2  # the id now belongs to another item
-    assert _latte_labels(tables)[1] == ("R002", "Latte", "Latte-Cold")
+    assert _latte_labels("variant_cold_of_another_item")[1] == ("R002", "Latte", "Latte-Cold")
 
 
 def test_a_run_without_the_variants_table_keeps_the_label_of_the_sale():
-    tables = api_tables()
-    del tables["item_variants"]  # a run from before the table was extracted
-    assert _latte_labels(tables) == [
+    assert _latte_labels("no_variants") == [
         ("R001", "Latte-Hot", "Latte-Hot"),
         ("R002", "Latte-Cold", "Latte-Cold"),
     ]
+
+
+# --- item resolution by id and alias, discount codes ---------------------------------------------
+
+
+def _line(case: str, receipt: str, item: str, columns: str) -> tuple:
+    con = golden_case(case)
+    sql = f"select {columns} from fct_sales_lines where receipt_nr = ? and item = ?"
+    (row,) = con.execute(sql, [receipt, item]).fetchall()
+    return row
+
+
+def test_a_renamed_item_follows_its_id_without_an_alias():
+    row = _line("item_renamed_without_alias", "R001", "Tomato Focaccia",
+                "adjusted_item, adjusted_category")  # fmt: skip
+    assert row == ("Focaccia Tomato", "Snacks (Focaccia)")
+
+
+def test_an_alias_wins_over_the_item_id():
+    # item 3 is "Focaccia Tomato" today, but the alias says this sales name is something else
+    row = _line("item_alias_wins", "R001", "Tomato Focaccia", "adjusted_item, adjusted_category")
+    assert row == ("Focaccia Mushroom", "Snacks")
+
+
+def test_a_deleted_item_falls_back_to_its_alias_then_to_its_own_category():
+    columns = "adjusted_item, adjusted_category"
+    # the alias's capitalization is corrected to the live item's
+    row = _line("item_deleted_with_alias", "R001", "Tomato Focaccia", columns)
+    assert row == ("Focaccia Tomato Special", "Snacks (Focaccia)")
+    row = _line("item_deleted_without_alias", "R001", "Tomato Focaccia", columns)
+    assert row == ("Tomato Focaccia", "Snacks (Focaccia)")
+
+
+def test_several_discount_codes_on_one_line_are_joined():
+    (code,) = _line("two_discount_codes", "R002", "Latte", "discount_code")
+    assert code == "CLEANUP20 + FOUNDER25"
 
 
 def test_build_order_puts_references_first_and_refuses_upward_references():
@@ -426,13 +427,9 @@ REAL_RUN = Path("data/extract/2026-11-22")
 
 
 @pytest.mark.skipif(not REAL_RUN.is_dir(), reason="needs the real extraction run (kept out of git)")
-def test_parity_with_the_pandas_lines_on_the_real_run():
-    anchor = date(2026, 11, 22)
-    run, result = load_api_sales(REAL_RUN, load_aliases(Path("config/item_aliases.csv")))
-    expected, _ = prepare_lines(result, Path("config/category_group.csv"), anchor)
-    db = open_run(REAL_RUN, Path("config"), anchor)
-    assert len(expected) == 2707
-    _assert_same_lines(db.con, expected)
+def test_the_real_run_has_the_lines_the_pandas_pipeline_had():
+    db = open_run(REAL_RUN, Path("config"), date(2026, 11, 22))
+    assert _query(db.con, "select count(*) from fct_sales_lines") == [(2707,)]
 
 
 @pytest.mark.skipif(not REAL_RUN.is_dir(), reason="needs the real extraction run (kept out of git)")

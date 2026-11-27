@@ -1,0 +1,5 @@
+scope,gross_sales,discounts,refunds,net_sales,orders,items_sold,aov,first_sale_ts,last_sale_ts,trading_days,compare_ok,empty
+full,263000,10000,40000,213000,4,7,53250,2026-10-05T07:00:00,2026-10-13T11:00:00,3,false,false
+L14D,263000,10000,40000,213000,4,7,53250,2026-10-05T07:00:00,2026-10-13T11:00:00,3,false,false
+L6W,148000,10000,40000,98000,2,3,49000,2026-10-05T07:00:00,2026-10-05T08:00:00,1,false,false
+L3M,0,0,0,0,0,0,,,,0,false,true
