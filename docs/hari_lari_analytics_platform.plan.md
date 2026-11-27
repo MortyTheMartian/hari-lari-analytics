@@ -35,7 +35,7 @@ todos:
   llm: gpt-5.6-terra-medium
   status: completed
 - id: t9-release-a
-  content: "[agent] Merge phase A on a Tuesday to Thursday (never between Saturday 18:00 and Monday 05:00 WITA), watch the release workflow to the promotion, and compare the next Monday's bundle.json in gs://hari-lari-data/reports/weekly/<anchor>/ with a local build on the same run. [owner] Confirm the Monday report looked as before. Blocked by t8-import-contract."
+  content: "[agent] Merge phase A on a Tuesday to Thursday (never between Saturday 18:00 and Monday 05:00 WITA), watch the release workflow to the promotion, and compare the next Monday's bundle.json in gs://hari-lari-data/reports/weekly/<anchor>/ with a local build on the same run. [owner] Confirm the Monday report looked as before. Blocked by t8-import-contract. Result 27 Nov 2026: merged as bd35ece; dry run succeeded; live job promoted ff86fcaac81d -> bd35ece9d9f7; the weekly scheduler is still Monday 04:00 WITA. Still open: Monday's bundle compare, and the owner confirms the report looked as before."
   llm: gpt-5.6-terra-medium
   status: pending
 - id: t10-design-b
