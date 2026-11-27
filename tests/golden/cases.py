@@ -11,10 +11,14 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from hari_lari_analytics.load import load_aliases, load_calendar_events, load_category_groups
 from hari_lari_analytics.project import Project, parse_project
 from hari_lari_analytics.reporting import db
 from hari_lari_analytics.reporting.db import Seeds
+from hari_lari_analytics.reporting.inputs import (
+    load_aliases,
+    load_calendar_events,
+    load_category_groups,
+)
 
 from ..api_fixture import api_tables
 

@@ -5,12 +5,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.load import (
-    InputError,
-    load_aliases,
-    load_calendar_events,
-    load_category_groups,
-)
 from hari_lari_analytics.reporting.db import (
     RAW_SOURCES,
     Seeds,
@@ -19,6 +13,12 @@ from hari_lari_analytics.reporting.db import (
     load_sources,
     model_references,
     open_run,
+)
+from hari_lari_analytics.reporting.inputs import (
+    InputError,
+    load_aliases,
+    load_calendar_events,
+    load_category_groups,
 )
 from hari_lari_analytics.reporting.model_specs import model_sql
 

@@ -122,6 +122,16 @@ def test_broken_amounts_fail():
     assert "int_signed_lines: gross_sales - discounts - refunds = net_sales" in _errors(tables)
 
 
+def test_a_refund_whose_lines_differ_from_its_refund_amount_warns():
+    tables = api_tables()
+    payments = tables["transactions"]
+    payments.loc[payments["id"] == "p3r", "refund_amount"] = 30000
+    report = check(connect(tables, SEEDS))
+    (warning,) = [r for r in report.warnings if "partial refund" in r.check.message]
+    assert warning.sample == [("R003", 30000.0)]
+    assert "refunds whose line amounts differ" in warning.describe()
+
+
 def test_a_line_without_its_payment_fails():
     tables = api_tables()
     tables["transactions"] = tables["transactions"][tables["transactions"]["id"] != "p5"]

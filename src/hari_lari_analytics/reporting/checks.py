@@ -20,7 +20,7 @@ import duckdb
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from hari_lari_analytics.load import InputError
+from hari_lari_analytics.reporting.inputs import InputError
 from hari_lari_analytics.reporting.model_specs import ModelSpec, default_models
 
 Severity = Literal["error", "warn"]

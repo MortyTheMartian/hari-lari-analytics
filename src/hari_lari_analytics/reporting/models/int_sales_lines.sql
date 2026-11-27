@@ -1,6 +1,5 @@
 -- The cleaned sales lines up to the anchor: the signed lines with the adjusted item and
--- category, the time truncations, the item-variant labels and the category groups (the
--- pandas pipeline: load_api_sales, add_dimensions, add_category_groups, the anchor cut).
+-- category, the time truncations, the item-variant labels and the category groups.
 -- Category groups are joined by adjusted category name, never by category id, because Moka
 -- reuses ids with a new meaning (decision D10). A category without a group is 'unmapped'.
 -- Items keep their identity by id (plan 9.8): `adjusted_item_variant` is today's label of the

@@ -35,7 +35,6 @@ import jinja2
 import pandas as pd
 import yaml
 
-from hari_lari_analytics.load import InputError
 from hari_lari_analytics.reporting import components, manifest, preview, report_cli
 from hari_lari_analytics.reporting import reports as reports_module
 from hari_lari_analytics.reporting.components import (
@@ -48,6 +47,7 @@ from hari_lari_analytics.reporting.components import (
 )
 from hari_lari_analytics.reporting.db import open_run
 from hari_lari_analytics.reporting.facets import Facet, run_facets
+from hari_lari_analytics.reporting.inputs import InputError
 from hari_lari_analytics.reporting.queries import QueryContext
 from hari_lari_analytics.reporting.reports import ReportError, load_report, reports_dir
 from hari_lari_analytics.reporting.result import Result

@@ -91,13 +91,12 @@ Phase A moves the code without changing any output (t6 and t7).
 | --- | --- |
 | `project.py`, `reporting/store.py`, `reporting/log.py` | `core` |
 | `extract/` | `sources/moka` |
-| `reporting/db.py`, `model_specs.py`, `checks.py`, `models/`, `sources.yml`, `models.yml`, `checks.yml`; `load.py` and `load_run` from `load_api.py` (t6) | `warehouse` |
+| `reporting/db.py`, `inputs.py` (the run reader and the seed loaders), `model_specs.py`, `checks.py`, `models/`, `sources.yml`, `models.yml`, `checks.yml` | `warehouse` |
 | `reporting/registry.py`, `metrics.yml`, `dimensions.yml`, `kpi_tree.yml` | `semantic` |
-| `reporting/compiler.py`, `result.py`, `windows.py` (with `periods.py`, t6), `transforms/`, `queries/` | `analysis` |
+| `reporting/compiler.py`, `result.py`, `windows.py`, `transforms/`, `queries/` | `analysis` |
 | `reporting/components.py`, `facets.py`, `insights.py`, `insights.yml`, `formats.py`, `present.py`, `visuals/`, `layouts.py`, `reports.py`, `builder.py`, `outputs/`, `manifest.py`, `snapshots.py`, `gallery.py`, `preview.py`, `components/`, `reports/`, `schema/`, `semantic_manifest.json` | `presentation` |
 | `reporting/report_cli.py`, `reporting/cli.py`, `reporting/delivery.py` (as it is; split in phase C) | `orchestration` |
 | `deliver/` | `distribution` |
-| `clean.py`, `dimensions.py`, `metrics.py`, `report_excel.py`, the pandas mapping in `load_api.py` | deleted (t6) |
 
 The console scripts keep their names. `extraction/moka/probe_schema.py` stays a script outside the
 package.

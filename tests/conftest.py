@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
-LAST = "test_zz_pandas_pipeline_unused.py"
 
 
 def pytest_addoption(parser):
@@ -12,11 +11,6 @@ def pytest_addoption(parser):
         action="store_true",
         help="rewrite tests/snapshots/ from the current results of the components",
     )
-
-
-def pytest_collection_modifyitems(items):
-    """The check that no test imported the pandas pipeline runs after all the others."""
-    items.sort(key=lambda item: item.path.name == LAST)
 
 
 @pytest.fixture(scope="module")

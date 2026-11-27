@@ -1,5 +1,5 @@
 -- The adjusted item and category of every sold item: one row per item id and name as sold
--- (plan 2.4, the rules of load_api._resolve_items).
+-- (plan 2.4).
 --
 -- 1. config/item_aliases.csv wins when it lists the sales name: adjusted_item replaces the
 --    name (empty: keep the sales name), adjusted_category sets the category.

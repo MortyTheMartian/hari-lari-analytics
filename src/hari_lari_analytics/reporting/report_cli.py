@@ -34,7 +34,6 @@ from pathlib import Path
 from typing import TextIO
 
 from hari_lari_analytics.extract.run import DEFAULT_SINCE
-from hari_lari_analytics.load import InputError
 from hari_lari_analytics.project import project
 from hari_lari_analytics.reporting import components as components_module
 from hari_lari_analytics.reporting import delivery, gallery
@@ -42,6 +41,7 @@ from hari_lari_analytics.reporting import reports as reports_module
 from hari_lari_analytics.reporting.builder import build_report
 from hari_lari_analytics.reporting.components import Component, ComponentError, components_dir
 from hari_lari_analytics.reporting.db import open_run
+from hari_lari_analytics.reporting.inputs import InputError
 from hari_lari_analytics.reporting.outputs import bundle_schema
 from hari_lari_analytics.reporting.queries import QueryContext
 from hari_lari_analytics.reporting.reports import (

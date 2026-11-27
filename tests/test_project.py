@@ -10,7 +10,6 @@ import pandas as pd
 import pytest
 import yaml
 
-from hari_lari_analytics import periods
 from hari_lari_analytics.extract.checks import last_week_bounds
 from hari_lari_analytics.project import (
     ENV_VAR,
@@ -246,13 +245,13 @@ def test_week_start_and_end():
 
 def test_complete_weeks_end_on_the_day_before_the_first_weekday():
     wed = date(2026, 11, 25)
-    assert periods.last_n_weeks(wed, 1).end == date(2026, 11, 22)  # Sunday
-    assert periods.last_n_weeks(date(2026, 11, 22), 1).start == date(2026, 11, 16)
+    assert windows.last_n_weeks(wed, 1).end == date(2026, 11, 22)  # Sunday
+    assert windows.last_n_weeks(date(2026, 11, 22), 1).start == date(2026, 11, 16)
     with use_project(SUNDAY):
-        week = periods.last_n_weeks(wed, 2)
+        week = windows.last_n_weeks(wed, 2)
         assert (week.start, week.end) == (date(2026, 11, 8), date(2026, 11, 21))  # Sun to Sat
-        assert periods.last_n_weeks(date(2026, 11, 21), 1).end == date(2026, 11, 21)
-        wtd = periods.week_to_date(wed)
+        assert windows.last_n_weeks(date(2026, 11, 21), 1).end == date(2026, 11, 21)
+        wtd = windows.week_to_date(wed)
         assert (wtd.start, wtd.prior_start) == (date(2026, 11, 22), date(2026, 11, 15))
 
 

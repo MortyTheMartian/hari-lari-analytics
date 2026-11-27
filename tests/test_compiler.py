@@ -20,10 +20,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.load_api import ApiRun
 from hari_lari_analytics.reporting.checks import check
 from hari_lari_analytics.reporting.compiler import Query, QueryError, compile_query, run_query
 from hari_lari_analytics.reporting.db import connect, open_run
+from hari_lari_analytics.reporting.inputs import ApiRun
 from hari_lari_analytics.reporting.queries import (
     QueryContext,
     SourceQuery,
@@ -459,6 +459,17 @@ def test_the_lines_export_has_the_excel_columns_and_never_the_note(con):
     pd.testing.assert_frame_equal(
         _comparable(r.df, EXPORT_COLUMNS), _comparable(lines, EXPORT_COLUMNS), check_dtype=False
     )
+
+
+def test_the_lines_export_orders_the_lines_of_one_receipt_and_second_by_their_key(con):
+    r = execute(parse_query({"source": "lines_export"}), QueryContext.create(con))
+    expected = con.execute(
+        "select item from fct_sales_lines order by sale_ts, receipt_nr, payment_id, line_uuid"
+    ).fetchall()
+    assert r.df["item"].tolist() == [item for (item,) in expected]
+    assert r.df.loc[r.df["receipt_nr"] == "R004", "item"].tolist() == [
+        "Nasi Campur", "Nasi Campur", "Mystery Cake"
+    ]  # fmt: skip
 
 
 def test_the_data_notes(con):

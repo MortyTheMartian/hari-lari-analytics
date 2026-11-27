@@ -1,38 +1,15 @@
-"""Find and read the two Moka POS exports, and check that they look as expected."""
+"""The inputs of the models: the Parquet tables of one extraction run, and the config CSV files
+(the seeds), each read and validated before `db.py` registers it."""
 
 from __future__ import annotations
 
-import re
+import json
+import tempfile
+from collections.abc import Iterable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pandas as pd
-
-LIBRARY_PATTERN = re.compile(r"^\d{4}_\d{2}_\d{2}_item_library\.csv$")
-SALES_PATTERN = re.compile(
-    r"^\d{4}_\d{2}_\d{2}_sales_report_item_details_\d{2}-\d{2}-\d{4}_\d{2}-\d{2}-\d{4}\.csv$"
-)
-
-SALES_COLUMNS = [
-    "Receipt Number",
-    "Date",
-    "Time",
-    "Category",
-    "Items",
-    "Variant",
-    "Quantity",
-    "Discount Applied",
-    "Gross Sales",
-    "Discounts",
-    "Refunds",
-    "Net Sales",
-    "Payment Method",
-    "Event Type",
-    "Reason of Refund",
-]
-MONEY_COLUMNS = ["Gross Sales", "Discounts", "Refunds", "Net Sales"]
-
-LIBRARY_ITEM = "Items Name (Do Not Edit)"
-LIBRARY_COLUMNS = [LIBRARY_ITEM, "Category", "Variant name"]
 
 ALIAS_COLUMNS = ["sales_item", "adjusted_item", "adjusted_category"]
 
@@ -47,29 +24,110 @@ class InputError(Exception):
     """The input files are missing, ambiguous or do not have the expected structure."""
 
 
-def find_inputs(input_dir: Path) -> tuple[Path, Path]:
-    """Return (item_library_path, sales_report_path); exactly one of each must exist."""
-    if not input_dir.is_dir():
-        raise InputError(f"Input folder not found: {input_dir}")
-    names = sorted(p.name for p in input_dir.iterdir() if p.is_file())
-    library = [n for n in names if LIBRARY_PATTERN.match(n)]
-    sales = [n for n in names if SALES_PATTERN.match(n)]
-    problems = []
-    for label, found, example in [
-        ("item library", library, "2026_11_01_item_library.csv"),
-        (
-            "sales report",
-            sales,
-            "2026_11_01_sales_report_item_details_01-01-2026_31-10-2026.csv",
-        ),
-    ]:
-        if not found:
-            problems.append(f"no {label} file found (expected a name like {example})")
-        elif len(found) > 1:
-            problems.append(f"more than one {label} file found: {', '.join(found)}")
-    if problems:
-        raise InputError(f"In {input_dir}: " + "; ".join(problems))
-    return input_dir / library[0], input_dir / sales[0]
+# ---- the extraction run -------------------------------------------------------------
+
+
+@dataclass
+class ApiRun:
+    """The tables of one extraction run, with the manifest if there is one."""
+
+    location: str
+    tables: dict[str, pd.DataFrame]
+    manifest: dict = field(default_factory=dict)
+
+    @property
+    def name(self) -> str:
+        return self.location.rstrip("/").rsplit("/", 1)[-1]
+
+
+def _is_gcs(location: str) -> bool:
+    return location.startswith("gs://")
+
+
+def find_run(location: str | Path) -> str:
+    """Return the folder of one run.
+
+    `location` is either a run folder (it holds `tables/`) or a folder of dated runs, in which
+    case the most recent run wins. `gs://bucket/prefix` works the same way.
+    """
+    location = str(location)
+    if _is_gcs(location):
+        return _find_gcs_run(location)
+    root = Path(location)
+    if (root / "tables").is_dir():
+        return str(root)
+    runs = sorted(p for p in root.glob("*") if (p / "tables").is_dir()) if root.is_dir() else []
+    if not runs:
+        raise InputError(f"No extraction run (a folder with tables/) found in {root}")
+    return str(runs[-1])
+
+
+def _gcs_client():
+    from google.cloud import storage  # needs the `gcp` extra
+
+    return storage.Client()
+
+
+def _split_gcs(location: str) -> tuple[str, str]:
+    bucket, _, prefix = location[len("gs://") :].partition("/")
+    return bucket, prefix.strip("/")
+
+
+def _find_gcs_run(location: str, client=None) -> str:
+    client = client or _gcs_client()
+    bucket, prefix = _split_gcs(location)
+    base = f"{prefix}/" if prefix else ""
+    if any(True for _ in client.list_blobs(bucket, prefix=f"{base}tables/", max_results=1)):
+        return f"gs://{bucket}/{prefix}"  # `location` is itself a run folder
+    blobs = client.list_blobs(bucket, prefix=base)
+    runs = {
+        b.name[len(base) :].split("/", 1)[0]
+        for b in blobs
+        if b.name[len(base) :].count("/") >= 2 and b.name[len(base) :].split("/")[1] == "tables"
+    }
+    if not runs:
+        raise InputError(f"No extraction run (a folder with tables/) found in {location}")
+    return f"gs://{bucket}/{base}{sorted(runs)[-1]}"
+
+
+def load_run(location: str | Path, tables: Iterable[str]) -> ApiRun:
+    """Read the Parquet tables (and manifest) of the run in `location`: each of `tables` that
+    the run has. Whether a missing table is an error is up to the caller (`sources.yml`)."""
+    names = list(dict.fromkeys(tables))
+    run = find_run(location)
+    if _is_gcs(run):
+        with tempfile.TemporaryDirectory() as tmp:
+            local = _download_gcs(run, Path(tmp))
+            loaded = _read_local(local, names)
+    else:
+        loaded = _read_local(Path(run), names)
+    return ApiRun(run, loaded[0], loaded[1])
+
+
+def _download_gcs(location: str, target: Path, client=None) -> Path:
+    client = client or _gcs_client()
+    bucket, prefix = _split_gcs(location)
+    for blob in client.list_blobs(bucket, prefix=prefix + "/"):
+        rel = blob.name[len(prefix) + 1 :]
+        if rel.startswith("tables/") or rel == "manifest.json":
+            dest = target / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            blob.download_to_filename(str(dest))
+    return target
+
+
+def _read_local(run_dir: Path, names: list[str]) -> tuple[dict[str, pd.DataFrame], dict]:
+    tables: dict[str, pd.DataFrame] = {}
+    for name in names:
+        path = run_dir / "tables" / f"{name}.parquet"
+        if path.exists():
+            tables[name] = pd.read_parquet(path)
+    manifest_path = run_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+    return tables, manifest
+
+
+# ---- the seeds ----------------------------------------------------------------------
 
 
 def _read_csv(path: Path, required: list[str]) -> pd.DataFrame:
@@ -78,47 +136,6 @@ def _read_csv(path: Path, required: list[str]) -> pd.DataFrame:
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise InputError(f"{path.name} is missing columns: {', '.join(missing)}")
-    return df
-
-
-def _to_int(series: pd.Series, column: str, path: Path) -> pd.Series:
-    values = pd.to_numeric(series.replace("", "0"), errors="coerce")
-    if values.isna().any():
-        bad = series[values.isna()].unique()[:5]
-        raise InputError(f"{path.name}: non-numeric values in '{column}': {list(bad)}")
-    if (values.round() != values).any():
-        raise InputError(f"{path.name}: '{column}' contains fractional values")
-    return values.round().astype("int64")
-
-
-def load_sales(path: Path) -> pd.DataFrame:
-    """Read the itemized sales report with amounts as whole Rupiah and Quantity as int."""
-    df = _read_csv(path, SALES_COLUMNS)
-    for column in MONEY_COLUMNS + ["Quantity"]:
-        df[column] = _to_int(df[column], column, path)
-
-    mismatch = df["Gross Sales"] - df["Discounts"] - df["Refunds"] != df["Net Sales"]
-    if mismatch.any():
-        receipts = df.loc[mismatch, "Receipt Number"].unique()[:5]
-        raise InputError(
-            f"{path.name}: Gross - Discounts - Refunds != Net Sales on {mismatch.sum()} rows "
-            f"(e.g. receipts {list(receipts)})"
-        )
-    unknown_events = set(df["Event Type"]) - {"Payment", "Refund"}
-    if unknown_events:
-        raise InputError(f"{path.name}: unexpected Event Type values {sorted(unknown_events)}")
-    return df
-
-
-def load_library(path: Path) -> pd.DataFrame:
-    """Read the item library; one row per item and variant."""
-    df = _read_csv(path, LIBRARY_COLUMNS)
-    df[LIBRARY_ITEM] = df[LIBRARY_ITEM].str.strip()
-    df["Category"] = df["Category"].str.strip()
-    categories = df.groupby(LIBRARY_ITEM)["Category"].nunique()
-    conflicting = categories[categories > 1].index.tolist()
-    if conflicting:
-        raise InputError(f"{path.name}: items listed under several categories: {conflicting}")
     return df
 
 
