@@ -2,8 +2,8 @@ import urllib.parse
 
 import pytest
 
-from hari_lari_analytics.deliver.drive import SCOPES, drive_session
-from hari_lari_analytics.deliver.drive_cli import REDIRECT_URI, auth_url, code_from
+from hari_lari_analytics.distribution.drive import SCOPES, drive_session
+from hari_lari_analytics.distribution.drive_cli import REDIRECT_URI, auth_url, code_from
 
 
 def test_auth_url_asks_for_offline_access_and_the_drive_scope():

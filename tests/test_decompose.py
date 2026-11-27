@@ -19,19 +19,19 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.reporting.compiler import Query, run_query
-from hari_lari_analytics.reporting.db import connect
-from hari_lari_analytics.reporting.registry import default_registry, identity_models
-from hari_lari_analytics.reporting.result import Result, ResultMeta
-from hari_lari_analytics.reporting.transforms import (
+from hari_lari_analytics.analysis.compiler import Query, run_query
+from hari_lari_analytics.analysis.result import Result, ResultMeta
+from hari_lari_analytics.analysis.transforms import (
     TransformContext,
     TransformError,
     apply,
     plan_query,
     run_pipeline,
 )
-from hari_lari_analytics.reporting.transforms.decompose import log_mean
-from hari_lari_analytics.reporting.windows import Calendar, ResolvedWindow, Window
+from hari_lari_analytics.analysis.transforms.decompose import log_mean
+from hari_lari_analytics.analysis.windows import Calendar, ResolvedWindow, Window
+from hari_lari_analytics.semantic.registry import default_registry, identity_models
+from hari_lari_analytics.warehouse.db import connect
 
 from .api_fixture import api_tables
 from .test_compiler import real, real_run  # noqa: F401  (real_run: a fixture)

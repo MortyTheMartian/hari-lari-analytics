@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import re
 
-from hari_lari_analytics.deliver.telegram import TelegramClient
+from hari_lari_analytics.distribution.telegram import TelegramClient
 
 TOKEN = "123456789:AAFakeTokenFakeTokenFakeTokenFake_12"
 GROUP, ADMIN = "-100111", "999"

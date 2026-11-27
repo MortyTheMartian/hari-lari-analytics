@@ -10,8 +10,8 @@ import pandas as pd
 import pytest
 import yaml
 
-from hari_lari_analytics.extract.checks import last_week_bounds
-from hari_lari_analytics.project import (
+from hari_lari_analytics.analysis import windows
+from hari_lari_analytics.core.project import (
     ENV_VAR,
     Project,
     ProjectError,
@@ -20,9 +20,8 @@ from hari_lari_analytics.project import (
     project,
     use_project,
 )
-from hari_lari_analytics.reporting import windows
-from hari_lari_analytics.reporting.components import check_calendar
-from hari_lari_analytics.reporting.formats import (
+from hari_lari_analytics.presentation.components import check_calendar
+from hari_lari_analytics.presentation.formats import (
     change_text,
     compact,
     date_range,
@@ -30,12 +29,13 @@ from hari_lari_analytics.reporting.formats import (
     idr,
     pct,
 )
-from hari_lari_analytics.reporting.registry import RegistryError, load_registry
+from hari_lari_analytics.semantic.registry import RegistryError, load_registry
+from hari_lari_analytics.sources.moka.checks import last_week_bounds
 
 from .test_models import golden_case
 
 ROOT = Path(__file__).parent.parent
-PACKAGED = ROOT / "src" / "hari_lari_analytics" / "project.yml"
+PACKAGED = ROOT / "src" / "hari_lari_analytics" / "core" / "project.yml"
 
 
 def make(**changes) -> Project:
@@ -125,7 +125,7 @@ def test_the_deploy_files_use_the_project_time_zone():
     assert re.search(rf"^\s*TZ={zone}\s*$", (ROOT / "Dockerfile").read_text(), re.M)
     assert f"TZ={zone}" in (ROOT / "deploy" / "setup.sh").read_text()
     weekly = yaml.safe_load(
-        (ROOT / "src/hari_lari_analytics/reporting/reports/weekly.yml").read_text()
+        (ROOT / "src/hari_lari_analytics/presentation/reports/weekly.yml").read_text()
     )
     assert weekly["schedule"]["timezone"] == zone  # the scheduler job's time zone
 
@@ -295,7 +295,7 @@ def test_the_default_min_n_comes_from_the_project():
 
 
 def test_min_n_defaults_is_no_longer_a_metrics_file_entry():
-    text = (ROOT / "src/hari_lari_analytics/reporting/metrics.yml").read_text()
+    text = (ROOT / "src/hari_lari_analytics/semantic/metrics.yml").read_text()
     assert not re.search(r"^defaults:", text, re.M)  # moved to project.yml
     with pytest.raises(RegistryError, match=r"metrics.yml: defaults is gone.*project.yml"):
         load_registry("defaults:\n  min_n: 30\n")

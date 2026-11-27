@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from hari_lari_analytics.deliver import cli, settings
-from hari_lari_analytics.deliver.telegram import (
+from hari_lari_analytics.distribution import cli, settings
+from hari_lari_analytics.distribution.telegram import (
     MAX_CAPTION,
     TelegramClient,
     TelegramError,
@@ -109,7 +109,7 @@ def test_network_error_text_hides_the_token():
 def test_50_mb_guard_stops_before_uploading(tmp_path, monkeypatch):
     big = tmp_path / "big.pdf"
     big.write_bytes(b"x" * 100)
-    monkeypatch.setattr("hari_lari_analytics.deliver.telegram.MAX_DOCUMENT_BYTES", 50)
+    monkeypatch.setattr("hari_lari_analytics.distribution.telegram.MAX_DOCUMENT_BYTES", 50)
     c, transport, _ = client()
     with pytest.raises(TelegramError, match="limit"):
         c.send_document(1, big)

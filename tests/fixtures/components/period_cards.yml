@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../../src/hari_lari_analytics/reporting/schema/component.schema.json
+# yaml-language-server: $schema=../../../src/hari_lari_analytics/presentation/schema/component.schema.json
 id: period_cards
 title: Periods
 params: { period: L14D }

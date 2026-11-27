@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from hari_lari_analytics.reporting.inputs import InputError, load_calendar_events
+from hari_lari_analytics.warehouse.inputs import InputError, load_calendar_events
 
 from .conftest import FIXTURES
 

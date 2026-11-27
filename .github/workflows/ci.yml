@@ -39,6 +39,9 @@ jobs:
       - name: Lint
         run: uv run --no-sync ruff check
 
+      - name: Import contracts
+        run: uv run --no-sync lint-imports
+
       - name: Tests
         run: uv run --no-sync pytest -q
 

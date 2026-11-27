@@ -19,12 +19,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.reporting import formats
-from hari_lari_analytics.reporting.compiler import Query, run_query
-from hari_lari_analytics.reporting.db import connect
-from hari_lari_analytics.reporting.registry import default_registry
-from hari_lari_analytics.reporting.result import Result, ResultMeta
-from hari_lari_analytics.reporting.transforms import (
+from hari_lari_analytics.analysis.compiler import Query, run_query
+from hari_lari_analytics.analysis.result import Result, ResultMeta
+from hari_lari_analytics.analysis.transforms import (
     TRANSFORMS,
     TransformContext,
     TransformError,
@@ -33,8 +30,11 @@ from hari_lari_analytics.reporting.transforms import (
     plan_query,
     run_pipeline,
 )
-from hari_lari_analytics.reporting.transforms.quality import small_n_mask
-from hari_lari_analytics.reporting.windows import Calendar
+from hari_lari_analytics.analysis.transforms.quality import small_n_mask
+from hari_lari_analytics.analysis.windows import Calendar
+from hari_lari_analytics.presentation import formats
+from hari_lari_analytics.semantic.registry import default_registry
+from hari_lari_analytics.warehouse.db import connect
 
 from . import golden
 from .api_fixture import api_tables

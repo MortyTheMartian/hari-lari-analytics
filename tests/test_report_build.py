@@ -14,25 +14,25 @@ import pytest
 import yaml
 from PIL import Image
 
-from hari_lari_analytics.reporting import report_cli
-from hari_lari_analytics.reporting.builder import (
+from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.orchestration import report_cli
+from hari_lari_analytics.presentation.builder import (
     BuildError,
     DataResolver,
     build_report,
     check_length,
     run_report,
 )
-from hari_lari_analytics.reporting.components import load_components
-from hari_lari_analytics.reporting.db import open_run
-from hari_lari_analytics.reporting.outputs import png_pages
-from hari_lari_analytics.reporting.outputs.telegram import fill_drive_url
-from hari_lari_analytics.reporting.outputs.xlsx import sheet_name
-from hari_lari_analytics.reporting.queries import QueryContext
-from hari_lari_analytics.reporting.reports import (
+from hari_lari_analytics.presentation.components import load_components
+from hari_lari_analytics.presentation.outputs import png_pages
+from hari_lari_analytics.presentation.outputs.telegram import fill_drive_url
+from hari_lari_analytics.presentation.outputs.xlsx import sheet_name
+from hari_lari_analytics.presentation.reports import (
     DRIVE_PLACEHOLDER,
     expand,
     parse_report,
 )
+from hari_lari_analytics.warehouse.db import open_run
 
 from .conftest import FIXTURES
 
@@ -470,5 +470,5 @@ def test_the_report_command_is_the_reporting_cli():
     import tomllib
 
     scripts = tomllib.loads(Path("pyproject.toml").read_text())["project"]["scripts"]
-    assert scripts["hari-lari-report"] == "hari_lari_analytics.reporting.report_cli:main"
+    assert scripts["hari-lari-report"] == "hari_lari_analytics.orchestration.report_cli:main"
     assert "hari-lari-weekly" not in scripts and "hari-lari-report-legacy" not in scripts

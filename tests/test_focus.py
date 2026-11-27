@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import pytest
 
-from hari_lari_analytics.reporting.compiler import Query, QueryError, run_query
-from hari_lari_analytics.reporting.components import ComponentError, parse_component
-from hari_lari_analytics.reporting.db import connect
-from hari_lari_analytics.reporting.facets import run_facets
-from hari_lari_analytics.reporting.queries import QueryContext
-from hari_lari_analytics.reporting.registry import default_registry
+from hari_lari_analytics.analysis.compiler import Query, QueryError, run_query
+from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.presentation.components import ComponentError, parse_component
+from hari_lari_analytics.presentation.facets import run_facets
+from hari_lari_analytics.semantic.registry import default_registry
+from hari_lari_analytics.warehouse.db import connect
 
 from .api_fixture import api_tables
 from .test_compiler import real, real_run, same  # noqa: F401  (real_run: a fixture)

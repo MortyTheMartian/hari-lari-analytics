@@ -13,11 +13,12 @@ import pandas as pd
 import pytest
 import yaml
 
-from hari_lari_analytics.reporting import insights, visuals
-from hari_lari_analytics.reporting.components import ComponentError, parse_component
-from hari_lari_analytics.reporting.db import connect
-from hari_lari_analytics.reporting.facets import Facet, run_facets
-from hari_lari_analytics.reporting.insights import (
+from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.analysis.result import Result, ResultMeta
+from hari_lari_analytics.presentation import insights, visuals
+from hari_lari_analytics.presentation.components import ComponentError, parse_component
+from hari_lari_analytics.presentation.facets import Facet, run_facets
+from hari_lari_analytics.presentation.insights import (
     Insight,
     InsightContext,
     InsightError,
@@ -27,8 +28,7 @@ from hari_lari_analytics.reporting.insights import (
     evaluate,
     parse_rules,
 )
-from hari_lari_analytics.reporting.queries import QueryContext
-from hari_lari_analytics.reporting.result import Result, ResultMeta
+from hari_lari_analytics.warehouse.db import connect
 
 from .api_fixture import api_tables
 from .test_models import LAST_SALE, SEEDS

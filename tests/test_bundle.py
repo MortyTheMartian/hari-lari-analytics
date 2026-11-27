@@ -12,15 +12,15 @@ import pandas as pd
 import pytest
 from pydantic import ValidationError
 
-from hari_lari_analytics.reporting.builder import run_report
-from hari_lari_analytics.reporting.db import open_run
-from hari_lari_analytics.reporting.gallery import make_gallery
-from hari_lari_analytics.reporting.outputs import bundle_schema
-from hari_lari_analytics.reporting.outputs.bundle import bundle, result_json, to_json
-from hari_lari_analytics.reporting.queries import QueryContext
-from hari_lari_analytics.reporting.result import Result as ResultModel
-from hari_lari_analytics.reporting.result import ResultMeta
-from hari_lari_analytics.reporting.visuals.theme import DAYLIGHT, DEFAULT_THEME, TOKENS, Theme
+from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.analysis.result import Result as ResultModel
+from hari_lari_analytics.analysis.result import ResultMeta
+from hari_lari_analytics.presentation.builder import run_report
+from hari_lari_analytics.presentation.gallery import make_gallery
+from hari_lari_analytics.presentation.outputs import bundle_schema
+from hari_lari_analytics.presentation.outputs.bundle import bundle, result_json, to_json
+from hari_lari_analytics.presentation.visuals.theme import DAYLIGHT, DEFAULT_THEME, TOKENS, Theme
+from hari_lari_analytics.warehouse.db import open_run
 
 from .components_fixture import all_components
 from .conftest import FIXTURES

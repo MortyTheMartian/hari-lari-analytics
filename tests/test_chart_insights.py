@@ -15,18 +15,18 @@ import pytest
 import yaml
 from matplotlib.text import Text
 
-from hari_lari_analytics.reporting import builder, layouts, visuals
-from hari_lari_analytics.reporting.builder import build_report, run_report, run_slot
-from hari_lari_analytics.reporting.components import (
+from hari_lari_analytics.presentation import builder, layouts, visuals
+from hari_lari_analytics.presentation.builder import build_report, run_report, run_slot
+from hari_lari_analytics.presentation.components import (
     ComponentError,
     check_sources,
     load_components,
     parse_component,
 )
-from hari_lari_analytics.reporting.insights import CHART_MAX, Insight, collect
-from hari_lari_analytics.reporting.outputs.pages import NO_COMPARISON, QUIET, render_page
-from hari_lari_analytics.reporting.reports import ReportError, parse_report
-from hari_lari_analytics.reporting.visuals.theme import DEFAULT_THEME
+from hari_lari_analytics.presentation.insights import CHART_MAX, Insight, collect
+from hari_lari_analytics.presentation.outputs.pages import NO_COMPARISON, QUIET, render_page
+from hari_lari_analytics.presentation.reports import ReportError, parse_report
+from hari_lari_analytics.presentation.visuals.theme import DEFAULT_THEME
 
 from .test_report_build import COMPONENTS, GENERATED, context, tracer_spec
 
@@ -89,7 +89,7 @@ def test_a_report_says_none_unless_it_asks_for_charts():
 
 
 def test_the_weekly_report_asks_for_charts():
-    from hari_lari_analytics.reporting.reports import load_reports
+    from hari_lari_analytics.presentation.reports import load_reports
 
     reports = load_reports(COMPONENTS)
     assert reports["weekly"].spec.insights == "chart"
@@ -377,7 +377,7 @@ def test_check_size_keeps_nothing_for_a_chart_without_rules():
 
 
 def test_the_weekly_overview_keeps_room_for_the_key_figures_sentences():
-    from hari_lari_analytics.reporting.reports import load_reports
+    from hari_lari_analytics.presentation.reports import load_reports
 
     weekly = load_reports(COMPONENTS)["weekly"]
     overview = next(p for p in weekly.spec.plain_pages() if p.id == "overview")

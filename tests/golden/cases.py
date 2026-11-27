@@ -11,10 +11,10 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from hari_lari_analytics.project import Project, parse_project
-from hari_lari_analytics.reporting import db
-from hari_lari_analytics.reporting.db import Seeds
-from hari_lari_analytics.reporting.inputs import (
+from hari_lari_analytics.core.project import Project, parse_project
+from hari_lari_analytics.warehouse import db
+from hari_lari_analytics.warehouse.db import Seeds
+from hari_lari_analytics.warehouse.inputs import (
     load_aliases,
     load_calendar_events,
     load_category_groups,
@@ -23,7 +23,7 @@ from hari_lari_analytics.reporting.inputs import (
 from ..api_fixture import api_tables
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
-PACKAGED = Path(__file__).parents[2] / "src" / "hari_lari_analytics" / "project.yml"
+PACKAGED = Path(__file__).parents[2] / "src" / "hari_lari_analytics" / "core" / "project.yml"
 LAST_SALE = date(2026, 10, 13)
 
 Tables = dict[str, pd.DataFrame]

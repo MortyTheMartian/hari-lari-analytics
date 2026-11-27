@@ -16,19 +16,11 @@ import pytest
 import yaml
 from PIL import Image
 
-from hari_lari_analytics.reporting import registry as registry_module
-from hari_lari_analytics.reporting import transforms
-from hari_lari_analytics.reporting.builder import run_report
-from hari_lari_analytics.reporting.compiler import Query, run_query
-from hari_lari_analytics.reporting.components import ComponentError, parse_component
-from hari_lari_analytics.reporting.db import connect
-from hari_lari_analytics.reporting.facets import run_facets
-from hari_lari_analytics.reporting.preview import render_preview
-from hari_lari_analytics.reporting.queries import QueryContext
-from hari_lari_analytics.reporting.registry import RegistryError, load_registry
-from hari_lari_analytics.reporting.reports import parse_report
-from hari_lari_analytics.reporting.result import Result, ResultMeta
-from hari_lari_analytics.reporting.transforms import (
+from hari_lari_analytics.analysis import transforms
+from hari_lari_analytics.analysis.compiler import Query, run_query
+from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.analysis.result import Result, ResultMeta
+from hari_lari_analytics.analysis.transforms import (
     Options,
     Requirements,
     TransformContext,
@@ -37,7 +29,15 @@ from hari_lari_analytics.reporting.transforms import (
     need_columns,
     transform,
 )
-from hari_lari_analytics.reporting.transforms.shape import row_masks
+from hari_lari_analytics.analysis.transforms.shape import row_masks
+from hari_lari_analytics.presentation.builder import run_report
+from hari_lari_analytics.presentation.components import ComponentError, parse_component
+from hari_lari_analytics.presentation.facets import run_facets
+from hari_lari_analytics.presentation.preview import render_preview
+from hari_lari_analytics.presentation.reports import parse_report
+from hari_lari_analytics.semantic import registry as registry_module
+from hari_lari_analytics.semantic.registry import RegistryError, load_registry
+from hari_lari_analytics.warehouse.db import connect
 
 from .api_fixture import api_tables
 from .test_models import LAST_SALE, SEEDS

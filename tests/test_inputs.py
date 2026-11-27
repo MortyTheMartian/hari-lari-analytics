@@ -6,8 +6,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.reporting.db import open_run
-from hari_lari_analytics.reporting.inputs import InputError, find_run, load_run
+from hari_lari_analytics.warehouse.db import open_run
+from hari_lari_analytics.warehouse.inputs import InputError, find_run, load_run
 
 from .api_fixture import api_tables
 from .conftest import FIXTURES

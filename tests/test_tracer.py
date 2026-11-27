@@ -14,11 +14,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.reporting import cli
-from hari_lari_analytics.reporting.components import load_components
-from hari_lari_analytics.reporting.db import open_run
-from hari_lari_analytics.reporting.facets import run_facets
-from hari_lari_analytics.reporting.queries import QueryContext
+from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.orchestration import cli
+from hari_lari_analytics.presentation.components import load_components
+from hari_lari_analytics.presentation.facets import run_facets
+from hari_lari_analytics.warehouse.db import open_run
 
 from . import golden
 from .conftest import FIXTURES

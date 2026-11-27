@@ -2,8 +2,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from hari_lari_analytics.reporting.db import connect
-from hari_lari_analytics.reporting.windows import (
+from hari_lari_analytics.analysis.windows import (
     Bucket,
     Calendar,
     bucket_before,
@@ -13,6 +12,7 @@ from hari_lari_analytics.reporting.windows import (
     resolve,
     shift_months,
 )
+from hari_lari_analytics.warehouse.db import connect
 
 from . import golden
 from .api_fixture import api_tables

@@ -6,7 +6,7 @@ from __future__ import annotations
 from functools import cache
 from pathlib import Path
 
-from hari_lari_analytics.reporting.components import Component, load_components
+from hari_lari_analytics.presentation.components import Component, load_components
 
 FIXTURE_COMPONENTS = Path(__file__).parent / "fixtures" / "components"
 

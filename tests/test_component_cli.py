@@ -11,11 +11,12 @@ import pytest
 import yaml
 from PIL import Image
 
-from hari_lari_analytics.reporting import cli, components, preview
-from hari_lari_analytics.reporting.components import SCHEMA_REF, load_component, schema_text
-from hari_lari_analytics.reporting.db import open_run
-from hari_lari_analytics.reporting.queries import QueryContext
-from hari_lari_analytics.reporting.snapshots import read_snapshot
+from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.orchestration import cli
+from hari_lari_analytics.presentation import components, preview
+from hari_lari_analytics.presentation.components import SCHEMA_REF, load_component, schema_text
+from hari_lari_analytics.presentation.snapshots import read_snapshot
+from hari_lari_analytics.warehouse.db import open_run
 
 from .api_fixture import api_tables
 from .conftest import FIXTURES

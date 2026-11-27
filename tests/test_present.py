@@ -9,14 +9,14 @@ from datetime import date
 import pytest
 import yaml
 
-from hari_lari_analytics.reporting import formats
-from hari_lari_analytics.reporting.components import parse_component
-from hari_lari_analytics.reporting.db import connect
-from hari_lari_analytics.reporting.facets import run_facets
-from hari_lari_analytics.reporting.formats import DASH, NA
-from hari_lari_analytics.reporting.present import TOTAL_LABEL, present
-from hari_lari_analytics.reporting.queries import QueryContext
-from hari_lari_analytics.reporting.registry import default_registry
+from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.presentation import formats
+from hari_lari_analytics.presentation.components import parse_component
+from hari_lari_analytics.presentation.facets import run_facets
+from hari_lari_analytics.presentation.formats import DASH, NA
+from hari_lari_analytics.presentation.present import TOTAL_LABEL, present
+from hari_lari_analytics.semantic.registry import default_registry
+from hari_lari_analytics.warehouse.db import connect
 
 from .api_fixture import api_tables
 from .test_models import LAST_SALE, SEEDS

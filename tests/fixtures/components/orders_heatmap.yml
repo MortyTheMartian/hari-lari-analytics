@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../../src/hari_lari_analytics/reporting/schema/component.schema.json
+# yaml-language-server: $schema=../../../src/hari_lari_analytics/presentation/schema/component.schema.json
 id: orders_heatmap
 title: Orders per trading day
 hint: By weekday and hour · {{ meta.window.current.label }}

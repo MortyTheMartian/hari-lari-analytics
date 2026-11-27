@@ -12,12 +12,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from hari_lari_analytics.deliver.drive import DriveUploader
-from hari_lari_analytics.extract.run import RunResult
-from hari_lari_analytics.project import project
-from hari_lari_analytics.reporting import report_cli
-from hari_lari_analytics.reporting.components import load_components
-from hari_lari_analytics.reporting.delivery import (
+from hari_lari_analytics.core.log import JsonLog
+from hari_lari_analytics.core.project import project
+from hari_lari_analytics.core.store import LocalStore
+from hari_lari_analytics.distribution.drive import DriveUploader
+from hari_lari_analytics.orchestration import report_cli
+from hari_lari_analytics.orchestration.delivery import (
     RunSettings,
     Services,
     marker_keys,
@@ -25,9 +25,9 @@ from hari_lari_analytics.reporting.delivery import (
     run_scheduled,
     token_expiry_notice,
 )
-from hari_lari_analytics.reporting.log import JsonLog
-from hari_lari_analytics.reporting.reports import load_reports, parse_report
-from hari_lari_analytics.reporting.store import LocalStore
+from hari_lari_analytics.presentation.components import load_components
+from hari_lari_analytics.presentation.reports import load_reports, parse_report
+from hari_lari_analytics.sources.moka.run import RunResult
 
 from .api_fixture import api_tables
 from .conftest import FIXTURES
@@ -222,8 +222,8 @@ def test_a_failed_send_reaches_the_admin_and_keeps_the_outputs(tmp_path):
 
 
 def test_a_failing_data_check_fails_the_model_step(env, monkeypatch):
-    from hari_lari_analytics.reporting import delivery
-    from hari_lari_analytics.reporting.checks import CheckReport, DataCheckError
+    from hari_lari_analytics.orchestration import delivery
+    from hari_lari_analytics.warehouse.checks import CheckReport, DataCheckError
 
     def broken(*args, **kwargs):
         raise DataCheckError(CheckReport([]))
@@ -315,7 +315,7 @@ def test_scheduled_runs_only_the_reports_with_a_schedule_on_one_extraction(env):
 
 
 def test_scheduled_fails_when_one_report_fails(env, monkeypatch):
-    from hari_lari_analytics.reporting import delivery
+    from hari_lari_analytics.orchestration import delivery
 
     real = delivery.build_report
 

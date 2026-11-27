@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../../src/hari_lari_analytics/reporting/schema/component.schema.json
+# yaml-language-server: $schema=../../../src/hari_lari_analytics/presentation/schema/component.schema.json
 id: top_category_items
 title: Items of the top categories
 params: { period: full, n: 2 }

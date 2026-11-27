@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.reporting.db import (
+from hari_lari_analytics.warehouse.db import (
     RAW_SOURCES,
     Seeds,
     build_order,
@@ -14,13 +14,13 @@ from hari_lari_analytics.reporting.db import (
     model_references,
     open_run,
 )
-from hari_lari_analytics.reporting.inputs import (
+from hari_lari_analytics.warehouse.inputs import (
     InputError,
     load_aliases,
     load_calendar_events,
     load_category_groups,
 )
-from hari_lari_analytics.reporting.model_specs import model_sql
+from hari_lari_analytics.warehouse.model_specs import model_sql
 
 from .api_fixture import api_tables
 from .conftest import FIXTURES

@@ -63,7 +63,7 @@ it looked then. It defaults to yesterday in Bali (the Monday report covers up to
 
 ## Reports (component framework)
 
-Reports are YAML files over the components in `src/hari_lari_analytics/reporting/`
+Reports are YAML files over the components in `src/hari_lari_analytics/presentation/`
 (`docs/components.md` explains the whole framework). `hari-lari-report` builds them from an
 extraction run; it never sends anything:
 
@@ -94,15 +94,15 @@ The gallery is the visual check after a change to a visual, a transform or the t
 build also writes `bundle.json`, the JSON results bundle: each page, slot and result as display
 cells (raw value, display string, tone, small-sample flag) with the theme colours, so a frontend
 can draw the report without computing anything. Its contract is
-`src/hari_lari_analytics/reporting/schema/bundle.schema.json`, and a test checks every bundle
+`src/hari_lari_analytics/presentation/schema/bundle.schema.json`, and a test checks every bundle
 against it. `semantic_manifest.json` is the catalogue of the semantic layer (like dbt's
 manifest); CI fails when it or the JSON Schemas are out of date (`uv run hari-lari-report schema`
 and `uv run hari-lari-component manifest` rewrite them).
 
 ### Adding a metric, component, transform, visual or report
 
-A new component is usually a YAML file in `src/hari_lari_analytics/reporting/components/`; a
-new metric is a few lines in `metrics.yml`. The loop, from a similar component to a snapshot:
+A new component is usually a YAML file in `src/hari_lari_analytics/presentation/components/`; a
+new metric is a few lines in `semantic/metrics.yml`. The loop, from a similar component to a snapshot:
 
 ```bash
 uv run hari-lari-component new orders_by_weekday --from category_contributive_aov
@@ -113,7 +113,7 @@ uv run hari-lari-component validate && uv run hari-lari-report validate
 ```
 
 The authoring guide is the Cursor rule `.cursor/rules/reporting-components.mdc` (it applies to
-the files of `reporting/`, and an LLM reads it as the procedure): how to add a metric, a
+`semantic/`, `analysis/` and `presentation/`, and an LLM reads it as the procedure): how to add a metric, a
 component, a transform, a visual and a report, the commands above and two worked examples, both
 run as tests in `tests/test_authoring_examples.py`: a refund-rate metric with a component
 (YAML only), and a transform in Python. The design note is `docs/components.md`.
@@ -166,7 +166,7 @@ The PDF is made for reading on screen, not for printing. These are the choices b
   and for good changes, coral for the prior period and for highlights (such as the three
   busiest hours), and orange-red for bad changes. Whether a change is good depends on the
   metric: more discounts or refunds show as bad. All colors live in the `Palette` of
-  `reporting/visuals/theme.py`; visuals name colour tokens, so another palette re-themes the
+  `presentation/visuals/theme.py`; visuals name colour tokens, so another palette re-themes the
   whole report.
 - **Font.** [Inter](https://rsms.me/inter/), bundled in `src/hari_lari_analytics/fonts/`
   under the SIL Open Font License (`Inter-OFL.txt`) and embedded in the PDF, so the report
@@ -200,10 +200,11 @@ uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
 
-Code lives in `src/hari_lari_analytics/`: `extract/` (the Moka API extraction), `reporting/`
-(the models, components, reports, outputs and the report job; `docs/components.md`), and
-`deliver/` (Telegram and Drive). `docs/architecture.md` describes the modules the code is moving
-to.
+Code lives in `src/hari_lari_analytics/`, in the modules of `docs/architecture.md`: `core/`
+(settings and storage), `sources/moka/` (the Moka API extraction), `warehouse/` (models and
+checks), `semantic/` (metrics and dimensions), `analysis/` (the compiler and transforms),
+`presentation/` (components, reports and outputs), `orchestration/` (the commands that run a
+report) and `distribution/` (Telegram and Drive). The framework's design is `docs/components.md`.
 
 ## License
 

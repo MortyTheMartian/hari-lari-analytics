@@ -6,8 +6,8 @@ from __future__ import annotations
 import matplotlib
 import pytest
 
-from hari_lari_analytics.reporting import layouts
-from hari_lari_analytics.reporting.layouts import (
+from hari_lari_analytics.presentation import layouts
+from hari_lari_analytics.presentation.layouts import (
     GridSpec,
     LayoutError,
     SlotSpec,
@@ -17,7 +17,7 @@ from hari_lari_analytics.reporting.layouts import (
     place,
     slot_rect,
 )
-from hari_lari_analytics.reporting.visuals.theme import DEFAULT_THEME
+from hari_lari_analytics.presentation.visuals.theme import DEFAULT_THEME
 
 
 def slot(row=1, col=1, span=12, height=1, component="c"):
@@ -135,7 +135,7 @@ def test_each_facet_cell_must_reach_the_minimum():
 
 
 def test_facet_cells_follow_the_layout():
-    from hari_lari_analytics.reporting.components import FacetSpec
+    from hari_lari_analytics.presentation.components import FacetSpec
 
     row = FacetSpec(by="metric", layout="row")
     assert layouts.facet_cells(None) == (1, 1)

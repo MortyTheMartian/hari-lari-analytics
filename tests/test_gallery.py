@@ -8,18 +8,18 @@ import json
 import pytest
 from PIL import Image
 
-from hari_lari_analytics.reporting import report_cli
-from hari_lari_analytics.reporting.components import load_components
-from hari_lari_analytics.reporting.db import open_run
-from hari_lari_analytics.reporting.gallery import (
+from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.orchestration import report_cli
+from hari_lari_analytics.presentation.components import load_components
+from hari_lari_analytics.presentation.gallery import (
     build_gallery,
     gallery_spec,
     make_gallery,
     slot_height,
 )
-from hari_lari_analytics.reporting.queries import QueryContext
-from hari_lari_analytics.reporting.reports import ReportError
-from hari_lari_analytics.reporting.snapshots import read_snapshot
+from hari_lari_analytics.presentation.reports import ReportError
+from hari_lari_analytics.presentation.snapshots import read_snapshot
+from hari_lari_analytics.warehouse.db import open_run
 
 from .components_fixture import FIXTURE_COMPONENTS, all_components
 from .conftest import FIXTURES
@@ -107,7 +107,7 @@ visual: {type: table}
 
 
 def test_a_component_that_never_fits_names_itself(monkeypatch):
-    from hari_lari_analytics.reporting import gallery
+    from hari_lari_analytics.presentation import gallery
 
     comp = load_components(FIXTURE_COMPONENTS)["kpi_cards"]
     monkeypatch.setattr(gallery.layouts, "check_size", _always_too_small)
@@ -120,7 +120,7 @@ def _always_too_small(*args, **kwargs):
 
 
 def gallery_error(message):
-    from hari_lari_analytics.reporting.layouts import LayoutError
+    from hari_lari_analytics.presentation.layouts import LayoutError
 
     return LayoutError(message)
 
