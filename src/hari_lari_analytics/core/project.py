@@ -162,7 +162,11 @@ class Project(_Strict):
 
     def default_anchor(self, now: datetime | None = None) -> date:
         """The last day of a report when none is given (`anchor` in project.yml)."""
-        return self.today(now) - timedelta(days=1 if self.anchor == "yesterday" else 0)
+        return self.anchor_for(self.today(now))
+
+    def anchor_for(self, day: date) -> date:
+        """The default anchor of a run on `day`: the day before it with `yesterday`."""
+        return day - timedelta(days=1 if self.anchor == "yesterday" else 0)
 
     def telegram_env(self, target: str) -> str:
         """The environment variable that holds a target's chat id in the job: its secret's name

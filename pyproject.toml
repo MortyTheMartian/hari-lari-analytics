@@ -33,6 +33,7 @@ hari-lari-extract = "hari_lari_analytics.sources.moka.cli:main"
 hari-lari-telegram = "hari_lari_analytics.distribution.cli:main"
 hari-lari-drive = "hari_lari_analytics.distribution.drive_cli:main"
 hari-lari-component = "hari_lari_analytics.orchestration.cli:main"
+hari-lari-warehouse = "hari_lari_analytics.orchestration.warehouse_cli:main"
 
 [build-system]
 requires = ["hatchling"]

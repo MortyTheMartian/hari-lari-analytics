@@ -193,8 +193,8 @@ fields; what only one source knows goes under `source_info`.
   with the edits and late refunds of earlier days. `snapshot` is the state at `finished_at` (the
   catalogue, the stock levels); the history models read the snapshots of every dated run.
 - **`columns`** is the Arrow type of each column as written. The warehouse's `sources.yml` says
-  which of them it reads and casts; it gets one level per source (`moka:`, later `jibble:`),
-  and the same table name in two sources is refused, so the `raw_<table>` names stay.
+  which of them it reads and casts, with one level per source (`moka:`, later `jibble:`); the
+  same table name in two sources is refused, so the `raw_<table>` names stay.
 - **`latest_at`**, the newest record of an `events` table, is the freshness the warehouse and
   the alerts read. Today's `first_sale` and `last_sale` become `latest_at` and a model.
 - **A run whose checks fail writes no manifest**, so it never lands; the ledger records the
@@ -219,6 +219,22 @@ stored; reports open it read-only instead of extracting and rebuilding (t13, t14
 - **Outputs.** `warehouse/<date>/warehouse.duckdb` holds every model;
   `warehouse/<date>/marts/<model>.parquet` holds the exposed models only, never line notes or
   personal data; `warehouse/latest.json` names the newest good build.
+- **Built by** `hari-lari-warehouse build [--date] [--dry-run]` (`warehouse/build.py`). The
+  file also holds the `raw_` and `seed_` tables, `run_context`, the data-check results
+  (`warehouse_checks`) and the landing run of each source with its manifest
+  (`warehouse_landing`), so a report reads its notes and its extraction time from the
+  warehouse. `build.json` beside it (and `latest.json`, a copy of the newest) records the run
+  date, the anchor, the landing runs, the config hashes, the check warnings and the mart row
+  counts. A model leaves a column out of its mart with `private` in `models.yml`
+  (`fct_sales_lines` keeps `note` in the file only). `latest.json` never moves back to an
+  older date.
+- **The anchor.** The models are cut at the default anchor of the run date (project.yml: the
+  day before), the anchor of every scheduled report today. A report with another anchor
+  rebuilds the models in memory from the stored `raw_` and `seed_` tables (under a second for
+  the history since January), so one file serves every anchor.
+- **Measured** on the landing run of 27 Nov 2026: the build takes about 2 s, the file is
+  9.4 MB, and its models and marts give the same row counts and net sales as the in-memory
+  build of the same run.
 - **Personal data.** Employees get a pseudonymous key; no employee name reaches a bundle, an
   Excel file or a mart unless the owner decides otherwise; staff costs live in private config
   only (t29).

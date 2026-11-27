@@ -223,12 +223,17 @@ def test_required_table_and_columns():
 def test_the_run_tables_come_from_sources_yml(tmp_path):
     assert RAW_SOURCES["item_variants"].required is False
     assert RAW_SOURCES["transactions"].required is True
+    assert RAW_SOURCES["transactions"].source == "moka"
     path = tmp_path / "sources.yml"
-    path.write_text("stock:\n  columns: { id: bigint, level: money }\n")
+    path.write_text("pos:\n  stock:\n    columns: { id: bigint, level: money }\n")
     with pytest.raises(ValueError, match=r"sources.yml: stock: unknown column type\(s\) money"):
         load_sources(path)
-    path.write_text("stock:\n  columns: { id: bigint }\n  requried: false\n")
+    path.write_text("pos:\n  stock:\n    columns: { id: bigint }\n    requried: false\n")
     with pytest.raises(ValueError, match="sources.yml: stock: requried: Extra inputs"):
+        load_sources(path)
+    table = "  stock:\n    columns: { id: bigint }\n"
+    path.write_text(f"pos:\n{table}hr:\n{table}")
+    with pytest.raises(ValueError, match="stock is a table of both pos and hr"):
         load_sources(path)
 
 

@@ -1,5 +1,6 @@
-# The run tables the models read (docs/components.md, "Models"): each Parquet table of an
-# extraction run becomes the table raw_<name>, with these columns cast to these DuckDB types.
+# The run tables the models read (docs/components.md, "Models"), by source: each Parquet table
+# of the source's landing run becomes the table raw_<name>, with these columns cast to these
+# DuckDB types. A table name is unique across the sources.
 #
 #   columns:   the columns a model reads; a run whose table lacks one fails.
 #   optional:  columns that are NULL when the table lacks them (older runs).
@@ -7,74 +8,75 @@
 #
 # A model may read only the raw_ tables listed here and the seed_ tables of the config files.
 
-transactions:
-  columns:
-    id: varchar
-    payment_no: varchar
-    created_at: timestamp
-    parent_payment_id: varchar
-    payment_type_label: varchar
-  optional:
-    refund_amount: double
+moka:
+  transactions:
+    columns:
+      id: varchar
+      payment_no: varchar
+      created_at: timestamp
+      parent_payment_id: varchar
+      payment_type_label: varchar
+    optional:
+      refund_amount: double
 
-transaction_lines:
-  columns:
-    payment_id: varchar
-    payment_no: varchar
-    uuid: varchar
-    item_id: bigint
-    item_name: varchar
-    item_variant_name: varchar
-    item_variant_id: bigint
-    category_id: bigint
-    category_name: varchar
-    quantity: bigint
-    gross_sales: double
-    discount_amount: double
-    net_sales: double
-  optional:
-    id: bigint
-    note: varchar
+  transaction_lines:
+    columns:
+      payment_id: varchar
+      payment_no: varchar
+      uuid: varchar
+      item_id: bigint
+      item_name: varchar
+      item_variant_name: varchar
+      item_variant_id: bigint
+      category_id: bigint
+      category_name: varchar
+      quantity: bigint
+      gross_sales: double
+      discount_amount: double
+      net_sales: double
+    optional:
+      id: bigint
+      note: varchar
 
-items:
-  columns:
-    id: bigint
-    name: varchar
-    category.name: varchar
-    is_deleted: boolean
+  items:
+    columns:
+      id: bigint
+      name: varchar
+      category.name: varchar
+      is_deleted: boolean
 
-item_variants:
-  columns:
-    id: bigint
-    item_id: bigint
-    name: varchar
-    in_stock: bigint
-    stock_alert: bigint
-    track_stock: boolean
-    alert: boolean
-    is_deleted: boolean
-  required: false
+  item_variants:
+    columns:
+      id: bigint
+      item_id: bigint
+      name: varchar
+      in_stock: bigint
+      stock_alert: bigint
+      track_stock: boolean
+      alert: boolean
+      is_deleted: boolean
+    required: false
 
-transaction_line_discounts:
-  columns:
-    payment_id: varchar
-    line_uuid: varchar
-    discount_name: varchar
-  required: false
+  transaction_line_discounts:
+    columns:
+      payment_id: varchar
+      line_uuid: varchar
+      discount_name: varchar
+    required: false
 
-transaction_line_modifiers:
-  columns:
-    payment_id: varchar
-    line_uuid: varchar
-    modifier_id: bigint
-    modifier_option_id: bigint
-    modifier_name: varchar
-    modifier_option_name: varchar
-    price: bigint
-  required: false
+  transaction_line_modifiers:
+    columns:
+      payment_id: varchar
+      line_uuid: varchar
+      modifier_id: bigint
+      modifier_option_id: bigint
+      modifier_name: varchar
+      modifier_option_name: varchar
+      price: bigint
+    required: false
 
-transaction_refunds:
-  columns:
-    payment_id: varchar
-    refunded_reason: varchar
-  required: false
+  transaction_refunds:
+    columns:
+      payment_id: varchar
+      refunded_reason: varchar
+    required: false

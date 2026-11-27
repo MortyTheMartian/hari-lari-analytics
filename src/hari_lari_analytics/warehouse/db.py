@@ -48,6 +48,7 @@ class Source:
     columns: dict[str, str]
     optional: dict[str, str] = field(default_factory=dict)  # NULL when the column is missing
     required: bool = True  # False: a missing or empty table gives an empty view
+    source: str = ""  # the source that lands the table (sources.yml); none for a seed
 
 
 SOURCES_FILE = Path(__file__).with_name("sources.yml")
@@ -63,26 +64,47 @@ class _SourceSpec(BaseModel):
 
 
 def load_sources(path: Path = SOURCES_FILE) -> dict[str, Source]:
-    """The run tables of `sources.yml`; an unknown key or column type fails, naming the table."""
+    """The run tables of `sources.yml`, by table name; an unknown key or column type fails,
+    naming the table, and so does a table name used by two sources."""
     raw = yaml.safe_load(path.read_text()) or {}
     sources: dict[str, Source] = {}
-    for name, entry in raw.items():
-        where = f"{path.name}: {name}"
-        try:
-            spec = _SourceSpec.model_validate(entry)
-        except ValidationError as error:
-            problem = error.errors()[0]
-            field_name = ".".join(str(p) for p in problem["loc"])
-            raise ValueError(f"{where}: {field_name}: {problem['msg']}") from None
-        types = {**spec.columns, **spec.optional}
-        unknown = sorted({t for t in types.values() if t not in SOURCE_TYPES})
-        if unknown:
-            raise ValueError(f"{where}: unknown column type(s) {', '.join(unknown)}")
-        sources[name] = Source(spec.columns, spec.optional, spec.required)
+    for source, entries in raw.items():
+        if not isinstance(entries, dict):
+            raise ValueError(f"{path.name}: {source}: expected a mapping of table names")
+        for name, entry in entries.items():
+            if name in sources:
+                raise ValueError(
+                    f"{path.name}: {name} is a table of both {sources[name].source} and {source}"
+                )
+            sources[name] = _source(f"{path.name}: {name}", entry, source)
     return sources
 
 
+def _source(where: str, entry: object, source: str) -> Source:
+    try:
+        spec = _SourceSpec.model_validate(entry)
+    except ValidationError as error:
+        problem = error.errors()[0]
+        field_name = ".".join(str(p) for p in problem["loc"])
+        raise ValueError(f"{where}: {field_name}: {problem['msg']}") from None
+    types = {**spec.columns, **spec.optional}
+    unknown = sorted({t for t in types.values() if t not in SOURCE_TYPES})
+    if unknown:
+        raise ValueError(f"{where}: unknown column type(s) {', '.join(unknown)}")
+    return Source(spec.columns, spec.optional, spec.required, source)
+
+
 RAW_SOURCES = load_sources()
+
+
+def source_tables(source: str) -> dict[str, Source]:
+    """The run tables one source lands."""
+    return {name: spec for name, spec in RAW_SOURCES.items() if spec.source == source}
+
+
+def source_names() -> list[str]:
+    return sorted({spec.source for spec in RAW_SOURCES.values()})
+
 
 SEED_SOURCES = {
     "item_aliases": Source(
@@ -144,30 +166,42 @@ def connect(
     anchor: date | None = None,
     settings: Project | None = None,
     extracted_at: datetime | None = None,
+    database: str = ":memory:",
 ) -> duckdb.DuckDBPyConnection:
     """Register the run tables and seeds and build every model.
 
     The models end on `anchor` (default: the day of the last payment); later sales are left out.
     The weeks start on the `first_weekday` of `settings` (default: project.yml). `extracted_at`
     is when the run was extracted, the time of the snapshots (stock levels) in local clock time.
+    `database` is a DuckDB file to build in (the stored warehouse) instead of memory.
     """
-    settings = settings or project()
-    con = duckdb.connect()
-    con.create_function("title_case", str.title, ["VARCHAR"], "VARCHAR")  # Python's rules
-    con.execute(WEEK_START_MACRO)
+    con = duckdb.connect(database)
     for name, source in RAW_SOURCES.items():
         _register(con, f"raw_{name}", tables.get(name), source)
     for name, source in SEED_SOURCES.items():
         _register(con, f"seed_{name}", getattr(seeds, name), source)
     if anchor is None:
-        anchor = con.execute("select max(created_at)::date from raw_transactions").fetchone()[0]
+        anchor = con.execute("select max(created_at)::date from raw_transactions").fetchall()[0][0]
+    build_on_inputs(con, anchor, settings, extracted_at)
+    return con
+
+
+def build_on_inputs(
+    con: duckdb.DuckDBPyConnection,
+    anchor: date,
+    settings: Project | None = None,
+    extracted_at: datetime | None = None,
+) -> None:
+    """Build the models on the raw_ and seed_ tables already in `con`, cut at `anchor`."""
+    settings = settings or project()
+    con.create_function("title_case", str.title, ["VARCHAR"], "VARCHAR")  # Python's rules
+    con.execute(WEEK_START_MACRO)
     con.execute(
         "create table run_context as select ?::date as anchor, ?::int as first_weekday, "
         "?::timestamp as extracted_at",
         [anchor, settings.first_isoweekday, extracted_at],
     )
     build_models(con)
-    return con
 
 
 @dataclass
