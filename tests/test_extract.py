@@ -136,20 +136,50 @@ def test_no_refresh_token_means_no_refresh(tmp_path):
 
 
 class FakeSecrets:
-    def __init__(self):
-        self.versions = []
+    """A Secret Manager client that keeps each version's number, payload and state."""
+
+    PARENT = "projects/p/secrets/moka-oauth-token"
+
+    def __init__(self, fail_disable: Exception | None = None):
+        self.versions = []  # [{"name", "data", "state"}]
+        self.fail_disable = fail_disable
+
+    @property
+    def enabled(self):
+        return [v for v in self.versions if v["state"] == "ENABLED"]
 
     def access_secret_version(self, name):
-        class R:
-            payload = type("P", (), {"data": self.versions[-1]})()
-
-        R.payload.data = self.versions[-1]
-        assert name.endswith("/secrets/moka-oauth-token/versions/latest")
-        return R
+        assert name == f"{self.PARENT}/versions/latest"
+        data = self.enabled[-1]["data"]
+        return type("R", (), {"payload": type("P", (), {"data": data})()})()
 
     def add_secret_version(self, parent, payload):
-        assert parent == "projects/p/secrets/moka-oauth-token"
-        self.versions.append(payload["data"])
+        assert parent == self.PARENT
+        number = len(self.versions) + 1
+        self.versions.append(
+            {"name": f"{parent}/versions/{number}", "data": payload["data"], "state": "ENABLED"}
+        )
+
+    def list_secret_versions(self, request):
+        assert request["parent"] == self.PARENT
+        assert request["filter"] == "state:ENABLED"
+        # newest first, like the API; a pager is only iterated
+        return iter([type("V", (), {"name": v["name"]})() for v in reversed(self.enabled)])
+
+    def disable_secret_version(self, request):
+        if self.fail_disable:
+            raise self.fail_disable
+        for v in self.versions:
+            if v["name"] == request["name"]:
+                v["state"] = "DISABLED"
+
+
+class ListLog:
+    def __init__(self):
+        self.warnings = []
+
+    def warning(self, message, **fields):
+        self.warnings.append((message, fields))
 
 
 def test_secret_manager_store_adds_a_version_on_save():
@@ -159,6 +189,45 @@ def test_secret_manager_store_adds_a_version_on_save():
     store.save({**token(), "access_token": "a2"})
     assert len(fake.versions) == 2
     assert store.load()["access_token"] == "a2"
+
+
+def test_save_leaves_only_the_new_version_enabled():
+    fake = FakeSecrets()
+    store = SecretManagerTokenStore("p", client=fake)
+    store.save(token())
+    assert [v["state"] for v in fake.versions] == ["ENABLED"]  # the first one is not disabled
+    for n in range(2, 6):
+        store.save({**token(), "access_token": f"a{n}"})
+    # older versions are disabled, not destroyed: they can be enabled again
+    assert [v["state"] for v in fake.versions] == ["DISABLED"] * 4 + ["ENABLED"]
+    assert store.load()["access_token"] == "a5"
+
+
+def test_forced_refresh_through_the_store_leaves_one_enabled_version():
+    fake = FakeSecrets()
+    store = SecretManagerTokenStore("p", client=fake)
+    store.save(token())
+    manager = TokenManager(
+        store, clock=Clock(151 * DAY),  # fewer than 30 days left: ensure_fresh refreshes
+        refresher=lambda old: {"access_token": "a2", "expires_in": 180 * DAY},
+    )  # fmt: skip
+    assert manager.access_token() == "a2"
+    assert manager.refreshed
+    assert len(fake.versions) == 2 and len(fake.enabled) == 1
+    assert json.loads(fake.enabled[0]["data"])["access_token"] == "a2"
+
+
+def test_failing_to_disable_never_fails_the_save():
+    log = ListLog()
+    fake = FakeSecrets(fail_disable=PermissionError("secretmanager.versions.disable denied"))
+    store = SecretManagerTokenStore("p", client=fake, log=log)
+    store.save(token())
+    store.save({**token(), "access_token": "a2"})  # must not raise
+    assert store.load()["access_token"] == "a2"  # the new token is stored and is the latest
+    assert len(log.warnings) == 1
+    message, fields = log.warnings[0]
+    assert "could not disable the older versions" in message and "PermissionError" in message
+    assert fields == {"step": "token"}
 
 
 # ---- 1.5 client --------------------------------------------------------------------
