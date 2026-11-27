@@ -38,9 +38,18 @@ step_bucket() { # 3.5
   g storage buckets describe "gs://$BUCKET" >/dev/null 2>&1 || g storage buckets create "gs://$BUCKET" \
     --location "$REGION" --uniform-bucket-level-access --public-access-prevention
   local lc; lc="$(mktemp)"
+  # D26: raw JSON goes after 90 days, a warehouse build after 30 (it is rebuildable; the prefix
+  # warehouse/2 spares latest.json), every dry run after 14. Landing tables, manifests, reports
+  # and the ledger are kept. raw/ is the extraction before the landing zone (t12).
   cat >"$lc" <<'JSON'
 {"rule": [{"action": {"type": "SetStorageClass", "storageClass": "NEARLINE"},
-           "condition": {"age": 90, "matchesPrefix": ["raw/"]}}]}
+           "condition": {"age": 90, "matchesPrefix": ["raw/"]}},
+          {"action": {"type": "Delete"},
+           "condition": {"age": 90, "matchesPrefix": ["landing/"], "matchesSuffix": [".json.gz"]}},
+          {"action": {"type": "Delete"},
+           "condition": {"age": 30, "matchesPrefix": ["warehouse/2"]}},
+          {"action": {"type": "Delete"},
+           "condition": {"age": 14, "matchesPrefix": ["dry-run/"]}}]}
 JSON
   g storage buckets update "gs://$BUCKET" --lifecycle-file "$lc"
   rm -f "$lc"
@@ -134,7 +143,7 @@ for path in (("spec", "template", "spec", "template", "spec", "containers"),
 # job keeps its image, so re-running setup never undoes a release (deploy/release.sh owns it).
 deploy_job() { # name image [flags...]
   local name="$1" image="$2"; shift 2
-  local env="TZ=Asia/Makassar,TOKEN_STORE=secret,GCP_PROJECT=$PROJECT,EXTRACT_OUT=gs://$BUCKET/raw,DATA_ROOT=gs://$BUCKET"
+  local env="TZ=Asia/Makassar,TOKEN_STORE=secret,GCP_PROJECT=$PROJECT,EXTRACT_OUT=gs://$BUCKET/landing,DATA_ROOT=gs://$BUCKET,CONFIG_DIR=$CONFIG_URL"
   [[ -n "${DRIVE_FOLDER_ID:-}" ]] && env="$env,DRIVE_FOLDER_ID=$DRIVE_FOLDER_ID"
   local verb=create envflag=--set-env-vars imageflag=(--image "$image")
   if g run jobs describe "$name" --region "$REGION" >/dev/null 2>&1; then
@@ -153,12 +162,12 @@ step_job() { # 3.11, 5.x: the weekly job with its Telegram secrets and Drive fol
 }
 
 # 7A.8 The dry-run job: the live job's configuration, run with --dry-run, never scheduled. The
-# release script sets its image and its argument on every release. It is created with the image
+# release script sets its image and its arguments on every release. It is created with the image
 # of the live job.
 step_dryrun_job() {
   local image
   image="$(job_image_of "$JOB")"
-  deploy_job "$DRYRUN_JOB" "${image:-$IMAGE}" --args=--dry-run
+  deploy_job "$DRYRUN_JOB" "${image:-$IMAGE}" --args=tick,--dry-run,--all-scheduled
 }
 
 # 7A.8 Clean-up policy of the registry. Every merge to main pushes an image, so old ones go:

@@ -1,15 +1,14 @@
-"""Where the report job keeps its files: a local folder or `gs://bucket[/prefix]`.
+"""Where the jobs keep their files: a local folder or `gs://bucket[/prefix]`.
 
-Layout under the root (a `dry-run/` prefix goes in front of all of it for a dry run):
-
-    raw/<run date>/...                the extraction (Parquet tables, manifest, raw JSON)
-    reports/<report>/<anchor>/...     the outputs of a report (`delivery.py`)
-    sent/<report>/<anchor>.json       the sent-marker
-    reports/<anchor>/, sent/<anchor>.json   the same, by the weekly job before the cut-over
+The layout under the root is in docs/architecture.md ("Storage layout"): `landing/`,
+`warehouse/`, `reports/`, `runs/`; a `dry-run/` prefix goes in front of all of it for a dry
+run. The sent-markers `sent/<report>/<anchor>.json` (`sent/<anchor>.json` for the weekly job
+before 9.7) are still written and read until the ledger replaces them (t15).
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Protocol
 
@@ -24,6 +23,16 @@ class Store(Protocol):
     def write_text(self, key: str, text: str) -> None: ...
 
     def upload(self, key: str, path: Path) -> None: ...
+
+    def download(self, key: str, path: Path) -> None: ...
+
+    def list(self, prefix: str = "") -> list[str]:
+        """Every key under the folder `prefix` (all keys for ""), sorted, relative to the root."""
+        ...
+
+    def delete(self, key: str) -> None:
+        """Delete one key; a missing key is not an error."""
+        ...
 
     def child(self, prefix: str) -> Store: ...
 
@@ -54,6 +63,19 @@ class LocalStore:
         target = self.root / key
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(Path(path).read_bytes())
+
+    def download(self, key: str, path: Path) -> None:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        Path(path).write_bytes((self.root / key).read_bytes())
+
+    def list(self, prefix: str = "") -> list[str]:
+        base = self.root / prefix if prefix else self.root
+        if not base.is_dir():
+            return []
+        return sorted(p.relative_to(self.root).as_posix() for p in base.rglob("*") if p.is_file())
+
+    def delete(self, key: str) -> None:
+        (self.root / key).unlink(missing_ok=True)
 
     def child(self, prefix: str) -> LocalStore:
         return LocalStore(self.root / prefix)
@@ -88,12 +110,37 @@ class GcsStore:
     def upload(self, key: str, path: Path) -> None:
         self.bucket.blob(self._key(key)).upload_from_filename(str(path))
 
+    def download(self, key: str, path: Path) -> None:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self.bucket.blob(self._key(key)).download_to_filename(str(path))
+
+    def list(self, prefix: str = "") -> list[str]:
+        folder = self._key(prefix)
+        start = len(self.prefix) + 1 if self.prefix else 0
+        blobs = self.client.list_blobs(self.bucket_name, prefix=f"{folder}/" if folder else None)
+        return sorted(b.name[start:] for b in blobs if not b.name.endswith("/"))
+
+    def delete(self, key: str) -> None:
+        blob = self.bucket.blob(self._key(key))
+        if blob.exists():
+            blob.delete()
+
     def child(self, prefix: str) -> GcsStore:
         return GcsStore(self.bucket_name, _join(self.prefix, prefix), self.client)
 
 
-def make_store(root: str) -> Store:
+def make_store(root: str | Path) -> Store:
+    root = str(root)
     if root.startswith("gs://"):
         bucket, _, prefix = root[len("gs://") :].partition("/")
         return GcsStore(bucket, prefix)
     return LocalStore(root)
+
+
+DATA_ROOT_HELP = "a folder or gs://bucket[/prefix] (default: $DATA_ROOT, else data)"
+
+
+def data_root(value: str | None = None) -> str:
+    """The data root of the bucket layout (docs/architecture.md): the value, else $DATA_ROOT,
+    else `data`."""
+    return value or os.environ.get("DATA_ROOT") or "data"

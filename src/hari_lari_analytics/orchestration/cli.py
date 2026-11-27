@@ -2,7 +2,7 @@
 
 ```text
 hari-lari-component run <id> [--period L6W] [--param name=value] [--anchor YYYY-MM-DD]
-                             [--run data/extract] [--sql] [--csv]
+                             [--warehouse <date|path>] [--sql] [--csv]
                              [--png [FILE] [--watch] [--span 12] [--height 3]]
 hari-lari-component validate
 hari-lari-component new <id> [--from <id>] [--param name=value]
@@ -10,14 +10,14 @@ hari-lari-component manifest [--out FILE] [--check]
 hari-lari-component schema [--check]
 ```
 
-`run` builds the models of an extraction run (the latest in `--run`), runs the component with its
-facets and transforms, and prints each facet's result; `--sql` adds the SQL with its parameters,
-`--csv` prints CSV instead of a table. `--png` draws the component into a PNG at its default slot
-size, as a report page would (plan 8.6), and `--watch` draws it again on every save. `validate`
-loads every component and report as strictly as a build would and checks the JSON Schemas; `new`
-copies a component (or a minimal one) and writes the stub of its snapshot; `manifest` writes the
-catalogue of the semantic layer, `semantic_manifest.json` (plan 8.10); `schema` writes the
-JSON Schemas of the component and report files.
+`run` opens a stored warehouse read-only (default: `warehouse/latest.json` under the data root),
+runs the component with its facets and transforms, and prints each facet's result; `--sql` adds
+the SQL with its parameters, `--csv` prints CSV instead of a table. `--png` draws the component
+into a PNG at its default slot size, as a report page would (plan 8.6), and `--watch` draws it
+again on every save. `validate` loads every component and report as strictly as a build would
+and checks the JSON Schemas; `new` copies a component (or a minimal one) and writes the stub of
+its snapshot; `manifest` writes the catalogue of the semantic layer, `semantic_manifest.json`
+(plan 8.10); `schema` writes the JSON Schemas of the component and report files.
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ import yaml
 
 from hari_lari_analytics.analysis.queries import QueryContext
 from hari_lari_analytics.analysis.result import Result
+from hari_lari_analytics.core.store import DATA_ROOT_HELP, data_root, make_store
 from hari_lari_analytics.orchestration import report_cli
 from hari_lari_analytics.presentation import components, manifest, preview
 from hari_lari_analytics.presentation import reports as reports_module
@@ -51,7 +52,7 @@ from hari_lari_analytics.presentation.components import (
 from hari_lari_analytics.presentation.facets import Facet, run_facets
 from hari_lari_analytics.presentation.reports import ReportError, load_report, reports_dir
 from hari_lari_analytics.presentation.snapshots import snapshot_text
-from hari_lari_analytics.warehouse.db import open_run
+from hari_lari_analytics.warehouse.build import WAREHOUSE_HELP, read_warehouse
 from hari_lari_analytics.warehouse.inputs import InputError
 
 PREVIEW_DIR = Path("data/output/preview")
@@ -90,14 +91,10 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--anchor",
         type=date.fromisoformat,
         metavar="YYYY-MM-DD",
-        help="last day of the data (default: the day of the run's last payment)",
+        help="last day of the data (default: the anchor the warehouse was built with)",
     )
-    run.add_argument(
-        "--run",
-        default="data/extract",
-        help="a run folder, or a folder (or gs://bucket/prefix) of dated runs; latest is used",
-    )
-    run.add_argument("--config", type=Path, default=Path("config"), help="the config CSV folder")
+    run.add_argument("--warehouse", help=WAREHOUSE_HELP)
+    run.add_argument("--data-root", help=DATA_ROOT_HELP)
     run.add_argument("--sql", action="store_true", help="also print the SQL and its parameters")
     run.add_argument("--csv", action="store_true", help="print CSV instead of a table")
     run.add_argument(
@@ -283,20 +280,20 @@ def cmd_run(args: argparse.Namespace, directory: Path, out: TextIO, err: TextIO)
     component.bind(params)  # fail on a parameter before building the models
     if args.watch and args.png is None:
         raise ComponentError("--watch draws a PNG: add --png")
-    db = open_run(args.run, args.config, args.anchor)
-    ctx = QueryContext.create(db.con, run=db.run, checks=db.checks)
-    print(
-        f"Run {db.run.name}, data through {ctx.calendar.anchor:%d %b %Y}, "
-        f"{len(db.checks.warnings)} data-check warning(s)",
-        file=err,
-    )
-    if args.png is not None:
-        return cmd_preview(args, directory, ctx, params, out, err)
-    facets = run_facets(component, ctx, params)
-    if not facets:
-        print("No sales in the component's window: nothing to show", file=err)
-        return 0
-    print_facets(component, params, facets, sql=args.sql, csv=args.csv, out=out, err=err)
+    with read_warehouse(make_store(data_root(args.data_root)), args.warehouse, args.anchor) as db:
+        ctx = QueryContext.create(db.con, run=db.run, checks=db.checks)
+        print(
+            f"Run {db.run.name}, data through {ctx.calendar.anchor:%d %b %Y}, "
+            f"{len(db.checks.warnings)} data-check warning(s)",
+            file=err,
+        )
+        if args.png is not None:
+            return cmd_preview(args, directory, ctx, params, out, err)
+        facets = run_facets(component, ctx, params)
+        if not facets:
+            print("No sales in the component's window: nothing to show", file=err)
+            return 0
+        print_facets(component, params, facets, sql=args.sql, csv=args.csv, out=out, err=err)
     return 0
 
 

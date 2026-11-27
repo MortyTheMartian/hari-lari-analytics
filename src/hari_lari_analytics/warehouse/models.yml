@@ -8,6 +8,8 @@
 #   sample_size:  the count metric of the default sample-size rule (the default min_n of
 #                 metrics.yml counts it per row); none for a model without orders.
 #   exposed:      whether components may query it; only dim_ and fct_ models can be.
+#   private:      columns that stay in warehouse.duckdb and never go into the model's mart
+#                 (warehouse/<date>/marts/), such as free text that may name a customer.
 
 stg_transactions:
   description: One payment of the API, a sale or a refund, with its receipt and payment type
@@ -76,6 +78,7 @@ fct_sales_lines:
   calendar: true
   sample_size: orders
   exposed: true
+  private: note
 
 fct_stock:
   description: One stock-tracked item-variant with its stock level at extraction time

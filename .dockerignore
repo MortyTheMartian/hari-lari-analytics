@@ -5,6 +5,7 @@
 .ruff_cache
 __pycache__
 data
+config
 extraction
 tests
 docs

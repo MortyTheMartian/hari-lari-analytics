@@ -6,8 +6,8 @@
 #   deploy/release.sh build [tag]       docker build, smoke test, push <image>:<tag>
 #   deploy/release.sh dryrun [tag]      run the image as hari-lari-weekly-dryrun; fails if the run fails
 #   deploy/release.sh promote [tag]     point the live job at the tag, remembering the previous one
-#   deploy/release.sh rollback [tag]    point the live job at the tag (default: the previous release)
-#   deploy/release.sh schedules [tag]   one Cloud Scheduler job per scheduled report of the image
+#   deploy/release.sh rollback [tag]    promote the tag (default: the previous release) and its schedules
+#   deploy/release.sh schedules [tag]   the Cloud Scheduler job(s) the image runs on: hari-lari-tick
 #   deploy/release.sh all [tag]         build, dryrun, promote, schedules; stops at the first failure
 #   deploy/release.sh status            the image of each job and the previous release
 #
@@ -84,7 +84,7 @@ step_build() { # [tag]
   tag="$(resolve_tag "${1:-}")"
   image="$IMAGE_REPO:$tag"
   g auth configure-docker "${REGION}-docker.pkg.dev"
-  docker build --platform linux/amd64 --tag "$image" "$ROOT"
+  docker build --platform linux/amd64 --build-arg "RELEASE=$tag" --tag "$image" "$ROOT"
   # The image must start and load its components and reports before it goes anywhere
   docker run --rm "$image" validate
   docker push "$image"
@@ -95,9 +95,10 @@ step_dryrun() { # [tag]
   local tag
   tag="$(resolve_tag "${1:-}")"
   # --args is set every time, so a job whose arguments were cleared can never send a report.
-  # Every report with a schedule must build before the release is promoted.
+  # A dry tick on which every report with a schedule is due: each must build before the release
+  # is promoted.
   g run jobs update "$DRYRUN_JOB" --region "$REGION" --image "$IMAGE_REPO:$tag" \
-    --args=run,--scheduled,--dry-run
+    --args=tick,--dry-run,--all-scheduled --update-env-vars "CONFIG_DIR=$CONFIG_URL"
   if ! g run jobs execute "$DRYRUN_JOB" --region "$REGION" --wait; then
     die "the dry run of $tag failed; the live job still runs $(job_tag "$JOB")"
   fi
@@ -114,7 +115,9 @@ step_promote() { # [tag]
   if [[ -n "$current" && "$current" != "$tag" ]]; then
     labels="$labels,previous-release=$current"
   fi
-  g run jobs update "$JOB" --region "$REGION" --image "$IMAGE_REPO:$tag" --update-labels "$labels"
+  # The config is not in the image (docs/architecture.md): the job reads it from the bucket
+  g run jobs update "$JOB" --region "$REGION" --image "$IMAGE_REPO:$tag" \
+    --update-env-vars "CONFIG_DIR=$CONFIG_URL" --update-labels "$labels"
   echo "live job $JOB: ${current:-?} -> $tag"
 }
 
@@ -125,21 +128,31 @@ step_rollback() { # [tag]
   fi
   [[ -n "$tag" ]] || die "no previous release is recorded; name the tag: deploy/release.sh rollback <tag>"
   step_promote "$tag"
+  # An image from before the tick does not know `tick`: its own scheduler jobs come back
+  step_schedules "$tag"
 }
 
-# The scheduler jobs follow the reports of the image: hari-lari-report schedules --json lists
-# each report with a schedule and its arguments. Each gets the scheduler job
-# hari-lari-report-<id>, which starts the live job through the Cloud Run v2 API with those
-# arguments as a container override; enabled: false pauses it. A hari-lari-report-* job whose
-# report is gone is deleted; other scheduler jobs are left alone.
+# The scheduler jobs follow the image. An image with the tick prints its one job with
+# `schedule --json`: it gets the scheduler job hari-lari-tick (the cron of the tick times of
+# project.yml), and the hari-lari-report-* jobs are deleted. An image from before the tick (a
+# rollback) exits with 2 there: it gets one hari-lari-report-<id> job per report of
+# `schedules --json` (enabled: false pauses it), and hari-lari-tick is deleted. Each scheduler
+# job starts the live job through the Cloud Run v2 API with its arguments as a container
+# override. Other scheduler jobs are left alone.
 step_schedules() { # [tag]
-  local tag rows existing name cron zone enabled body state
+  local tag rows status existing name cron zone enabled body state
   local uri="https://run.googleapis.com/v2/projects/${PROJECT}/locations/${REGION}/jobs/${JOB}:run"
   local wanted=" "
   tag="$(resolve_tag "${1:-}")"
   g auth configure-docker "${REGION}-docker.pkg.dev"
-  rows="$(docker run --rm "$IMAGE_REPO:$tag" schedules --json)" ||
-    die "could not read the schedules of $IMAGE_REPO:$tag"
+  status=0
+  rows="$(docker run --rm "$IMAGE_REPO:$tag" schedule --json 2>/dev/null)" || status=$?
+  if [[ "$status" == 2 ]]; then
+    rows="$(docker run --rm "$IMAGE_REPO:$tag" schedules --json)" ||
+      die "could not read the schedules of $IMAGE_REPO:$tag"
+  elif [[ "$status" != 0 ]]; then
+    die "could not read the schedule of $IMAGE_REPO:$tag (exit code $status)"
+  fi
   existing="$(g scheduler jobs list --location "$REGION" --format 'value(name)' | sed 's#.*/##')"
   while IFS=$'\t' read -r name cron zone enabled body; do
     [[ -n "$name" ]] || continue
@@ -160,15 +173,19 @@ step_schedules() { # [tag]
     echo "scheduler job $name: $cron $zone$([[ "$enabled" == true ]] || echo ' (paused)')"
   done < <(SCHEDULE_PREFIX="$SCHEDULE_PREFIX" python3 -c '
 import json, os, sys
-for row in json.load(sys.stdin):
+found = json.load(sys.stdin)
+if isinstance(found, dict):  # the tick
+    found = [{"name": found["job"], "enabled": True, **found}]
+for row in found:
+    name = row.get("name") or os.environ["SCHEDULE_PREFIX"] + row["report"]
     body = {"overrides": {"containerOverrides": [{"args": row["args"]}]}}
-    print("\t".join([os.environ["SCHEDULE_PREFIX"] + row["report"], row["cron"], row["timezone"],
-                     "true" if row["enabled"] else "false", json.dumps(body, separators=(",", ":"))]))
+    print("\t".join([name, row["cron"], row["timezone"], "true" if row["enabled"] else "false",
+                     json.dumps(body, separators=(",", ":"))]))
 ' <<<"$rows")
   for name in $existing; do
-    if [[ "$name" == "$SCHEDULE_PREFIX"* && "$wanted" != *" $name "* ]]; then
+    if [[ ("$name" == "$SCHEDULE_PREFIX"* || "$name" == "$TICK_JOB") && "$wanted" != *" $name "* ]]; then
       g scheduler jobs delete "$name" --location "$REGION"
-      echo "scheduler job $name deleted: its report has no schedule any more"
+      echo "scheduler job $name deleted: the image does not run on it"
     fi
   done
 }

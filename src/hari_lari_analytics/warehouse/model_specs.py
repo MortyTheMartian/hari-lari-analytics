@@ -4,7 +4,8 @@ Per model: `description`; `primary_key` (the data checks test it for uniqueness)
 date column the windows filter on); `calendar` (whether the trading days of `dim_calendar`
 apply to its rows); `sample_size` (the count metric of the default sample-size rule, such as
 `orders`; none for a model without orders); and `exposed` (whether components may query it;
-only `dim_` and `fct_` models can be). Every SQL model has an entry and every entry a model.
+only `dim_` and `fct_` models can be); `private` (columns that never go into its mart, such as
+free text that may name a customer). Every SQL model has an entry and every entry a model.
 """
 
 from __future__ import annotations
@@ -33,8 +34,9 @@ class ModelSpec(BaseModel):
     calendar: bool = False
     sample_size: str | None = None
     exposed: bool = False
+    private: list[str] = []  # columns that stay in the warehouse file, never in a mart
 
-    @field_validator("primary_key", mode="before")
+    @field_validator("primary_key", "private", mode="before")
     @classmethod
     def _listify(cls, value):
         return [value] if isinstance(value, str) else value

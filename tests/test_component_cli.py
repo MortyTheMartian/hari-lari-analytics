@@ -16,21 +16,11 @@ from hari_lari_analytics.orchestration import cli
 from hari_lari_analytics.presentation import components, preview
 from hari_lari_analytics.presentation.components import SCHEMA_REF, load_component, schema_text
 from hari_lari_analytics.presentation.snapshots import read_snapshot
-from hari_lari_analytics.warehouse.db import open_run
+from hari_lari_analytics.warehouse.build import open_warehouse
 
-from .api_fixture import api_tables
 from .conftest import FIXTURES
 
 COMPONENTS = FIXTURES / "components"
-
-
-@pytest.fixture(scope="module")
-def run_dir(tmp_path_factory):
-    run = tmp_path_factory.mktemp("extract") / "2026-10-14"
-    (run / "tables").mkdir(parents=True)
-    for name, table in api_tables().items():
-        table.to_parquet(run / "tables" / f"{name}.parquet", index=False)
-    return run
 
 
 def component_cli(capsys, *args, components=COMPONENTS):
@@ -39,15 +29,15 @@ def component_cli(capsys, *args, components=COMPONENTS):
     return code, captured.out, captured.err
 
 
-def run(capsys, run_dir, *args):
-    return component_cli(capsys, "run", *args, "--run", str(run_dir), "--config", str(FIXTURES))
+def run(capsys, warehouse, *args):
+    return component_cli(capsys, "run", *args, "--warehouse", str(warehouse))
 
 
 # --- run ------------------------------------------------------------------------------------------
 
 
-def test_run_prints_the_result(capsys, run_dir):
-    code, out, err = run(capsys, run_dir, "aov_bridge", "--period", "WTD")
+def test_run_prints_the_result(capsys, warehouse):
+    code, out, err = run(capsys, warehouse, "aov_bridge", "--period", "WTD")
     assert code == 0, err
     assert "Run 2026-10-14, data through 13 Oct 2026" in err
     assert out.startswith("== Why the average order value moved\n")
@@ -55,53 +45,53 @@ def test_run_prints_the_result(capsys, run_dir):
     assert "items_per_order" in out and "with\n" not in out  # no SQL without --sql
 
 
-def test_run_with_sql(capsys, run_dir):
-    code, out, _ = run(capsys, run_dir, "aov_bridge", "--period", "WTD", "--sql")
+def test_run_with_sql(capsys, warehouse):
+    code, out, _ = run(capsys, warehouse, "aov_bridge", "--period", "WTD", "--sql")
     assert code == 0
     assert "\nwith\n" in out and "-- parameters:" in out and "$cur_lo = " in out
 
 
-def test_run_as_csv(capsys, run_dir):
-    code, out, err = run(capsys, run_dir, "aov_bridge", "--period", "WTD", "--csv", "--sql")
+def test_run_as_csv(capsys, warehouse):
+    code, out, err = run(capsys, warehouse, "aov_bridge", "--period", "WTD", "--csv", "--sql")
     assert code == 0
     df = pd.read_csv(io.StringIO(out))
     assert df.iloc[-1].effect == 57_500 - 49_000
     assert "\nwith\n" in err  # the SQL goes to stderr, so stdout stays CSV
 
 
-def test_run_facets_by_dimension(capsys, run_dir):
-    code, out, _ = run(capsys, run_dir, "top_category_items", "--period", "L6W")
+def test_run_facets_by_dimension(capsys, warehouse):
+    code, out, _ = run(capsys, warehouse, "top_category_items", "--period", "L6W")
     assert code == 0
     headings = [line for line in out.splitlines() if line.startswith("== ")]
     title = "== Items of the top categories"
     assert headings == [f"{title} · Coffee", f"{title} · Snacks (Focaccia)"]
-    code, out, _ = run(capsys, run_dir, "top_category_items", "--period", "L6W", "--csv")
+    code, out, _ = run(capsys, warehouse, "top_category_items", "--period", "L6W", "--csv")
     assert set(pd.read_csv(io.StringIO(out))["facet"]) == {"Coffee", "Snacks (Focaccia)"}
 
 
-def test_run_facets_by_metric_print_their_result_once(capsys, run_dir):
-    code, out, _ = run(capsys, run_dir, "kpi_cards", "--period", "L14D")
+def test_run_facets_by_metric_print_their_result_once(capsys, warehouse):
+    code, out, _ = run(capsys, warehouse, "kpi_cards", "--period", "L14D")
     assert code == 0
     assert out.count("== ") == 1
     assert "== Key figures · Net Sales, Orders, Avg Order Value, Items Sold" in out
 
 
-def test_run_binds_parameters(capsys, run_dir):
-    code, _, err = run(capsys, run_dir, "category_trend")
+def test_run_binds_parameters(capsys, warehouse):
+    code, _, err = run(capsys, warehouse, "category_trend")
     assert code == 1 and r"$category are not bound" in err
-    code, out, err = run(capsys, run_dir, "category_trend", "--param", "category=Coffee")
+    code, out, err = run(capsys, warehouse, "category_trend", "--param", "category=Coffee")
     assert code == 0, err
-    code, _, err = run(capsys, run_dir, "aov_bridge", "--param", "category=Coffee")
+    code, _, err = run(capsys, warehouse, "aov_bridge", "--param", "category=Coffee")
     assert code == 0 and "Note: aov_bridge does not use $category" in err
 
 
-def test_run_fails_before_building_on_a_bad_period(capsys, run_dir):
-    code, _, err = run(capsys, run_dir, "aov_bridge", "--period", "L6X")
+def test_run_fails_before_building_on_a_bad_period(capsys, warehouse):
+    code, _, err = run(capsys, warehouse, "aov_bridge", "--period", "L6X")
     assert code == 1 and "unknown window 'L6X'" in err and "Run " not in err
 
 
-def test_run_an_unknown_component(capsys, run_dir):
-    code, _, err = run(capsys, run_dir, "aov_bridg")
+def test_run_an_unknown_component(capsys, warehouse):
+    code, _, err = run(capsys, warehouse, "aov_bridg")
     assert code == 1 and "no component aov_bridg" in err and "did you mean aov_bridge?" in err
 
 
@@ -149,28 +139,28 @@ def size(path):
         return image.size
 
 
-def test_run_png_draws_the_component_into_its_slot(capsys, run_dir, tmp_path):
+def test_run_png_draws_the_component_into_its_slot(capsys, warehouse, tmp_path):
     png = tmp_path / "kpis.png"
-    code, out, err = run(capsys, run_dir, "kpi_cards", "--period", "L14D", "--png", str(png))
+    code, out, err = run(capsys, warehouse, "kpi_cards", "--period", "L14D", "--png", str(png))
     assert code == 0, err
     assert out == f"Wrote {png}\n"  # a picture instead of the table
     width, height = size(png)
     assert 1500 < width and 0.2 < height / width < 0.5  # the slot: full width, half the body
 
 
-def test_run_png_defaults_to_the_preview_folder(capsys, run_dir, tmp_path, monkeypatch):
+def test_run_png_defaults_to_the_preview_folder(capsys, warehouse, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    code, out, err = run(capsys, run_dir, "aov_bridge", "--period", "WTD", "--png")
+    code, out, err = run(capsys, warehouse, "aov_bridge", "--period", "WTD", "--png")
     assert code == 0, err
     assert out == f"Wrote {cli.PREVIEW_DIR / 'aov_bridge.png'}\n"
     assert (tmp_path / "data/output/preview/aov_bridge.png").exists()
 
 
-def test_span_and_height_set_the_size_of_the_slot(capsys, run_dir, tmp_path):
+def test_span_and_height_set_the_size_of_the_slot(capsys, warehouse, tmp_path):
     def draw(name, span, height):
         png = tmp_path / name
         code, _, err = run(
-            capsys, run_dir, "kpi_cards", "--png", str(png), "--span", span, "--height", height
+            capsys, warehouse, "kpi_cards", "--png", str(png), "--span", span, "--height", height
         )
         assert code == 0, err
         return size(png)
@@ -183,23 +173,23 @@ def test_span_and_height_set_the_size_of_the_slot(capsys, run_dir, tmp_path):
     assert narrow[0] < wide[0] and tall[1] > wide[1]
 
 
-def test_a_slot_too_small_for_the_visual_is_refused_as_in_a_report(capsys, run_dir, tmp_path):
+def test_a_slot_too_small_for_the_visual_is_refused_as_in_a_report(capsys, warehouse, tmp_path):
     png = tmp_path / "small.png"
     args = ("aov_bridge", "--period", "WTD", "--png", str(png), "--span", "2", "--height", "1")
-    code, _, err = run(capsys, run_dir, *args)
+    code, _, err = run(capsys, warehouse, *args)
     assert code == 1 and not png.exists()
     assert "needs at least" in err and "(--span 2, --height 1)" in err
 
 
-def test_a_text_that_runs_over_the_slot_is_a_warning(capsys, run_dir, tmp_path, folders):
+def test_a_text_that_runs_over_the_slot_is_a_warning(capsys, warehouse, tmp_path, folders):
     components, _ = folders
     path = components / "aov_bridge.yml"
     title = "Why the average order value moved"
     assert title in path.read_text()
     path.write_text(path.read_text().replace(title, title + " and then some" * 12))
     code, out, err = component_cli(
-        capsys, "run", "aov_bridge", "--period", "WTD", "--run", str(run_dir), "--config",
-        str(FIXTURES), "--png", str(tmp_path / "x.png"), components=components,
+        capsys, "run", "aov_bridge", "--period", "WTD", "--warehouse", str(warehouse),
+        "--png", str(tmp_path / "x.png"), components=components,
     )  # fmt: skip
     assert code == 0 and out.startswith("Wrote ")
     assert "Warning: " in err and "and then some" in err and "runs over the right edge" in err
@@ -208,22 +198,23 @@ def test_a_text_that_runs_over_the_slot_is_a_warning(capsys, run_dir, tmp_path, 
 @pytest.mark.parametrize(
     ("flag", "value"), [("--span", "0"), ("--span", "13"), ("--height", "0"), ("--height", "7")]
 )
-def test_span_and_height_have_limits(capsys, run_dir, tmp_path, flag, value):
-    code, _, err = run(capsys, run_dir, "kpi_cards", "--png", str(tmp_path / "x.png"), flag, value)
+def test_span_and_height_have_limits(capsys, warehouse, tmp_path, flag, value):
+    png = str(tmp_path / "x.png")
+    code, _, err = run(capsys, warehouse, "kpi_cards", "--png", png, flag, value)
     assert code == 1 and "1 to" in err
 
 
-def test_watch_needs_png(capsys, run_dir):
-    code, _, err = run(capsys, run_dir, "kpi_cards", "--watch")
+def test_watch_needs_png(capsys, warehouse):
+    code, _, err = run(capsys, warehouse, "kpi_cards", "--watch")
     assert code == 1 and "--watch draws a PNG: add --png" in err
 
 
-def test_a_component_without_a_visual_has_no_preview(capsys, run_dir, tmp_path, folders):
+def test_a_component_without_a_visual_has_no_preview(capsys, warehouse, tmp_path, folders):
     components, _ = folders
     (components / "bare.yml").write_text("id: bare\ntitle: Bare\nquery: {source: lines_export}\n")
     png = str(tmp_path / "x.png")
     code, _, err = component_cli(
-        capsys, "run", "bare", "--run", str(run_dir), "--config", str(FIXTURES), "--png", png,
+        capsys, "run", "bare", "--warehouse", str(warehouse), "--png", png,
         components=components,
     )  # fmt: skip
     assert code == 1 and "has no visual to preview" in err
@@ -275,7 +266,7 @@ def test_watch_survives_an_error_and_ends_on_ctrl_c(tmp_path):
 
 
 def test_run_watch_hands_the_file_and_the_drawing_to_the_watcher(
-    capsys, run_dir, tmp_path, folders
+    capsys, warehouse, tmp_path, folders
 ):
     components, _ = folders
     seen = {}
@@ -289,7 +280,7 @@ def test_run_watch_hands_the_file_and_the_drawing_to_the_watcher(
     args = argparse.Namespace(
         id="kpi_cards", png=str(tmp_path / "w.png"), watch=True, span=12, height=3
     )
-    db = open_run(run_dir, FIXTURES, None)
+    db = open_warehouse(warehouse)
     ctx = QueryContext.create(db.con, run=db.run, checks=db.checks)
     out, err = io.StringIO(), io.StringIO()
     code = cli.cmd_preview(args, components, ctx, {"period": "L14D"}, out, err, watch=fake_watch)
@@ -356,7 +347,7 @@ def test_new_refuses_a_bad_or_existing_id(capsys, folders):
 
 def test_schema(capsys, tmp_path, monkeypatch):
     code, out, _ = component_cli(capsys, "schema", "--check")
-    assert code == 0 and out.count("is up to date") == 3  # component, report and bundle
+    assert code == 0 and out.count("is up to date") == 4  # component, report, bundle, landing
     path = tmp_path / "component.schema.json"
     monkeypatch.setattr(components, "schema_path", lambda: path)
     code, out, _ = component_cli(capsys, "schema", "--check")

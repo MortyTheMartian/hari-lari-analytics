@@ -42,6 +42,13 @@ anchor: yesterday
 # compiled against a calendar that ends here.
 reference_date: 2026-11-22
 
+# The daily tick (`hari-lari-pipeline tick`): the local times Cloud Scheduler starts it, the
+# first run and its retries. They share the minute, because deploy/ builds the one scheduler
+# job's cron from them (`0 4,6 * * *`). A retry does only what the earlier tick left undone; the
+# last one of the day also tells a report's chats that it is late.
+tick:
+  times: ["04:00", "06:00"]
+
 # The Telegram chats a report may deliver to (`deliver.telegram[].to`). A report names a chat
 # here, never a chat id: each name maps to the Secret Manager secret that holds the id. The job
 # reads it from an environment variable named after the secret, upper case with `_` for `-`

@@ -57,8 +57,8 @@ def build_parser() -> argparse.ArgumentParser:
     r = sub.add_parser("run", help="extract the API into Parquet (default command)")
     r.add_argument(
         "--out",
-        default=os.environ.get("EXTRACT_OUT", "data/extract"),
-        help="local folder or gs://bucket/prefix; a dated subfolder is added",
+        default=os.environ.get("EXTRACT_OUT", "data/landing"),
+        help="the landing folder or gs://bucket/landing; the run goes to moka/<run date>/",
     )
     r.add_argument("--since", default=DEFAULT_SINCE, help="YYYY-MM-DD, Bali date")
     r.add_argument("--until", help="YYYY-MM-DD exclusive (default now)")
@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
             client, args.out, since=args.since, until=args.until, only=args.only
         )
         print(f"\nOK -> {result.location}\n{json.dumps(result.manifest, indent=2)}")
-        for w in result.manifest["warnings"]:
+        for w in result.manifest["checks"]["warnings"]:
             print(f"WARNING: {w}", file=sys.stderr)
         return 0
     except ExtractionFailed as e:

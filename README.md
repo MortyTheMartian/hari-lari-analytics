@@ -40,9 +40,11 @@ uv sync
 
 ## Data source
 
-The reports read the Parquet tables of a Moka API extraction run (`hari-lari-extract run`), by
-default the latest run in `data/extract/`. No export has to be downloaded by hand, and the item
-library is not needed: items are matched by their Moka id.
+The reports read a stored warehouse: `hari-lari-extract run` lands a Moka API extraction in
+`data/landing/moka/<date>/`, and `hari-lari-warehouse build` builds the models from it and the
+config into `data/warehouse/<date>/warehouse.duckdb`, which every report and component opens
+read-only (`--warehouse`, default the newest build). No export has to be downloaded by hand,
+and the item library is not needed: items are matched by their Moka id.
 
 The two back-office exports (item library and sales _Item Details_) were the first source, read
 by a pandas pipeline. For the 948 receipts and 1,700 lines up to 31 Oct 2026 both sources gave
@@ -52,7 +54,8 @@ fixture are kept in `tests/golden/`, and the models are tested against them.
 ## Run
 
 ```bash
-uv run hari-lari-report build --report weekly                       # latest extraction, up to yesterday
+uv run hari-lari-extract run && uv run hari-lari-warehouse build    # land today's data, build the models
+uv run hari-lari-report build --report weekly                       # newest warehouse, up to yesterday
 uv run hari-lari-report build --report weekly --anchor 2026-11-15   # re-run an earlier week
 ```
 
@@ -64,13 +67,15 @@ it looked then. It defaults to yesterday in Bali (the Monday report covers up to
 ## Reports (component framework)
 
 Reports are YAML files over the components in `src/hari_lari_analytics/presentation/`
-(`docs/components.md` explains the whole framework). `hari-lari-report` builds them from an
-extraction run; it never sends anything:
+(`docs/components.md` explains the whole framework). `hari-lari-report` builds them from the
+stored warehouse; it never sends anything:
 
 ```bash
+uv run hari-lari-warehouse build                              # data/landing -> data/warehouse/<today>/
 uv run hari-lari-report validate                              # every report and component, the schemas
 uv run hari-lari-report build --report tracer --anchor 2026-11-22   # PDF, PNG, text, XLSX, bundle.json
-uv run hari-lari-report schedules --json                      # the schedules, as deploy/ reads them
+uv run hari-lari-report schedules                             # the reports on the tick, by cron
+uv run hari-lari-pipeline tick --dry-run --date 2026-11-30    # the daily tick, without sending
 ```
 
 The outputs go to `data/output/reports/<report>/<anchor>/` (`--out` changes it); `--strict` fails
@@ -124,9 +129,10 @@ run as tests in `tests/test_authoring_examples.py`: a refund-rate metric with a 
 API, check the data, build the report, store the files, upload to Google Drive, send to
 Telegram); `--scheduled` runs every report with a `schedule` on one extraction. Useful options:
 `--dry-run` (sends nothing), `--to admin` (private run to the admin chat), `--anchor
-YYYY-MM-DD`, `--force`. In the cloud, the Cloud Run job `hari-lari-weekly` runs it, started by
-one Cloud Scheduler job per scheduled report (`hari-lari-report-weekly`: Mondays at 04:00 in
-Bali). The runbook (`docs/runbook.md`) explains the options, the files it writes and what each
+YYYY-MM-DD`, `--force`. In the cloud the daily tick runs them: `hari-lari-pipeline tick`
+extracts, builds the warehouse and runs every report due that day (the weekly one on Mondays),
+in the Cloud Run job `hari-lari-weekly`, started by the Cloud Scheduler job `hari-lari-tick` at
+04:00 and 06:00 in Bali (the 06:00 tick retries what failed). The runbook (`docs/runbook.md`) explains the options, the files it writes and what each
 alert means, and how a merge to `main` is released: `deploy/release.sh` builds the image, runs
 it as a cloud dry run, only then points the live job at it and syncs the scheduler jobs
 (GitHub Actions with Workload Identity Federation, see "Release path" there).
@@ -150,8 +156,10 @@ categories that Moka still has as `Uncategorized`. A renamed item needs no row.
 
 ## Using it for your own cafe
 
-The code reads the Moka API with your own token (`hari-lari-extract`, see the runbook). Replace
-`config/item_aliases.csv` with your own mapping (or empty it) and run as above (with an old
+The code reads the Moka API with your own token (`hari-lari-extract`, see the runbook). The
+business config is private and not in git: copy the demo files of `config/examples/` into
+`config/` (or point `CONFIG_DIR` at another folder or a `gs://` location), replace
+`item_aliases.csv` with your own mapping (or keep only its header) and run as above (with an old
 itemized sales report from Moka POS, any LLM can quickly draft the item_aliases.csv for you).
 
 ## Report design

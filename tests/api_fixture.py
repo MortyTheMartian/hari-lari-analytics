@@ -6,11 +6,15 @@ cleaned lines; `tests/test_load_api.py` checks that.
 
 from __future__ import annotations
 
-from datetime import datetime
+import tempfile
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
 CAFE = 1160056
+TZ = ZoneInfo("Asia/Makassar")
 EXTRACTED_AT = datetime(2026, 10, 14, 9, 30)  # when the run was extracted, the stock's time
 
 
@@ -117,3 +121,32 @@ def api_tables() -> dict[str, pd.DataFrame]:
         "items": _items(),
         "item_variants": _item_variants(),
     }
+
+
+SNAPSHOTS = {"items", "item_variants"}
+
+
+def land_fixture(
+    landing, run_date: date = date(2026, 10, 14), *, started_at: datetime = EXTRACTED_AT,
+    warnings: list[str] | None = None, tables: dict[str, pd.DataFrame] | None = None,
+) -> str:  # fmt: skip
+    """Land the fixture tables as a Moka run of `run_date` in a landing store (rooted at
+    landing/), with its manifest. Returns the run's URL."""
+    from hari_lari_analytics.core.landing import Checks, Manifest, land, table_entry
+
+    started = started_at.replace(tzinfo=TZ)
+    with tempfile.TemporaryDirectory() as tmp:
+        staging = Path(tmp)
+        (staging / "tables").mkdir()
+        entries = {}
+        for name, df in (api_tables() if tables is None else tables).items():
+            df.to_parquet(staging / "tables" / f"{name}.parquet", index=False)
+            kind = "snapshot" if name in SNAPSHOTS else "events"
+            entries[name] = table_entry(staging, name, df, kind)
+        manifest = Manifest(
+            source="moka", run_date=run_date, run_id=f"{started:%H%M%S}-0000",
+            started_at=started, finished_at=started + timedelta(minutes=2),
+            tables=entries, checks=Checks(warnings=warnings or []),
+            source_info={"token_expires_at": "2027-05-11T00:00:00+08:00"},
+        )  # fmt: skip
+        return land(landing, manifest, staging)

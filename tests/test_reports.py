@@ -536,12 +536,9 @@ def test_bad_cron_expressions(cron, message):
     refuse(message, schedule={"cron": cron})
 
 
-def test_a_schedule_has_a_time_zone_that_exists():
-    r = report(schedule={"cron": "0 7 * * 1", "timezone": "Asia/Makassar"})
-    assert r.spec.schedule.enabled and r.spec.schedule.timezone == "Asia/Makassar"
-    refuse(
-        "'Mars/Base' is not a time zone", schedule={"cron": "0 7 * * 1", "timezone": "Mars/Base"}
-    )
+def test_a_schedule_has_no_time_zone_and_may_be_disabled():
+    assert report(schedule={"cron": "0 7 * * 1"}).spec.schedule.enabled
+    refuse("timezone: remove the key", schedule={"cron": "0 7 * * 1", "timezone": "Asia/Makassar"})
     assert report(schedule={"cron": "0 7 * * 1", "enabled": False}).spec.schedule.enabled is False
 
 

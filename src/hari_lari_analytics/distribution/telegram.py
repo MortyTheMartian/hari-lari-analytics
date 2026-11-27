@@ -221,12 +221,15 @@ def format_alert(
     error: BaseException | str,
     link: str | None = None,
     subject: str = "weekly report",
+    note: str | None = None,
 ) -> str:
     message = scrub(str(error) or type(error).__name__)
     if len(message) > MAX_ALERT_ERROR:
         message = message[: MAX_ALERT_ERROR - 1].rstrip() + "…"
     kind = f"{type(error).__name__}: " if isinstance(error, BaseException) else ""
     lines = [f"⚠️ Hari Lari {subject} failed at step: {step}", "", f"{kind}{message}"]
+    if note:
+        lines += ["", note]
     if link:
         lines += ["", f"Logs: {link}"]
     return "\n".join(lines)
@@ -239,13 +242,16 @@ def send_alert(
     error: BaseException | str,
     link: str | None = None,
     subject: str = "weekly report",
+    note: str | None = None,
 ) -> bool:
     """Tell the admin chat which step failed. Never raises: an alert must not hide the real error.
 
     Returns whether the alert was delivered.
     """
     try:
-        client.send_message(admin_chat_id, format_alert(step, error, link or logs_url(), subject))
+        client.send_message(
+            admin_chat_id, format_alert(step, error, link or logs_url(), subject, note)
+        )
     except Exception:  # noqa: BLE001
         return False
     return True

@@ -1,0 +1,8 @@
+category_id,category,category_group_level_1,category_group_level_2
+1000001,Coffee,drink,coffee
+1000002,Tea,drink,
+1000003,Juices,drink,
+1000004,Pastries,food,bakery
+1000005,Breakfast,food,meal
+1000006,Add-ons,food,
+1000007,Local Crafts,consignment,

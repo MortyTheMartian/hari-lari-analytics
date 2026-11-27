@@ -2,22 +2,24 @@
 
 ```text
 hari-lari-report run --report weekly [--anchor YYYY-MM-DD] [--dry-run] [--to admin] [--force]
-                     [--run <run>]
+                     [--warehouse <date|path>]
 hari-lari-report run --scheduled [--dry-run]
-hari-lari-report build --report weekly [--run data/extract] [--anchor YYYY-MM-DD]
+hari-lari-report build --report weekly [--warehouse <date|path>] [--anchor YYYY-MM-DD]
                        [--out DIR] [--strict]
-hari-lari-report gallery [--run data/extract] [--anchor YYYY-MM-DD] [--out DIR] [--no-png]
+hari-lari-report gallery [--warehouse <date|path>] [--anchor YYYY-MM-DD] [--out DIR] [--no-png]
 hari-lari-report validate
 hari-lari-report schedules [--json]
 hari-lari-report schema [--check]
 ```
 
-`run` is the job (plan 9.7, `delivery.py`): extract, model and check, build, store, deliver and
-mark as sent; `--scheduled` runs every report with a schedule on one extraction. `build` opens
-the latest extraction run, builds the models and the data checks, runs the report and writes its
+`run` is the job (plan 9.7, `delivery.py`): extract, build the warehouse, build the report,
+store, deliver and mark as sent; `--scheduled` runs every report with a schedule on one
+extraction. `build` opens a stored warehouse read-only (default: `warehouse/latest.json` under
+the data root; `hari-lari-warehouse build` writes it), runs the report and writes its
 outputs (PDF, PNG pages, Telegram text, workbook, JSON bundle) to
 `data/output/reports/<report>/<anchor>/`; it never sends anything. `--strict` fails when a text
-runs over its slot. `gallery` draws every component with a visual on the run, one page each, to
+runs over its slot. `gallery` draws every component with a visual on the warehouse, one page
+each, to
 `data/output/gallery/` (plan 8.7). `validate` loads every component and report as strictly as a
 build would and checks the three JSON Schemas; `schedules` lists the reports with a schedule, as
 `deploy/` reads them. `--reports` and `--components` before the command point at other folders.
@@ -34,7 +36,10 @@ from pathlib import Path
 from typing import TextIO
 
 from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.core import landing
+from hari_lari_analytics.core.config import CONFIG_HELP, config_location
 from hari_lari_analytics.core.project import project
+from hari_lari_analytics.core.store import DATA_ROOT_HELP, data_root, make_store
 from hari_lari_analytics.orchestration import delivery
 from hari_lari_analytics.presentation import components as components_module
 from hari_lari_analytics.presentation import gallery
@@ -52,7 +57,7 @@ from hari_lari_analytics.presentation.reports import (
 )
 from hari_lari_analytics.presentation.visuals.theme import DEFAULT_THEME
 from hari_lari_analytics.sources.moka.run import DEFAULT_SINCE
-from hari_lari_analytics.warehouse.db import open_run
+from hari_lari_analytics.warehouse.build import WAREHOUSE_HELP, read_warehouse
 from hari_lari_analytics.warehouse.inputs import InputError
 
 DEFAULT_OUT = Path("data/output/reports")
@@ -72,11 +77,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
     build = commands.add_parser("build", help="build the outputs of one report")
     build.add_argument("--report", required=True, help="a report id, or the path of its file")
-    build.add_argument(
-        "--run",
-        default="data/extract",
-        help="a run folder, or a folder (or gs://bucket/prefix) of dated runs; latest is used",
-    )
+    build.add_argument("--warehouse", help=WAREHOUSE_HELP)
+    build.add_argument("--data-root", help=DATA_ROOT_HELP)
     build.add_argument(
         "--anchor",
         type=date.fromisoformat,
@@ -84,7 +86,6 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="last day of the report (default: the report's `anchor` parameter, else the rule "
         "of project.yml)",
     )
-    build.add_argument("--config", type=Path, default=Path("config"), help="the config CSV folder")
     build.add_argument(
         "--out", type=Path, help=f"the output folder (default: {DEFAULT_OUT}/<report>/<anchor>)"
     )
@@ -93,16 +94,10 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     gallery = commands.add_parser(
         "gallery", help="draw every component on one run, one page each (a visual check)"
     )
-    gallery.add_argument(
-        "--run",
-        default="data/extract",
-        help="a run folder, or a folder (or gs://bucket/prefix) of dated runs; latest is used",
-    )
+    gallery.add_argument("--warehouse", help=WAREHOUSE_HELP)
+    gallery.add_argument("--data-root", help=DATA_ROOT_HELP)
     gallery.add_argument(
         "--anchor", type=date.fromisoformat, metavar="YYYY-MM-DD", help="last day of the data"
-    )
-    gallery.add_argument(
-        "--config", type=Path, default=Path("config"), help="the config CSV folder"
     )
     gallery.add_argument(
         "--out",
@@ -130,9 +125,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 
 def add_run_parser(commands) -> None:
-    env = os.environ.get
     run = commands.add_parser(
-        "run", help="extract, build, store and deliver a report (the job of every schedule)"
+        "run", help="extract, build, store and deliver a report (by hand; the tick runs them daily)"
     )
     which = run.add_mutually_exclusive_group(required=True)
     which.add_argument("--report", help="a report id, or the path of its file")
@@ -145,38 +139,42 @@ def add_run_parser(commands) -> None:
         "of project.yml)",
     )  # fmt: skip
     run.add_argument(
+        "--warehouse",
+        help="an existing warehouse instead of a new extraction and build: a run date, or the "
+        "path or gs:// URL of a warehouse.duckdb or of its folder",
+    )  # fmt: skip
+    add_job_options(run)
+
+
+def add_job_options(parser: argparse.ArgumentParser) -> None:
+    """The options of a run that may send (`run`, and `hari-lari-pipeline tick`)."""
+    env = os.environ.get
+    parser.add_argument(
         "--dry-run", action="store_true",
         help="do everything except sending; files go under dry-run/",
     )  # fmt: skip
-    run.add_argument(
+    parser.add_argument(
         "--to", choices=sorted(project().telegram_targets),
-        help="send every Telegram delivery to this chat instead; no sent-marker",
+        help="send every Telegram delivery to this chat instead; not recorded as sent",
     )  # fmt: skip
-    run.add_argument("--force", action="store_true", help="send even if it was already sent")
-    run.add_argument(
-        "--run", dest="existing_run",
-        help="an existing run (a folder or gs://...) instead of a new extraction",
-    )  # fmt: skip
-    run.add_argument(
-        "--data-root", default=env("DATA_ROOT", "data/jobs"),
-        help="folder or gs://bucket[/prefix] for raw/, reports/, sent/",
-    )  # fmt: skip
-    run.add_argument("--config", type=Path, default=Path("config"), help="the config CSV folder")
-    run.add_argument(
+    parser.add_argument("--force", action="store_true", help="send even if it was already sent")
+    parser.add_argument("--data-root", help=DATA_ROOT_HELP)
+    parser.add_argument("--config", help=CONFIG_HELP)
+    parser.add_argument(
         "--drive-folder-id", default=env("DRIVE_FOLDER_ID"),
         help="the Drive folder the report folders go into",
     )  # fmt: skip
     # The extraction: the same options and environment variables as hari-lari-extract
-    run.add_argument("--since", default=DEFAULT_SINCE, help="first day of the extraction")
-    run.add_argument(
+    parser.add_argument("--since", default=DEFAULT_SINCE, help="first day of the extraction")
+    parser.add_argument(
         "--token-store", choices=["file", "secret"], default=env("TOKEN_STORE", "file")
     )
-    run.add_argument(
+    parser.add_argument(
         "--token-file", type=Path,
         default=Path(env("MOKA_TOKEN_FILE", "extraction/moka/.token.json")),
     )  # fmt: skip
-    run.add_argument("--gcp-project", default=env("GCP_PROJECT"))
-    run.add_argument("--token-secret", default=env("MOKA_TOKEN_SECRET", "moka-oauth-token"))
+    parser.add_argument("--gcp-project", default=env("GCP_PROJECT"))
+    parser.add_argument("--token-secret", default=env("MOKA_TOKEN_SECRET", "moka-oauth-token"))
 
 
 # --- run ------------------------------------------------------------------------------------------
@@ -229,19 +227,18 @@ def run_services(args: argparse.Namespace, log) -> delivery.Services:
 
 def cmd_run(args: argparse.Namespace) -> int:
     from hari_lari_analytics.core.log import JsonLog
-    from hari_lari_analytics.core.store import make_store
     from hari_lari_analytics.sources.moka.cli import load_env
 
     load_env()
     log = JsonLog()
     settings = delivery.RunSettings(
-        store=make_store(args.data_root),
-        config_dir=args.config,
+        store=make_store(data_root(args.data_root)),
+        config=config_location(args.config),
         anchor=args.anchor,
         dry_run=args.dry_run,
         force=args.force,
         to=args.to,
-        run=args.existing_run,
+        warehouse=args.warehouse,
         drive_folder_id=args.drive_folder_id,
     )
     services = run_services(args, log)
@@ -281,15 +278,15 @@ def cmd_build(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
     components = load_components(args.components)
     report = find_report(args.report, components, args.reports)
     anchor = reports_module.resolve_anchor(report, args.anchor)
-    db = open_run(args.run, args.config, anchor)
-    ctx = QueryContext.create(db.con, run=db.run, checks=db.checks)
-    print(
-        f"Run {db.run.name}, data through {ctx.calendar.anchor:%d %b %Y}, "
-        f"{len(db.checks.warnings)} data-check warning(s)",
-        file=err,
-    )
-    target = args.out or DEFAULT_OUT / report.id / f"{ctx.calendar.anchor:%Y-%m-%d}"
-    result = build_report(report, ctx, target)
+    with read_warehouse(make_store(data_root(args.data_root)), args.warehouse, anchor) as db:
+        ctx = QueryContext.create(db.con, run=db.run, checks=db.checks)
+        print(
+            f"Run {db.run.name}, data through {ctx.calendar.anchor:%d %b %Y}, "
+            f"{len(db.checks.warnings)} data-check warning(s)",
+            file=err,
+        )
+        target = args.out or DEFAULT_OUT / report.id / f"{ctx.calendar.anchor:%Y-%m-%d}"
+        result = build_report(report, ctx, target)
     for path in result.files:
         print(path, file=out)
     for found in result.overflows:
@@ -305,12 +302,13 @@ def cmd_build(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
 
 def cmd_gallery(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
     components = load_components(args.components)
-    db = open_run(args.run, args.config, args.anchor)
-    ctx = QueryContext.create(db.con, run=db.run, checks=db.checks)
-    print(f"Run {db.run.name}, data through {ctx.calendar.anchor:%d %b %Y}", file=err)
-    result, skipped = gallery.build_gallery(
-        components, ctx, args.out, png=not args.no_png, theme=DEFAULT_THEME
-    )
+    root = make_store(data_root(args.data_root))
+    with read_warehouse(root, args.warehouse, args.anchor) as db:
+        ctx = QueryContext.create(db.con, run=db.run, checks=db.checks)
+        print(f"Run {db.run.name}, data through {ctx.calendar.anchor:%d %b %Y}", file=err)
+        result, skipped = gallery.build_gallery(
+            components, ctx, args.out, png=not args.no_png, theme=DEFAULT_THEME
+        )
     for path in result.files:
         print(path, file=out)
     for item in skipped:
@@ -386,13 +384,14 @@ def cmd_validate(args: argparse.Namespace, out: TextIO) -> int:
 
 
 def schema_checks() -> list[tuple[str, Path, str]]:
-    """The JSON Schema files of components, reports and the bundle, with the text they should
-    have: the report schema lists the packaged components."""
+    """The JSON Schema files of components, reports, the bundle and the landing manifest, with
+    the text they should have: the report schema lists the packaged components."""
     packaged = sorted(p.stem for p in components_dir().glob("*.yml"))
     return [
         ("component", components_module.schema_path(), components_module.schema_text()),
         ("report", reports_module.schema_path(), reports_module.schema_text(packaged)),
         ("bundle", bundle_schema.schema_path(), bundle_schema.schema_text()),
+        ("landing manifest", landing.schema_path(), landing.schema_text()),
     ]
 
 
@@ -400,7 +399,7 @@ def schema_checks() -> list[tuple[str, Path, str]]:
 
 
 def schedules(reports: dict[str, Report]) -> list[dict]:
-    """The reports that have a schedule, as `deploy/` reads them: what to start and when."""
+    """The reports on the daily tick: the cron whose day fields say when each is due."""
     found = []
     for report in sorted(reports.values(), key=lambda r: r.id):
         s = report.spec.schedule
@@ -410,7 +409,7 @@ def schedules(reports: dict[str, Report]) -> list[dict]:
             {
                 "report": report.id,
                 "cron": s.cron,
-                "timezone": s.timezone or project().timezone,
+                "timezone": project().timezone,
                 "enabled": s.enabled,
                 "args": ["run", "--report", report.id],
             }
@@ -444,11 +443,10 @@ def cmd_schema(args: argparse.Namespace, out: TextIO) -> int:
         for _, path, _ in checks:
             print(f"{path} is {'out of date' if path in stale else 'up to date'}", file=out)
         return 1 if stale else 0
-    components_module.write_schema()
-    print(f"Wrote {components_module.schema_path()}", file=out)
-    packaged = sorted(p.stem for p in components_dir().glob("*.yml"))
-    print(f"Wrote {reports_module.write_schema(packaged)}", file=out)
-    print(f"Wrote {bundle_schema.write_schema()}", file=out)
+    for _, path, text in checks:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        print(f"Wrote {path}", file=out)
     return 0
 
 

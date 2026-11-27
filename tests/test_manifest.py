@@ -159,7 +159,7 @@ def test_a_parameter_without_a_default_is_listed_as_unbound():
 
 def test_a_report_lists_its_schedule_outputs_and_pages():
     report = make(
-        schedule={"cron": "0 4 * * 1", "timezone": "Asia/Makassar"},
+        schedule={"cron": "0 4 * * 1"},
         deliver={},
     )
     raw = build_manifest(all_components(), {"tracer": report})

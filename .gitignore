@@ -1,12 +1,10 @@
 # Real data and generated reports never leave this machine
-data/input/
+data/*
+!data/output/
 data/output/*
-data/extract/
-data/jobs/
-data/weekly/
 !data/output/.gitkeep
 *.csv
-!config/*.csv
+!config/examples/*.csv
 !tests/fixtures/*.csv
 !tests/golden/*.csv
 !tests/golden/lines/*.csv
@@ -16,6 +14,10 @@ data/weekly/
 
 # Local environment
 .env
+
+# The business config is private (CONFIG_DIR, docs/architecture.md); examples/ is the demo
+config/*
+!config/examples/
 
 # Python
 .venv/

@@ -360,15 +360,15 @@ def cli(capsys, *args):
     return code, captured.out, captured.err
 
 
-def build(capsys, run_dir, out, *args, report="tracer"):
+def build(capsys, warehouse, out, *args, report="tracer"):
     return cli(
-        capsys, "build", "--report", report, "--run", str(run_dir), "--config", str(FIXTURES),
+        capsys, "build", "--report", report, "--warehouse", str(warehouse),
         "--anchor", "2026-10-13", "--out", str(out), *args,
     )  # fmt: skip
 
 
-def test_build_writes_the_outputs_and_lists_them(capsys, run_dir, tmp_path):
-    code, out, err = build(capsys, run_dir, tmp_path)
+def test_build_writes_the_outputs_and_lists_them(capsys, warehouse, tmp_path):
+    code, out, err = build(capsys, warehouse, tmp_path)
     assert code == 0, err
     assert "Run 2026-10-14, data through 13 Oct 2026" in err
     listed = [Path(line).name for line in out.splitlines()]
@@ -376,29 +376,29 @@ def test_build_writes_the_outputs_and_lists_them(capsys, run_dir, tmp_path):
     assert all((tmp_path / name).exists() for name in listed)
 
 
-def test_build_without_out_writes_under_data_output(capsys, run_dir, tmp_path, monkeypatch):
+def test_build_without_out_writes_under_data_output(capsys, warehouse, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    code, out, _ = build(capsys, run_dir, tmp_path / "x")  # an explicit --out is honoured
+    code, out, _ = build(capsys, warehouse, tmp_path / "x")  # an explicit --out is honoured
     assert code == 0 and str(tmp_path / "x") in out
     code, _, err = cli(
-        capsys, "build", "--report", "tracer", "--run", str(run_dir), "--config", str(FIXTURES),
+        capsys, "build", "--report", "tracer", "--warehouse", str(warehouse),
         "--anchor", "2026-10-13",
     )  # fmt: skip
     assert code == 0, err
     assert (tmp_path / "data/output/reports/tracer/2026-10-13/bundle.json").exists()
 
 
-def test_build_takes_the_path_of_a_report_file(capsys, run_dir, tmp_path):
-    code, _, err = build(capsys, run_dir, tmp_path, report=str(REPORTS / "tracer.yml"))
+def test_build_takes_the_path_of_a_report_file(capsys, warehouse, tmp_path):
+    code, _, err = build(capsys, warehouse, tmp_path, report=str(REPORTS / "tracer.yml"))
     assert code == 0, err
 
 
-def test_build_names_an_unknown_report(capsys, run_dir, tmp_path):
-    code, _, err = build(capsys, run_dir, tmp_path, report="nope")
+def test_build_names_an_unknown_report(capsys, warehouse, tmp_path):
+    code, _, err = build(capsys, warehouse, tmp_path, report="nope")
     assert code == 1 and "no report nope" in err and "known: tracer" in err
 
 
-def test_strict_fails_on_an_overflow(capsys, run_dir, tmp_path):
+def test_strict_fails_on_an_overflow(capsys, warehouse, tmp_path):
     reports = tmp_path / "reports"
     reports.mkdir()
     slots = tracer_spec()["pages"][0]["slots"]
@@ -406,8 +406,8 @@ def test_strict_fails_on_an_overflow(capsys, run_dir, tmp_path):
     bad = tracer_spec(pages=[{**tracer_spec()["pages"][0], "slots": slots}])
     (reports / "tracer.yml").write_text(yaml.safe_dump(bad))
     out = str(tmp_path / "o")
-    args = ("--reports", str(reports), "build", "--report", "tracer", "--run", str(run_dir),
-            "--config", str(FIXTURES), "--anchor", "2026-10-13", "--out", out)  # fmt: skip
+    args = ("--reports", str(reports), "build", "--report", "tracer", "--warehouse", str(warehouse),
+            "--anchor", "2026-10-13", "--out", out)  # fmt: skip
     code = report_cli.main(args)
     err = capsys.readouterr().err
     assert code == 0 and "Warning: " in err and "An extremely long title" in err
@@ -447,7 +447,7 @@ def test_validate_names_the_slots_a_filter_does_not_reach(capsys, tmp_path):
 
 
 def test_schedules_lists_the_reports_that_have_one(capsys, tmp_path):
-    scheduled = tracer_spec(schedule={"cron": "0 7 * * 1", "timezone": "Asia/Jakarta"})
+    scheduled = tracer_spec(schedule={"cron": "0 7 * * 1"})
     (tmp_path / "tracer.yml").write_text(yaml.safe_dump(scheduled))
     other = {**tracer_spec(id="quiet"), "outputs": {}, "text_blocks": {}, "deliver": {}}
     (tmp_path / "quiet.yml").write_text(yaml.safe_dump(other))
@@ -455,7 +455,7 @@ def test_schedules_lists_the_reports_that_have_one(capsys, tmp_path):
     found = json.loads(capsys.readouterr().out)
     assert code == 0
     assert [(s["report"], s["cron"], s["timezone"], s["enabled"]) for s in found] == [
-        ("tracer", "0 7 * * 1", "Asia/Jakarta", True)
+        ("tracer", "0 7 * * 1", "Asia/Makassar", True)  # the project's: one tick, one zone
     ]
     code = report_cli.main(["--reports", str(tmp_path), "schedules"])
     assert "tracer" in capsys.readouterr().out and code == 0
@@ -463,7 +463,7 @@ def test_schedules_lists_the_reports_that_have_one(capsys, tmp_path):
 
 def test_the_schemas_are_up_to_date(capsys):
     code, out, _ = cli(capsys, "schema", "--check")
-    assert code == 0 and out.count("is up to date") == 3
+    assert code == 0 and out.count("is up to date") == 4
 
 
 def test_the_report_command_is_the_reporting_cli():

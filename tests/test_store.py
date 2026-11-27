@@ -1,13 +1,11 @@
 """Where the report job keeps its files (local or Cloud Storage), and the Drive client."""
 
-from pathlib import Path
-
 import pytest
 
 from hari_lari_analytics.core.store import GcsStore, LocalStore
 from hari_lari_analytics.distribution.drive import DriveError, DriveUploader
 
-from .fakes import DriveSession, Response
+from .fakes import DriveSession, GcsClient, Response
 
 
 # ---- Drive client -----------------------------------------------------------------
@@ -59,41 +57,8 @@ def test_local_store_child_and_upload(tmp_path):
     assert store.url("raw").endswith("dry-run/raw")
 
 
-class _Blob:
-    def __init__(self, bucket, name):
-        self.bucket, self.name = bucket, name
-
-    def exists(self):
-        return self.name in self.bucket.objects
-
-    def upload_from_string(self, text, content_type=None):
-        self.bucket.objects[self.name] = text
-
-    def upload_from_filename(self, path):
-        self.bucket.objects[self.name] = Path(path).read_text()
-
-    def download_as_text(self):
-        return self.bucket.objects[self.name]
-
-
-class _Bucket:
-    def __init__(self):
-        self.objects = {}
-
-    def blob(self, name):
-        return _Blob(self, name)
-
-
-class _GcsClient:
-    def __init__(self):
-        self.buckets = {}
-
-    def bucket(self, name):
-        return self.buckets.setdefault(name, _Bucket())
-
-
 def test_gcs_store_prefixes_keys_and_urls():
-    client = _GcsClient()
+    client = GcsClient()
     store = GcsStore("b", "", client).child("dry-run")
     store.write_text("sent/weekly/2026-10-13.json", "{}")
     assert "dry-run/sent/weekly/2026-10-13.json" in client.buckets["b"].objects
@@ -101,3 +66,25 @@ def test_gcs_store_prefixes_keys_and_urls():
     assert store.read_text("sent/weekly/2026-10-13.json") == "{}"
     assert store.url("raw") == "gs://b/dry-run/raw"
     assert GcsStore("b", "", client).url("raw") == "gs://b/raw"
+
+
+@pytest.mark.parametrize("kind", ["local", "gcs"])
+def test_stores_list_download_and_delete(tmp_path, kind):
+    root = LocalStore(tmp_path / "root") if kind == "local" else GcsStore("b", "data", GcsClient())
+    store = root.child("dry-run")
+    for key in ["runs/2026-11-30/a.json", "runs/2026-11-30/b.json", "runs/2026-12-01/c.json"]:
+        store.write_text(key, key)
+    root.write_text("outside.json", "{}")
+    assert store.list("runs/2026-11-30") == ["runs/2026-11-30/a.json", "runs/2026-11-30/b.json"]
+    assert store.list() == [
+        "runs/2026-11-30/a.json",
+        "runs/2026-11-30/b.json",
+        "runs/2026-12-01/c.json",
+    ]
+    assert store.list("runs/2026-11") == []  # a folder, not a key prefix
+    assert store.list("nothing") == []
+    store.download("runs/2026-12-01/c.json", tmp_path / "out" / "c.json")
+    assert (tmp_path / "out" / "c.json").read_text() == "runs/2026-12-01/c.json"
+    store.delete("runs/2026-12-01/c.json")
+    store.delete("runs/2026-12-01/c.json")  # a missing key is not an error
+    assert not store.exists("runs/2026-12-01/c.json")
