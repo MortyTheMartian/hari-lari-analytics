@@ -24,6 +24,8 @@ import pandas as pd
 import yaml
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from hari_lari_analytics.core.config import DEFAULT as DEFAULT_CONFIG
+from hari_lari_analytics.core.config import local_config
 from hari_lari_analytics.core.project import Project, project
 from hari_lari_analytics.warehouse.checks import CheckReport, check
 from hari_lari_analytics.warehouse.inputs import (
@@ -103,6 +105,13 @@ SEED_SOURCES = {
 }
 
 
+SEED_FILES = {
+    "item_aliases": ("item_aliases.csv", load_aliases),
+    "category_groups": ("category_group.csv", load_category_groups),
+    "calendar_events": ("calendar_events.csv", load_calendar_events),
+}
+
+
 @dataclass(frozen=True)
 class Seeds:
     """The validated config files (see `inputs.py`), as DataFrames."""
@@ -113,11 +122,14 @@ class Seeds:
 
     @classmethod
     def from_dir(cls, config_dir: Path) -> Seeds:
-        return cls(
-            item_aliases=load_aliases(config_dir / "item_aliases.csv"),
-            category_groups=load_category_groups(config_dir / "category_group.csv"),
-            calendar_events=load_calendar_events(config_dir / "calendar_events.csv"),
-        )
+        return cls(**{name: load(config_dir / file) for name, (file, load) in SEED_FILES.items()})
+
+    @classmethod
+    def load(cls, location: str | Path) -> Seeds:
+        """The seeds of a config location (`core/config.py`): a folder or gs://; every file of
+        `SEED_FILES` is required."""
+        with local_config(location, [file for file, _ in SEED_FILES.values()]) as folder:
+            return cls.from_dir(folder)
 
 
 WEEK_START_MACRO = (
@@ -168,14 +180,15 @@ class RunDb:
 
 
 def open_run(
-    location: str | Path, config_dir: Path = Path("config"), anchor: date | None = None
+    location: str | Path, config: str | Path = DEFAULT_CONFIG, anchor: date | None = None
 ) -> RunDb:
     """Load the latest run in `location` (local or gs://), build the models and check them.
 
-    A failing data check of severity error raises `DataCheckError`.
+    `config` is the config location (a folder or gs://). A failing data check of severity error
+    raises `DataCheckError`.
     """
     run = load_run(location, RAW_SOURCES)
-    con = connect(run.tables, Seeds.from_dir(config_dir), anchor, extracted_at=run_time(run))
+    con = connect(run.tables, Seeds.load(config), anchor, extracted_at=run_time(run))
     return RunDb(run, con, check(con))
 
 

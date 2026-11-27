@@ -58,7 +58,7 @@ LEGACY_MARKERS = {"weekly": "sent/{anchor}.json"}
 @dataclass
 class RunSettings:
     store: Store
-    config_dir: Path = Path("config")
+    config: str = "config"  # a folder or gs:// (core/config.py)
     anchor: date | None = None  # default: the report's `anchor` parameter, else project.yml
     dry_run: bool = False
     force: bool = False
@@ -231,7 +231,7 @@ def run_report_job(
         location = settings.run or extract_step(run, store)
 
         with run.step("model"):
-            db = open_run(location, settings.config_dir, anchor)
+            db = open_run(location, settings.config, anchor)
             ctx = QueryContext.create(db.con, run=db.run, checks=db.checks)
         for warning in db.checks.warnings:
             log.warning(f"data check: {warning.describe()}", step="model")

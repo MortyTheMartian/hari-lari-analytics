@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import TextIO
 
 from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.core.config import CONFIG_HELP, config_location
 from hari_lari_analytics.core.project import project
 from hari_lari_analytics.orchestration import delivery
 from hari_lari_analytics.presentation import components as components_module
@@ -84,7 +85,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="last day of the report (default: the report's `anchor` parameter, else the rule "
         "of project.yml)",
     )
-    build.add_argument("--config", type=Path, default=Path("config"), help="the config CSV folder")
+    build.add_argument("--config", help=CONFIG_HELP)
     build.add_argument(
         "--out", type=Path, help=f"the output folder (default: {DEFAULT_OUT}/<report>/<anchor>)"
     )
@@ -101,9 +102,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     gallery.add_argument(
         "--anchor", type=date.fromisoformat, metavar="YYYY-MM-DD", help="last day of the data"
     )
-    gallery.add_argument(
-        "--config", type=Path, default=Path("config"), help="the config CSV folder"
-    )
+    gallery.add_argument("--config", help=CONFIG_HELP)
     gallery.add_argument(
         "--out",
         type=Path,
@@ -161,7 +160,7 @@ def add_run_parser(commands) -> None:
         "--data-root", default=env("DATA_ROOT", "data/jobs"),
         help="folder or gs://bucket[/prefix] for raw/, reports/, sent/",
     )  # fmt: skip
-    run.add_argument("--config", type=Path, default=Path("config"), help="the config CSV folder")
+    run.add_argument("--config", help=CONFIG_HELP)
     run.add_argument(
         "--drive-folder-id", default=env("DRIVE_FOLDER_ID"),
         help="the Drive folder the report folders go into",
@@ -236,7 +235,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     log = JsonLog()
     settings = delivery.RunSettings(
         store=make_store(args.data_root),
-        config_dir=args.config,
+        config=config_location(args.config),
         anchor=args.anchor,
         dry_run=args.dry_run,
         force=args.force,
@@ -281,7 +280,7 @@ def cmd_build(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
     components = load_components(args.components)
     report = find_report(args.report, components, args.reports)
     anchor = reports_module.resolve_anchor(report, args.anchor)
-    db = open_run(args.run, args.config, anchor)
+    db = open_run(args.run, config_location(args.config), anchor)
     ctx = QueryContext.create(db.con, run=db.run, checks=db.checks)
     print(
         f"Run {db.run.name}, data through {ctx.calendar.anchor:%d %b %Y}, "
@@ -305,7 +304,7 @@ def cmd_build(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
 
 def cmd_gallery(args: argparse.Namespace, out: TextIO, err: TextIO) -> int:
     components = load_components(args.components)
-    db = open_run(args.run, args.config, args.anchor)
+    db = open_run(args.run, config_location(args.config), args.anchor)
     ctx = QueryContext.create(db.con, run=db.run, checks=db.checks)
     print(f"Run {db.run.name}, data through {ctx.calendar.anchor:%d %b %Y}", file=err)
     result, skipped = gallery.build_gallery(

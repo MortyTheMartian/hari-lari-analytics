@@ -32,7 +32,10 @@ def test_unknown_level_1_is_an_error(tmp_path):
 
 
 def test_real_config_is_valid_and_covers_known_categories():
-    groups = load_category_groups(FIXTURES.parents[1] / "config" / "category_group.csv")
+    path = FIXTURES.parents[1] / "config" / "category_group.csv"
+    if not path.exists():
+        pytest.skip("the real config is not here (it is private)")
+    groups = load_category_groups(path)
     mapped = dict(zip(groups["category"], groups["category_group_level_1"], strict=True))
     for name in ["HYGO", "Casa Boa", "BAHASA Books"]:
         assert mapped[name] == "consignment"

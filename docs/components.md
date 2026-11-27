@@ -219,10 +219,11 @@ src/hari_lari_analytics/
     report_cli.py     # hari-lari-report: run, build, validate, schedules
   distribution/       # Telegram and Drive
   fonts/              # Inter, embedded in the PDF
-config/
+config/                           # private, not in git: $CONFIG_DIR, a folder or gs:// (t11)
   item_aliases.csv
   category_group.csv
   calendar_events.csv             # new in plan 7.4
+  examples/                       # in git: the same columns with demo values
   # later: targets.csv, item_margins.csv, modifier_costs.csv, note_addons.csv,
   #        payment_fees.csv, expense_group.csv
 ```

@@ -194,7 +194,8 @@ def test_dryrun_runs_every_scheduled_report_as_a_dry_run_and_waits_for_it(releas
     assert done.returncode == 0, done.stderr
     assert release.calls() == [
         f"run jobs update hari-lari-weekly-dryrun --region asia-southeast2 "
-        f"--image {IMAGES}:bbb222 --args=run,--scheduled,--dry-run",
+        f"--image {IMAGES}:bbb222 --args=run,--scheduled,--dry-run "
+        "--update-env-vars CONFIG_DIR=gs://hari-lari-data/config",
         "run jobs execute hari-lari-weekly-dryrun --region asia-southeast2 --wait",
     ]
 
@@ -211,6 +212,7 @@ def test_promote_points_the_live_job_at_the_tag_and_remembers_the_previous_one(r
     assert done.returncode == 0, done.stderr
     assert release.live_updates() == [
         f"run jobs update hari-lari-weekly --region asia-southeast2 --image {IMAGES}:bbb222 "
+        "--update-env-vars CONFIG_DIR=gs://hari-lari-data/config "
         "--update-labels release=bbb222,previous-release=aaa111"
     ]
     assert "aaa111 -> bbb222" in done.stdout
@@ -343,6 +345,7 @@ def test_rollback_without_a_tag_goes_to_the_previous_release(release):
     assert done.returncode == 0, done.stderr
     assert release.live_updates() == [
         f"run jobs update hari-lari-weekly --region asia-southeast2 --image {IMAGES}:aaa111 "
+        "--update-env-vars CONFIG_DIR=gs://hari-lari-data/config "
         "--update-labels release=aaa111,previous-release=bbb222"
     ]
 

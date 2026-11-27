@@ -4,6 +4,7 @@
 PROJECT="${PROJECT:-hari-lari}"
 REGION="${REGION:-asia-southeast2}"
 BUCKET="${BUCKET:-${PROJECT}-data}"
+CONFIG_URL="gs://${BUCKET}/config"   # the private business config (CONFIG_DIR of the jobs)
 REPO="hari-lari"
 IMAGE_REPO="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/weekly"
 JOB="hari-lari-weekly"                  # the live job, started by Cloud Scheduler

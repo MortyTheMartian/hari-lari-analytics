@@ -97,7 +97,7 @@ step_dryrun() { # [tag]
   # --args is set every time, so a job whose arguments were cleared can never send a report.
   # Every report with a schedule must build before the release is promoted.
   g run jobs update "$DRYRUN_JOB" --region "$REGION" --image "$IMAGE_REPO:$tag" \
-    --args=run,--scheduled,--dry-run
+    --args=run,--scheduled,--dry-run --update-env-vars "CONFIG_DIR=$CONFIG_URL"
   if ! g run jobs execute "$DRYRUN_JOB" --region "$REGION" --wait; then
     die "the dry run of $tag failed; the live job still runs $(job_tag "$JOB")"
   fi
@@ -114,7 +114,9 @@ step_promote() { # [tag]
   if [[ -n "$current" && "$current" != "$tag" ]]; then
     labels="$labels,previous-release=$current"
   fi
-  g run jobs update "$JOB" --region "$REGION" --image "$IMAGE_REPO:$tag" --update-labels "$labels"
+  # The config is not in the image (docs/architecture.md): the job reads it from the bucket
+  g run jobs update "$JOB" --region "$REGION" --image "$IMAGE_REPO:$tag" \
+    --update-env-vars "CONFIG_DIR=$CONFIG_URL" --update-labels "$labels"
   echo "live job $JOB: ${current:-?} -> $tag"
 }
 

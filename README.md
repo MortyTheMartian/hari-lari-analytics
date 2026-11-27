@@ -150,8 +150,10 @@ categories that Moka still has as `Uncategorized`. A renamed item needs no row.
 
 ## Using it for your own cafe
 
-The code reads the Moka API with your own token (`hari-lari-extract`, see the runbook). Replace
-`config/item_aliases.csv` with your own mapping (or empty it) and run as above (with an old
+The code reads the Moka API with your own token (`hari-lari-extract`, see the runbook). The
+business config is private and not in git: copy the demo files of `config/examples/` into
+`config/` (or point `CONFIG_DIR` at another folder or a `gs://` location), replace
+`item_aliases.csv` with your own mapping (or keep only its header) and run as above (with an old
 itemized sales report from Moka POS, any LLM can quickly draft the item_aliases.csv for you).
 
 ## Report design

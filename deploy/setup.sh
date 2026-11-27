@@ -134,7 +134,7 @@ for path in (("spec", "template", "spec", "template", "spec", "containers"),
 # job keeps its image, so re-running setup never undoes a release (deploy/release.sh owns it).
 deploy_job() { # name image [flags...]
   local name="$1" image="$2"; shift 2
-  local env="TZ=Asia/Makassar,TOKEN_STORE=secret,GCP_PROJECT=$PROJECT,EXTRACT_OUT=gs://$BUCKET/raw,DATA_ROOT=gs://$BUCKET"
+  local env="TZ=Asia/Makassar,TOKEN_STORE=secret,GCP_PROJECT=$PROJECT,EXTRACT_OUT=gs://$BUCKET/raw,DATA_ROOT=gs://$BUCKET,CONFIG_DIR=$CONFIG_URL"
   [[ -n "${DRIVE_FOLDER_ID:-}" ]] && env="$env,DRIVE_FOLDER_ID=$DRIVE_FOLDER_ID"
   local verb=create envflag=--set-env-vars imageflag=(--image "$image")
   if g run jobs describe "$name" --region "$REGION" >/dev/null 2>&1; then

@@ -1,9 +1,10 @@
 """Fakes of the outside world for the job tests: a Telegram transport and a Drive session that
-record what they are sent."""
+record what they are sent, and a Cloud Storage client."""
 
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from hari_lari_analytics.distribution.telegram import TelegramClient
 
@@ -57,3 +58,48 @@ class Response:
 
     def json(self):
         return self._payload
+
+
+class GcsBlob:
+    def __init__(self, bucket, name):
+        self.bucket, self.name = bucket, name
+
+    def exists(self):
+        return self.name in self.bucket.objects
+
+    def upload_from_string(self, text, content_type=None):
+        self.bucket.objects[self.name] = text.encode() if isinstance(text, str) else text
+
+    def upload_from_filename(self, path):
+        self.bucket.objects[self.name] = Path(path).read_bytes()
+
+    def download_as_text(self):
+        return self.bucket.objects[self.name].decode()
+
+    def download_to_filename(self, path):
+        Path(path).write_bytes(self.bucket.objects[self.name])
+
+    def delete(self):
+        del self.bucket.objects[self.name]
+
+
+class GcsBucket:
+    def __init__(self):
+        self.objects: dict[str, bytes] = {}
+
+    def blob(self, name):
+        return GcsBlob(self, name)
+
+
+class GcsClient:
+    """A Cloud Storage client over dicts: `buckets[name].objects[key]` holds the bytes."""
+
+    def __init__(self):
+        self.buckets: dict[str, GcsBucket] = {}
+
+    def bucket(self, name):
+        return self.buckets.setdefault(name, GcsBucket())
+
+    def list_blobs(self, bucket, prefix=None, max_results=None):
+        names = sorted(n for n in self.bucket(bucket).objects if n.startswith(prefix or ""))
+        return [GcsBlob(self.bucket(bucket), n) for n in names[:max_results]]

@@ -37,6 +37,7 @@ import yaml
 
 from hari_lari_analytics.analysis.queries import QueryContext
 from hari_lari_analytics.analysis.result import Result
+from hari_lari_analytics.core.config import CONFIG_HELP, config_location
 from hari_lari_analytics.orchestration import report_cli
 from hari_lari_analytics.presentation import components, manifest, preview
 from hari_lari_analytics.presentation import reports as reports_module
@@ -97,7 +98,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         default="data/extract",
         help="a run folder, or a folder (or gs://bucket/prefix) of dated runs; latest is used",
     )
-    run.add_argument("--config", type=Path, default=Path("config"), help="the config CSV folder")
+    run.add_argument("--config", help=CONFIG_HELP)
     run.add_argument("--sql", action="store_true", help="also print the SQL and its parameters")
     run.add_argument("--csv", action="store_true", help="print CSV instead of a table")
     run.add_argument(
@@ -283,7 +284,7 @@ def cmd_run(args: argparse.Namespace, directory: Path, out: TextIO, err: TextIO)
     component.bind(params)  # fail on a parameter before building the models
     if args.watch and args.png is None:
         raise ComponentError("--watch draws a PNG: add --png")
-    db = open_run(args.run, args.config, args.anchor)
+    db = open_run(args.run, config_location(args.config), args.anchor)
     ctx = QueryContext.create(db.con, run=db.run, checks=db.checks)
     print(
         f"Run {db.run.name}, data through {ctx.calendar.anchor:%d %b %Y}, "

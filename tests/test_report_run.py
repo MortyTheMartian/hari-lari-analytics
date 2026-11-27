@@ -56,7 +56,7 @@ class Env:
         self.manifest = {"token_expires_at": "2027-05-11T00:00:00+08:00", "warnings": []}
         self.settings = RunSettings(
             store=LocalStore(self.root),
-            config_dir=FIXTURES,
+            config=settings.pop("config", str(FIXTURES)),
             anchor=settings.pop("anchor", ANCHOR),
             drive_folder_id=settings.pop("drive_folder_id", "root"),
             **settings,
@@ -231,6 +231,14 @@ def test_a_failing_data_check_fails_the_model_step(env, monkeypatch):
     monkeypatch.setattr(delivery, "open_run", broken)
     assert env.run() == 1
     assert "step: model" in env.telegram.text(ADMIN, "sendMessage")
+
+
+def test_a_missing_config_file_fails_the_model_step_with_the_admin_alert(tmp_path):
+    env = Env(tmp_path, config=str(tmp_path / "no-config"))
+    assert env.run() == 1
+    alert = env.telegram.text(ADMIN, "sendMessage")
+    assert "step: model" in alert and "has no item_aliases.csv" in alert
+    assert env.telegram.sent(GROUP) == []
 
 
 def test_a_drive_failure_sends_the_text_without_the_link_line(tmp_path):

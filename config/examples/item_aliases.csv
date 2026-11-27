@@ -1,0 +1,5 @@
+sales_item,adjusted_item,adjusted_category,note
+Banana Bread,Banana Walnut Bread,,renamed and merged into the live item
+Iced Latte Large,Iced Latte,,old size variant sold as its own item
+Custom Amount,,Custom Amount,open-price entry
+Oat Milk,,Add-ons,add-on that reuses an old item id

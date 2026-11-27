@@ -142,6 +142,25 @@ uv run --extra gcp hari-lari-extract --token-store secret --gcp-project hari-lar
 
 The second command adds a new version of the secret `moka-oauth-token`; the next run uses it.
 
+### The business config (`CONFIG_DIR`)
+
+The CSV files the models read (`item_aliases.csv`, `category_group.csv`,
+`calendar_events.csv`) are private: they are neither in git nor in the image. The jobs read them
+from `gs://hari-lari-data/config/` (their variable `CONFIG_DIR`, set by `deploy/setup.sh` and on
+every release); locally the default is `config/`, which git ignores. Each file is required: a
+missing one fails the run at step `model` with the admin alert. `config/examples/` in git has the
+same columns with demo values.
+
+To change one, edit it in `config/`, build the report locally on it, then upload it; the next
+run reads it, no release needed:
+
+```bash
+uv run hari-lari-report build --report weekly --run data/extract
+gcloud storage cp config/*.csv gs://hari-lari-data/config/
+```
+
+A fresh checkout gets the real files back with `gcloud storage cp gs://hari-lari-data/config/*.csv config/`.
+
 ### Drive
 
 A service account cannot create files in a normal Google Drive ("Service Accounts do not have
