@@ -16,7 +16,7 @@ agreed on 25 Nov 2026 (plan task 7A.9), D15 to D19 on the same day (plan tasks 8
 
 | # | Question | Decision | Status |
 | --- | --- | --- | --- |
-| D1 | Where the definitions live | agreed: inside the package (`src/hari_lari_analytics/reporting/`) | in force; the package splits into the modules of [architecture.md](architecture.md) in phase A (t7) |
+| D1 | Where the definitions live | agreed: inside the package, now the modules of [architecture.md](architecture.md) (`semantic/`, `analysis/`, `presentation/`, `warehouse/`) | in force (split in t7, 27 Nov 2026) |
 | D2 | Data source of the component report | agreed: sales from API runs only; the hand-maintained `config/*.csv` files (aliases, category groups, later margins) stay and are loaded as `seed_*` tables | in force; the config leaves git in phase B (t11) |
 | D3 | Layout definitions | agreed: a 12-column grid in the report YAML, with a minimum size per visual and an overflow test (replaces the rectangles in `layouts.yml`) | in force |
 | D4 | Where Python lives | agreed: one query compiler; Python only for transforms, visuals, insight rule types and `@query` sources; none in components or reports (replaces the Jinja SQL pattern per chart with an optional `post` step) | in force |

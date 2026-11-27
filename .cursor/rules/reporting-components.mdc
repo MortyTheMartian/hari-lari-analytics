@@ -1,6 +1,6 @@
 ---
 description: Authoring guide for the reporting framework (metrics, components, transforms, visuals, reports) with the CLI loop and two tested examples
-globs: src/hari_lari_analytics/reporting/**
+globs: src/hari_lari_analytics/semantic/**,src/hari_lari_analytics/analysis/**,src/hari_lari_analytics/presentation/**
 alwaysApply: false
 ---
 
@@ -11,7 +11,7 @@ tree) → one query compiler → transforms → visuals, insights and grid layou
 text, Excel and a JSON bundle. A new component should take under 30 minutes and usually only YAML.
 The design and the reasons are in `docs/components.md`; this file is the working procedure.
 
-**Start from the catalogue.** `src/hari_lari_analytics/reporting/semantic_manifest.json` lists
+**Start from the catalogue.** `src/hari_lari_analytics/presentation/semantic_manifest.json` lists
 every model, metric (label, format, kind, depends on), dimension, KPI-tree identity, window form,
 transform, visual (options, accepted shapes, minimum size), insight rule, component and report.
 Read it before writing anything: the metric or component you need may exist already.
@@ -45,7 +45,7 @@ Read it before writing anything: the metric or component you need may exist alre
 ```bash
 uv run hari-lari-component new <id> [--from <similar_id>] [--param name=value]
                                     # a component and the stub of its snapshot
-# edit src/hari_lari_analytics/reporting/components/<id>.yml
+# edit src/hari_lari_analytics/presentation/components/<id>.yml
 uv run hari-lari-component run <id> --period L6W --sql      # the result, its SQL, the checks
 uv run hari-lari-component run <id> --png --watch           # data/output/preview/<id>.png on every save
 uv run hari-lari-component validate                         # every component, report, schema, manifest
@@ -60,7 +60,7 @@ date). A parameter without a default needs a value for the snapshot (`new ... --
 category=Coffee`). The test fixture (`tests/fixtures`, 9 days of made-up sales) has too little
 history for comparisons; use the real run to judge a component and the fixture for its tests.
 
-## Add a metric (`metrics.yml`)
+## Add a metric (`semantic/metrics.yml`)
 
 One kind per metric: `sql` (an aggregate per model: `func(expr)` or `func(distinct expr)`, with an
 optional `filter (where ...)`), `filtered` (a base metric restricted by dimension values),
@@ -72,13 +72,13 @@ when the default rule (30 of the model's `sample_size` count) is wrong for it. T
 every reference and says which metric and model fail. Add a test with a hand-computed value to
 `tests/test_registry.py`, and describe a business definition in `METRICS.md`.
 
-A new column a metric needs comes from the SQL of a model in `models/` (`models.yml` has the
-metadata: primary key, time column, whether it is exposed); a new way to group is a dimension
-in `dimensions.yml` (grain, models, labels, bins).
+A new column a metric needs comes from the SQL of a model in `warehouse/models/`
+(`warehouse/models.yml` has the metadata: primary key, time column, whether it is exposed); a
+new way to group is a dimension in `semantic/dimensions.yml` (grain, models, labels, bins).
 
 ## Add a component
 
-A file in `components/` with `id`, `title`, optional `hint`/`description`, `params`, a `query`
+A file in `presentation/components/` with `id`, `title`, optional `hint`/`description`, `params`, a `query`
 (`model`, `metrics`, `dimensions`, `window`, `compare`, `where`, `focus`, `totals`, `top`, ...) or
 `source` for a registered Python query, optional `transforms`, `facet` (repeat the visual by
 metric, period or dimension value), a `visual` and `insights` (rules of `insights.yml`). Titles
@@ -95,28 +95,28 @@ automatically.
 
 ## Add a transform (Python)
 
-A pure function `(result, options, ctx) -> Result` in `transforms/` that never queries the
+A pure function `(result, options, ctx) -> Result` in `analysis/transforms/` that never queries the
 database, registered with `@transform("name", Options, shapes=..., requires=...)`; its docstring is its
 description. `requires` adds what the query must have (metrics, buckets
 before the window) or fails with a clear message (a missing dimension or comparison). Put it in an
-existing module of `transforms/` or in a new one imported at the bottom of
-`transforms/__init__.py`. Test it by hand on a small result in `tests/test_transforms.py`, then
+existing module of `analysis/transforms/` or in a new one imported at the bottom of
+`analysis/transforms/__init__.py`. Test it by hand on a small result in `tests/test_transforms.py`, then
 refresh the schema and the manifest.
 
 ## Add a visual (Python)
 
-A function `(area, result, options, ctx)` in `visuals/` registered with
+A function `(area, result, options, ctx)` in `presentation/visuals/` registered with
 `@visual(name, Options, accepts=..., min_size=..., check=..., text=...)`: the options model is
 the YAML contract (renderer-neutral: columns, flags, theme tokens), `check` validates the options
 against the query at load time (`need_metrics`, `need_compare`), `text` is the plain-text form for
 Telegram. Draw from `present(result)` cells (never recompute or reformat), mark small samples
 (`n=`), and never place text outside `area`: the layout test fails on overflow. Import the module
-at the bottom of `visuals/__init__.py`, add a case to `CASES` in `tests/test_visuals.py`, and
-refresh the schema and the manifest. `text_line` in `visuals/kpi.py` is the smallest real example.
+at the bottom of `presentation/visuals/__init__.py`, add a case to `CASES` in `tests/test_visuals.py`, and
+refresh the schema and the manifest. `text_line` in `presentation/visuals/kpi.py` is the smallest real example.
 
 ## Add a report
 
-A file in `reports/` (`hari-lari-report` finds it by id) with `params`, `filters` (`where`/`focus`
+A file in `presentation/reports/` (`hari-lari-report` finds it by id) with `params`, `filters` (`where`/`focus`
 on every page), `pages` (a 12-column grid, `slots` naming a component with `row`, `col`, `span`,
 `height`; `repeat` over any parameter or the `top` members of a dimension; `when_empty`),
 `outputs` (`pdf`, `png`, `telegram` text blocks, `xlsx` sheets), `insights` (`chart` draws each
@@ -179,7 +179,7 @@ on the fixture.
 
 Question: *hide the items too small to matter on this table.* `sort_limit` keeps a number of rows,
 not a size, and `suppress_small_n` greys rows out instead. A transform that keeps the rows whose
-metric reaches a value, in `transforms/shape.py`:
+metric reaches a value, in `analysis/transforms/shape.py`:
 
 ```python
 class MinValueOptions(Options):

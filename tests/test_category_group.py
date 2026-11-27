@@ -1,6 +1,6 @@
 import pytest
 
-from hari_lari_analytics.reporting.inputs import InputError, load_category_groups
+from hari_lari_analytics.warehouse.inputs import InputError, load_category_groups
 
 from .conftest import FIXTURES
 

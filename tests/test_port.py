@@ -23,17 +23,17 @@ import pandas as pd
 import pytest
 from matplotlib.text import Text
 
-from hari_lari_analytics.reporting.builder import run_report
-from hari_lari_analytics.reporting.checks import check
-from hari_lari_analytics.reporting.components import load_components
-from hari_lari_analytics.reporting.db import connect, open_run
-from hari_lari_analytics.reporting.facets import run_facets
-from hari_lari_analytics.reporting.inputs import ApiRun
-from hari_lari_analytics.reporting.outputs.pages import render_page
-from hari_lari_analytics.reporting.queries import QueryContext
-from hari_lari_analytics.reporting.reports import load_reports
-from hari_lari_analytics.reporting.result import Result
-from hari_lari_analytics.reporting.visuals.theme import DEFAULT_THEME
+from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.analysis.result import Result
+from hari_lari_analytics.presentation.builder import run_report
+from hari_lari_analytics.presentation.components import load_components
+from hari_lari_analytics.presentation.facets import run_facets
+from hari_lari_analytics.presentation.outputs.pages import render_page
+from hari_lari_analytics.presentation.reports import load_reports
+from hari_lari_analytics.presentation.visuals.theme import DEFAULT_THEME
+from hari_lari_analytics.warehouse.checks import check
+from hari_lari_analytics.warehouse.db import connect, open_run
+from hari_lari_analytics.warehouse.inputs import ApiRun
 
 from . import golden
 from .api_fixture import api_tables
@@ -145,7 +145,7 @@ def test_the_data_notes_from_the_run_manifest(port):
 
 
 def test_the_lines_export_has_the_lines_of_the_excel_file(port):
-    from hari_lari_analytics.reporting.queries.lines_export import COLUMNS
+    from hari_lari_analytics.analysis.queries.lines_export import COLUMNS
 
     df = port.result("lines_export").df
     assert list(df.columns) == [c for c, *_ in COLUMNS]

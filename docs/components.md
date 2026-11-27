@@ -116,7 +116,7 @@ took 40 seconds as views and 0.07 seconds as tables, with the build itself at 0.
 tables are read with the existing `load_run` (local folder or `gs://`) and copied into
 `raw_<table>` tables with the columns the models need, cast to fixed types: an empty table comes
 back from Parquet without any columns, and a column that is NULL on every row has no type. The
-run tables and their columns are declared in `reporting/sources.yml` (plan 9.2), so a new Moka
+run tables and their columns are declared in `warehouse/sources.yml` (plan 9.2), so a new Moka
 table (`item_variants` for the stock) is one entry there and a `stg_` model, without Python; a
 model that reads a `raw_` table not in `sources.yml` (or a `seed_` that is not a seed, or a model
 that does not exist) fails the build with its name. A missing optional table (`required: false`:
@@ -132,101 +132,93 @@ are found with `importlib.resources`. The hand-maintained CSVs stay in `config/`
 
 ```text
 src/hari_lari_analytics/
-  project.yml         # project settings: currency, number format, time zone, week start,
+  core/
+    project.yml       # project settings: currency, number format, time zone, week start,
                       # default min_n, anchor rule, reference date (plan 7A.4)
-  project.py          # load and validate project.yml; project() is the setting of the process
-src/hari_lari_analytics/reporting/
-  __init__.py
-  inputs.py           # read an extraction run and validate the config CSVs (the seeds)
-  db.py               # open DuckDB, load seeds, build the models in layer order
-  model_specs.py      # load and validate models.yml
-  checks.py           # run checks.yml; a broken check fails the build
-  registry.py         # load and validate metrics.yml, dimensions.yml, kpi_tree.yml
-  windows.py          # periods and the window resolver
-  compiler.py         # semantic query -> SQL -> Result
-  result.py           # Result and ResultMeta
-  transforms/
-    __init__.py       # the @transform registry
-    shape.py          # sort_limit, rank, fill_domain, pivot
-    time.py           # per_trading_day, growth_vs_previous
-    share.py          # cumulative_share
-    classify.py       # thresholds, quadrants, item lifecycle
-    quality.py        # suppress_small_n
-    decompose.py      # change attribution along the KPI tree
-  queries/            # the @query escape hatch for sources that are not SQL aggregates
-    notes.py          # data notes from the cleaning steps and the run manifest
-    lines_export.py   # the cleaned lines for the Excel export
-  components.py       # pydantic schemas, loader, parameters, overrides
-  facets.py           # facet engine
-  snapshots.py        # the golden result of a component, tests/snapshots/<id>.yml
-  gallery.py          # every component on a run, one page each (8.7)
-  manifest.py         # the semantic manifest, semantic_manifest.json (8.10)
-  insights.py         # insight engine and rule types
-  layouts.py          # grid layout engine: geometry, sizes, page chrome, overflow check (8.4)
-  reports.py          # report YAML schema, loader, repeats, filters, checks, JSON Schema (8.5)
-  builder.py          # runs a report on a run: pages, text blocks, sheets (8.5)
-  preview.py          # one component in its default slot as a PNG, with --watch (8.6)
-  outputs/            # write_outputs(run, dir): one renderer per output
-    pages.py          # draws a page: chrome, slots, empty page, the overflow check
-    bundle.py         # the JSON bundle (format_version 1)
-    bundle_schema.py  # its contract: pydantic models, and the JSON Schema generated from them
-    pdf.py
-    png.py
-    telegram.py
-    xlsx.py
-  delivery.py         # schedule and deliver of a report: conditions, Telegram, Drive, marker
-  run.py              # hari-lari-report run: extract, build, deliver, with the admin alert
-  cli.py              # hari-lari-component
-  report_cli.py       # hari-lari-report: run, build, validate, schedules
-  metrics.yml
-  dimensions.yml
-  kpi_tree.yml
-  insights.yml
-  models.yml          # description, primary key, time column, ... of every model
-  checks.yml
-  schema/             # written by `hari-lari-component schema`
-    component.schema.json
-    report.schema.json
-    bundle.schema.json
-  semantic_manifest.json  # written by `hari-lari-component manifest`
-  models/
-    stg_transactions.sql
-    stg_transaction_lines.sql
-    stg_transaction_line_discounts.sql
-    stg_transaction_line_modifiers.sql
-    stg_transaction_refunds.sql
-    stg_items.sql
-    stg_categories.sql
-    int_signed_lines.sql          # refund payments turned into negative lines (plan 2.3)
-    int_item_resolution.sql       # adjusted item and category per sold item (plan 2.4)
-    int_sales_lines.sql           # cleaned lines with dimensions and groups, up to the anchor
-    int_order_attributes.sql      # items, lines, has_food, has_drink, ... per receipt
-    int_item_lifecycle.sql        # first and last sale per adjusted item-variant
-    dim_items.sql
-    dim_categories.sql            # with category_group_level_1 and _level_2
-    dim_calendar.sql              # with trading days and calendar events
-    fct_sales_lines.sql
-    fct_orders.sql
-  components/
-    full_history_kpis.yml
-    category_contributive_aov.yml
-    aov_bridge.yml
-    ...
-  reports/
-    weekly.yml
-    category_deep_dive.yml
-  formats.py                      # display strings: idr, pct, compact, headline, change_text, ...
-  present.py                      # a result as display cells: value, text, tone, small, n
-  visuals/
-    __init__.py                   # the @visual registry, Area, DrawContext, draw()
-    theme.py                      # Palette, DAYLIGHT, theme tokens and text roles
-    base.py                       # card, chips, table, bar column, sparkline (from report_pdf)
-    common.py                     # arrows, tone colours, n= labels, event marks, legends
-    kpi.py                        # kpi_card, summary_card, text_line
-    tables.py                     # table (bars, deltas, rank, total row)
-    charts.py                     # bar_trend, hbar, dot_plot, stacked_share_bar, heatmap,
-                                  # scatter_quadrant, waterfall
-    notes.py                      # notes_card, insights
+    project.py        # load and validate project.yml; project() is the setting of the process
+    store.py          # local or gs:// storage
+    log.py            # JSON logs
+  sources/moka/       # the Moka extractor: client, tokens, fetch, tables, checks
+  warehouse/
+    inputs.py         # read an extraction run and validate the config CSVs (the seeds)
+    db.py             # open DuckDB, load seeds, build the models in layer order
+    model_specs.py    # load and validate models.yml
+    checks.py         # run checks.yml; a broken check fails the build
+    sources.yml       # the run tables and their columns
+    models.yml        # description, primary key, time column, ... of every model
+    checks.yml
+    models/           # the SQL, one file per model
+  semantic/
+    registry.py       # load and validate metrics.yml, dimensions.yml, kpi_tree.yml
+    metrics.yml
+    dimensions.yml
+    kpi_tree.yml
+  analysis/
+    windows.py        # periods and the window resolver
+    compiler.py       # semantic query -> SQL -> Result
+    result.py         # Result and ResultMeta
+    transforms/
+      __init__.py     # the @transform registry
+      shape.py        # sort_limit, rank, fill_domain, pivot
+      time.py         # per_trading_day, growth_vs_previous
+      share.py        # cumulative_share
+      classify.py     # thresholds, quadrants, item lifecycle
+      quality.py      # suppress_small_n
+      decompose.py    # change attribution along the KPI tree
+    queries/          # the @query escape hatch for sources that are not SQL aggregates
+      notes.py        # data notes from the cleaning steps and the run manifest
+      lines_export.py # the cleaned lines for the Excel export
+  presentation/
+    components.py     # pydantic schemas, loader, parameters, overrides
+    facets.py         # facet engine
+    snapshots.py      # the golden result of a component, tests/snapshots/<id>.yml
+    gallery.py        # every component on a run, one page each (8.7)
+    manifest.py       # the semantic manifest, semantic_manifest.json (8.10)
+    insights.py       # insight engine and rule types
+    insights.yml
+    layouts.py        # grid layout engine: geometry, sizes, page chrome, overflow check (8.4)
+    reports.py        # report YAML schema, loader, repeats, filters, checks, JSON Schema (8.5)
+    builder.py        # runs a report on a run: pages, text blocks, sheets (8.5)
+    preview.py        # one component in its default slot as a PNG, with --watch (8.6)
+    formats.py        # display strings: idr, pct, compact, headline, change_text, ...
+    present.py        # a result as display cells: value, text, tone, small, n
+    semantic_manifest.json  # written by `hari-lari-component manifest`
+    outputs/          # write_outputs(run, dir): one renderer per output
+      pages.py        # draws a page: chrome, slots, empty page, the overflow check
+      bundle.py       # the JSON bundle (format_version 1)
+      bundle_schema.py  # its contract: pydantic models, and the JSON Schema generated from them
+      pdf.py
+      png.py
+      telegram.py
+      xlsx.py
+    schema/           # written by `hari-lari-component schema`
+      component.schema.json
+      report.schema.json
+      bundle.schema.json
+    components/
+      full_history_kpis.yml
+      category_contributive_aov.yml
+      aov_bridge.yml
+      ...
+    reports/
+      weekly.yml
+      category_deep_dive.yml
+    visuals/
+      __init__.py     # the @visual registry, Area, DrawContext, draw()
+      theme.py        # Palette, DAYLIGHT, theme tokens and text roles
+      base.py         # card, chips, table, bar column, sparkline (from report_pdf)
+      common.py       # arrows, tone colours, n= labels, event marks, legends
+      kpi.py          # kpi_card, summary_card, text_line
+      tables.py       # table (bars, deltas, rank, total row)
+      charts.py       # bar_trend, hbar, dot_plot, stacked_share_bar, heatmap,
+                      # scatter_quadrant, waterfall
+      notes.py        # notes_card, insights
+  orchestration/
+    delivery.py       # schedule and deliver of a report: conditions, Telegram, Drive, marker
+    cli.py            # hari-lari-component
+    report_cli.py     # hari-lari-report: run, build, validate, schedules
+  distribution/       # Telegram and Drive
+  fonts/              # Inter, embedded in the PDF
 config/
   item_aliases.csv
   category_group.csv
@@ -1070,12 +1062,12 @@ show the same numbers as the PDF.
   compact`, `orientation: metrics`). They never hold a point size, a coordinate, a line width
   or a hex colour; a test checks every visual's options schema for that. Colours are **theme tokens** and text sizes are **text roles**, both resolved by
   the renderer's theme.
-- **One place formats numbers.** `reporting/formats.py` (no matplotlib) writes every display
+- **One place formats numbers.** `presentation/formats.py` (no matplotlib) writes every display
   string from the settings of `project.yml`: values by the metric's `format` (`idr`,
   `idr_compact`, `count`, `decimal`, `pct`, `timestamp`) in a `style` (`full`, `compact`,
   `headline`), changes, deltas and growth, bucket labels and window labels. The old helpers
   `idr`, `pct`, `compact`, `headline`, `stamp` and `change_text` live there too.
-- **One presentation step.** `reporting/present.py` turns a result into display cells: for each
+- **One presentation step.** `presentation/present.py` turns a result into display cells: for each
   row and column the raw value, the display string, the tone of a change, the sample-size flag
   and its `n`, plus the row's label. The matplotlib visuals draw from these cells, and the JSON
   bundle (plan 8.9) writes the same cells, so no frontend formats a number or applies a rule.
@@ -1102,7 +1094,7 @@ show the same numbers as the PDF.
 
 ### Theme tokens and text roles
 
-The theme (`reporting/visuals/theme.py`) maps the tokens to today's `DAYLIGHT` palette:
+The theme (`presentation/visuals/theme.py`) maps the tokens to today's `DAYLIGHT` palette:
 
 | Token | Use | Today |
 | --- | --- | --- |
@@ -1191,8 +1183,8 @@ line).
 
 ## Insights
 
-Insight rule types are Python (`reporting/insights.py`, plan 8.3); the rules themselves are
-YAML (`reporting/insights.yml`). A rule type reads one result and returns findings: the
+Insight rule types are Python (`presentation/insights.py`, plan 8.3); the rules themselves are
+YAML (`presentation/insights.yml`). A rule type reads one result and returns findings: the
 variables of a sentence as display strings from `present.py`, a score, a key (what the sentence
 is about: the metric and the group) and a tone. A rule picks a type, sets its options, a
 `weight` (default 1) and the Jinja `text` of the sentence:
@@ -1575,7 +1567,7 @@ hari-lari-report schema [--check]             # the JSON Schemas of reports and 
 ```
 
 `build`, `validate`, `schedules` and `schema` exist since 8.5; `run` and `--scheduled` since the
-cut-over (9.7), in `reporting/delivery.py`, with the scheduler sync in `deploy/release.sh
+cut-over (9.7), in `orchestration/delivery.py`, with the scheduler sync in `deploy/release.sh
 schedules`. The job itself has no arguments: every start names what to run.
 
 `build` never sends anything. It opens the latest run in `--run` (default `data/extract`) up to
@@ -1700,7 +1692,7 @@ descriptions from it, and the Cursor rule points an LLM at it.
 
 ## Developer workflow
 
-Adding a component, with the developer CLI `hari-lari-component` (`reporting/cli.py`):
+Adding a component, with the developer CLI `hari-lari-component` (`orchestration/cli.py`):
 
 1. `hari-lari-component new orders_heatmap --from orders_by_hour` copies a similar component
    with the new id (without `--from`: a minimal component with the schema line) and writes the
@@ -1761,7 +1753,7 @@ the reason on stderr. The date defaults to the day of the last payment, as for
 components with the snapshots' parameters, and fails on text overflow.
 
 **Authoring guide (8.8).** The Cursor rule `.cursor/rules/reporting-components.mdc` (it applies to
-`src/hari_lari_analytics/reporting/**`) is the working procedure for an LLM and for you: the
+`src/hari_lari_analytics/{semantic,analysis,presentation}/**`) is the working procedure for an LLM and for you: the
 rules that hold everywhere, this loop, how to add a metric, dimension, component, transform,
 visual and report, and two worked examples: a refund-rate metric with a component in YAML only,
 and a `min_value` transform in Python. `tests/test_authoring_examples.py` checks that the rule

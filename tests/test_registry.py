@@ -6,8 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.reporting.db import connect
-from hari_lari_analytics.reporting.registry import (
+from hari_lari_analytics.semantic.registry import (
     Aggregate,
     RegistryError,
     default_registry,
@@ -15,6 +14,7 @@ from hari_lari_analytics.reporting.registry import (
     parse_bins,
     render_expression,
 )
+from hari_lari_analytics.warehouse.db import connect
 
 from . import golden
 from .api_fixture import api_tables

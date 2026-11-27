@@ -11,7 +11,8 @@ import jsonschema
 import pytest
 import yaml
 
-from hari_lari_analytics.reporting.components import (
+from hari_lari_analytics.analysis.queries import QueryContext, SourceQuery
+from hari_lari_analytics.presentation.components import (
     SCHEMA_REF,
     ComponentError,
     component_json_schema,
@@ -24,8 +25,7 @@ from hari_lari_analytics.reporting.components import (
     schema_text,
     substitute,
 )
-from hari_lari_analytics.reporting.db import connect
-from hari_lari_analytics.reporting.queries import QueryContext, SourceQuery
+from hari_lari_analytics.warehouse.db import connect
 
 from .api_fixture import api_tables
 from .test_models import LAST_SALE, SEEDS
@@ -354,7 +354,7 @@ def test_a_dimension_facet_needs_a_compiled_query():
 
 def test_the_schema_file_is_current():
     assert schema_path().read_text() == schema_text(), (
-        "run `uv run python -m hari_lari_analytics.reporting.components` to update the schema"
+        "run `uv run python -m hari_lari_analytics.presentation.components` to update the schema"
     )
 
 

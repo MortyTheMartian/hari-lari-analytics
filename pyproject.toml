@@ -28,11 +28,11 @@ gcp = [
 ]
 
 [project.scripts]
-hari-lari-report = "hari_lari_analytics.reporting.report_cli:main"
-hari-lari-extract = "hari_lari_analytics.extract.cli:main"
-hari-lari-telegram = "hari_lari_analytics.deliver.cli:main"
-hari-lari-drive = "hari_lari_analytics.deliver.drive_cli:main"
-hari-lari-component = "hari_lari_analytics.reporting.cli:main"
+hari-lari-report = "hari_lari_analytics.orchestration.report_cli:main"
+hari-lari-extract = "hari_lari_analytics.sources.moka.cli:main"
+hari-lari-telegram = "hari_lari_analytics.distribution.cli:main"
+hari-lari-drive = "hari_lari_analytics.distribution.drive_cli:main"
+hari-lari-component = "hari_lari_analytics.orchestration.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -40,6 +40,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "import-linter>=2.17",
     "jsonschema>=4.26.0",
     "pytest>=9.2.0",
     "ruff>=0.17.3",
@@ -57,3 +58,45 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# docs/architecture.md. Each module may import only the modules below it.
+# sources and distribution sit outside the chain: they import only core.
+[tool.importlinter]
+root_package = "hari_lari_analytics"
+
+[[tool.importlinter.contracts]]
+name = "Module layers"
+type = "layers"
+layers = [
+    "hari_lari_analytics.orchestration",
+    "hari_lari_analytics.presentation",
+    "hari_lari_analytics.analysis",
+    "hari_lari_analytics.semantic",
+    "hari_lari_analytics.warehouse",
+    "hari_lari_analytics.core",
+]
+
+[[tool.importlinter.contracts]]
+name = "Sources and distribution import only core"
+type = "forbidden"
+source_modules = [
+    "hari_lari_analytics.sources",
+    "hari_lari_analytics.distribution",
+]
+forbidden_modules = [
+    "hari_lari_analytics.warehouse",
+    "hari_lari_analytics.semantic",
+    "hari_lari_analytics.analysis",
+    "hari_lari_analytics.presentation",
+    "hari_lari_analytics.orchestration",
+    "hari_lari_analytics.sources",
+    "hari_lari_analytics.distribution",
+]
+
+[[tool.importlinter.contracts]]
+name = "Sources and distribution are independent"
+type = "independence"
+modules = [
+    "hari_lari_analytics.sources",
+    "hari_lari_analytics.distribution",
+]

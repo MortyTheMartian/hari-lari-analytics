@@ -13,10 +13,10 @@ from pathlib import Path
 
 import pytest
 
-from hari_lari_analytics.reporting.db import connect
-from hari_lari_analytics.reporting.facets import run_facets
-from hari_lari_analytics.reporting.queries import QueryContext
-from hari_lari_analytics.reporting.snapshots import read_snapshot, snapshot_text
+from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.presentation.facets import run_facets
+from hari_lari_analytics.presentation.snapshots import read_snapshot, snapshot_text
+from hari_lari_analytics.warehouse.db import connect
 
 from .api_fixture import EXTRACTED_AT, api_tables
 from .components_fixture import all_components

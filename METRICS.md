@@ -1,7 +1,7 @@
 # Metrics and dimensions
 
 All figures are computed from line-level Moka sales data after cleaning, from the Moka API: the
-Parquet tables of one extraction run. The report models (`reporting/models/`) apply the rules
+Parquet tables of one extraction run. The report models (`warehouse/models/`) apply the rules
 below in SQL. Amounts are whole Indonesian Rupiah (IDR).
 
 ## Cleaning rules

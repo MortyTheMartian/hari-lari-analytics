@@ -20,19 +20,19 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.reporting.checks import check
-from hari_lari_analytics.reporting.compiler import Query, QueryError, compile_query, run_query
-from hari_lari_analytics.reporting.db import connect, open_run
-from hari_lari_analytics.reporting.inputs import ApiRun
-from hari_lari_analytics.reporting.queries import (
+from hari_lari_analytics.analysis.compiler import Query, QueryError, compile_query, run_query
+from hari_lari_analytics.analysis.queries import (
     QueryContext,
     SourceQuery,
     execute,
     parse_query,
 )
-from hari_lari_analytics.reporting.queries.lines_export import EXPORT_COLUMNS
-from hari_lari_analytics.reporting.registry import default_registry
-from hari_lari_analytics.reporting.windows import Calendar
+from hari_lari_analytics.analysis.queries.lines_export import EXPORT_COLUMNS
+from hari_lari_analytics.analysis.windows import Calendar
+from hari_lari_analytics.semantic.registry import default_registry
+from hari_lari_analytics.warehouse.checks import check
+from hari_lari_analytics.warehouse.db import connect, open_run
+from hari_lari_analytics.warehouse.inputs import ApiRun
 
 from .api_fixture import api_tables
 from .test_models import LAST_SALE, REAL_RUN, SEEDS, _comparable

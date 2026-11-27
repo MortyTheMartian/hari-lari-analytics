@@ -5,13 +5,13 @@ import duckdb
 import pydantic
 import pytest
 
-from hari_lari_analytics.reporting.checks import (
+from hari_lari_analytics.warehouse.checks import (
     DataCheckError,
     check,
     load_checks,
     run_checks,
 )
-from hari_lari_analytics.reporting.db import connect, open_run
+from hari_lari_analytics.warehouse.db import connect, open_run
 
 from .api_fixture import api_tables
 from .test_models import REAL_RUN, SEEDS

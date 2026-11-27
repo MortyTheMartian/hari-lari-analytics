@@ -27,13 +27,13 @@ todos:
   llm: claude-sonnet-5-5-high
   status: completed
 - id: t7-modules
-  content: "[agent] Move the code into the module layout of 'Target architecture' (core, sources/moka, warehouse, semantic, analysis, presentation, orchestration, distribution) without changing behaviour: console scripts keep their names, YAML files keep their $schema lines (paths updated), the Dockerfile, the Cursor rule's globs, docs/components.md paths and README follow. delivery.py moves to orchestration as it is; its split comes in phase C. Local check: as t6 (bundle.json identical) plus the PDF pages pixel-identical (pdftoppm at 100 dpi and a byte compare of the PNGs), ruff, validate, schema and manifest checks, and the suite. Blocked by t6-retire-pandas, t3-architecture."
+  content: "[agent] Move the code into the module layout of 'Target architecture' (core, sources/moka, warehouse, semantic, analysis, presentation, orchestration, distribution) without changing behaviour: console scripts keep their names, YAML files keep their $schema lines (paths updated), the Dockerfile, the Cursor rule's globs, docs/components.md paths and README follow. delivery.py moves to orchestration as it is; its split comes in phase C. Local check: as t6 (bundle.json identical) plus the PDF pages pixel-identical (pdftoppm at 100 dpi and a byte compare of the PNGs), ruff, validate, schema and manifest checks, and the suite. Blocked by t6-retire-pandas, t3-architecture. Result 27 Nov 2026: done; code is in core, sources/moka, warehouse, semantic, analysis, presentation, orchestration and distribution; bundle.json identical and the 10 PDF pages pixel-identical at 100 dpi; 1055 passed."
   llm: claude-sonnet-5-5-high
-  status: pending
+  status: completed
 - id: t8-import-contract
-  content: "[agent] Add import-linter (dev dependency) with a layers contract in pyproject.toml matching docs/architecture.md, plus an independence contract (distribution and sources import only core), and a CI step lint-imports. Local check: lint-imports passes; a deliberate upward import in a scratch file fails with the contract named; CI green on the pull request. Blocked by t7-modules."
+  content: "[agent] Add import-linter (dev dependency) with a layers contract in pyproject.toml matching docs/architecture.md, plus an independence contract (distribution and sources import only core), and a CI step lint-imports. Local check: lint-imports passes; a deliberate upward import in a scratch file fails with the contract named; CI green on the pull request. Blocked by t7-modules. Result 27 Nov 2026: done; lint-imports keeps the layer, only-core and independence contracts; a warehouse import of presentation fails the Module layers contract."
   llm: gpt-5.6-terra-medium
-  status: pending
+  status: completed
 - id: t9-release-a
   content: "[agent] Merge phase A on a Tuesday to Thursday (never between Saturday 18:00 and Monday 05:00 WITA), watch the release workflow to the promotion, and compare the next Monday's bundle.json in gs://hari-lari-data/reports/weekly/<anchor>/ with a local build on the same run. [owner] Confirm the Monday report looked as before. Blocked by t8-import-contract."
   llm: gpt-5.6-terra-medium

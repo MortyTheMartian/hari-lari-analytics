@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from hari_lari_analytics.deliver.drive import DriveError, DriveUploader
-from hari_lari_analytics.reporting.store import GcsStore, LocalStore
+from hari_lari_analytics.core.store import GcsStore, LocalStore
+from hari_lari_analytics.distribution.drive import DriveError, DriveUploader
 
 from .fakes import DriveSession, Response
 

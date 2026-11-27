@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import typing
 
-from hari_lari_analytics.reporting import cli, manifest, transforms, visuals, windows
-from hari_lari_analytics.reporting.components import load_components
-from hari_lari_analytics.reporting.insights import default_rules
-from hari_lari_analytics.reporting.manifest import build_manifest, manifest_path, manifest_text
-from hari_lari_analytics.reporting.registry import default_registry
+from hari_lari_analytics.analysis import transforms, windows
+from hari_lari_analytics.orchestration import cli
+from hari_lari_analytics.presentation import manifest, visuals
+from hari_lari_analytics.presentation.components import load_components
+from hari_lari_analytics.presentation.insights import default_rules
+from hari_lari_analytics.presentation.manifest import build_manifest, manifest_path, manifest_text
+from hari_lari_analytics.semantic.registry import default_registry
 
 from .components_fixture import all_components
 from .test_report_build import make

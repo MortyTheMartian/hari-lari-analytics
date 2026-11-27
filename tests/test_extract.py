@@ -5,12 +5,12 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from hari_lari_analytics.extract.checks import last_week_bounds, run_checks
-from hari_lari_analytics.extract.client import MokaClient
-from hari_lari_analytics.extract.fetch import tables_from_payments
-from hari_lari_analytics.extract.output import upload_dir
-from hari_lari_analytics.extract.tables import Table, naive_timestamp
-from hari_lari_analytics.extract.tokens import (
+from hari_lari_analytics.sources.moka.checks import last_week_bounds, run_checks
+from hari_lari_analytics.sources.moka.client import MokaClient
+from hari_lari_analytics.sources.moka.fetch import tables_from_payments
+from hari_lari_analytics.sources.moka.output import upload_dir
+from hari_lari_analytics.sources.moka.tables import Table, naive_timestamp
+from hari_lari_analytics.sources.moka.tokens import (
     DAY,
     FileTokenStore,
     SecretManagerTokenStore,

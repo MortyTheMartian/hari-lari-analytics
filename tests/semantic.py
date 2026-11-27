@@ -11,7 +11,7 @@ from datetime import date, timedelta
 import duckdb
 import pandas as pd
 
-from hari_lari_analytics.reporting.registry import Registry
+from hari_lari_analytics.semantic.registry import Registry
 
 
 def evaluate(

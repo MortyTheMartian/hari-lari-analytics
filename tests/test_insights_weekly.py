@@ -10,15 +10,15 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from hari_lari_analytics.reporting.components import ComponentError
-from hari_lari_analytics.reporting.db import connect
-from hari_lari_analytics.reporting.insights import (
+from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.presentation.components import ComponentError
+from hari_lari_analytics.presentation.insights import (
     InsightContext,
     default_rules,
     evaluate,
     parse_rules,
 )
-from hari_lari_analytics.reporting.queries import QueryContext
+from hari_lari_analytics.warehouse.db import connect
 
 from .api_fixture import api_tables
 from .test_insights import BIG, SMALL, bridge, compared, component, rule, run, trend

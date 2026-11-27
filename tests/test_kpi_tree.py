@@ -6,15 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from hari_lari_analytics.reporting.db import connect, open_run
-from hari_lari_analytics.reporting.registry import (
+from hari_lari_analytics.analysis.windows import Calendar, resolve
+from hari_lari_analytics.semantic.registry import (
     Identity,
     Registry,
     default_registry,
     identity_models,
     load_registry,
 )
-from hari_lari_analytics.reporting.windows import Calendar, resolve
+from hari_lari_analytics.warehouse.db import connect, open_run
 
 from .api_fixture import api_tables
 from .semantic import evaluate

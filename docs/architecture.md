@@ -1,10 +1,9 @@
 # Architecture
 
-Status: target architecture, written 27 Nov 2026 (platform plan, task t3). Phases A to G of the
-platform plan build it; until then the code is where [components.md](components.md), "Folder
-layout", says. The reporting framework inside it (models, semantic layer, compiler, transforms,
-components, visuals, reports) is designed in [components.md](components.md); the decisions are
-in [decisions.md](decisions.md).
+Status: the modules below are the code, as of phase A (platform plan, task t7, 27 Nov 2026).
+Phases B to G still build the stored warehouse, the daily tick, audiences and the rest. The
+reporting framework (models, semantic layer, compiler, transforms, components, visuals, reports)
+is designed in [components.md](components.md); the decisions are in [decisions.md](decisions.md).
 
 Hari Lari analytics is a small BI platform for one café: sources are extracted once a day into a
 landing zone, a warehouse is built from landing and config, and reports run on the warehouse and
@@ -83,9 +82,9 @@ lives next to the engine that reads it.
 | `orchestration` | tick, due rules, ledger, alerts, CLIs | none (schedules are in the report YAML) |
 | `distribution` | message, channels, sinks | audiences in `project.yml` (phase C) |
 
-### Where today's code goes
+### Where the code came from
 
-Phase A moves the code without changing any output (t6 and t7).
+Phase A (t7) moved the code without changing any output.
 
 | Today | Module |
 | --- | --- |

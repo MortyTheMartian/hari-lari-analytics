@@ -14,16 +14,16 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.lines import Line2D
 from matplotlib.text import Text
 
-from hari_lari_analytics.reporting import visuals
-from hari_lari_analytics.reporting.components import (
+from hari_lari_analytics.analysis.queries import QueryContext
+from hari_lari_analytics.presentation import visuals
+from hari_lari_analytics.presentation.components import (
     ComponentError,
     load_components,
     parse_component,
 )
-from hari_lari_analytics.reporting.db import connect
-from hari_lari_analytics.reporting.facets import run_facets
-from hari_lari_analytics.reporting.queries import QueryContext
-from hari_lari_analytics.reporting.visuals.theme import DEFAULT_THEME, TOKENS
+from hari_lari_analytics.presentation.facets import run_facets
+from hari_lari_analytics.presentation.visuals.theme import DEFAULT_THEME, TOKENS
+from hari_lari_analytics.warehouse.db import connect
 
 from .api_fixture import api_tables
 from .test_models import LAST_SALE, SEEDS

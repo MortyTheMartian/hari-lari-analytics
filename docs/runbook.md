@@ -52,7 +52,7 @@ find the group.
 
 ## The report job (`hari-lari-report run`)
 
-One command runs any report of `src/hari_lari_analytics/reporting/reports/`: extract the Moka
+One command runs any report of `src/hari_lari_analytics/presentation/reports/`: extract the Moka
 API, build the models and run the data checks, build the report, store the files, upload to
 Drive, send to Telegram and write the sent-marker. All reports share the Cloud Run job
 `hari-lari-weekly`; each report with a `schedule` has a Cloud Scheduler job

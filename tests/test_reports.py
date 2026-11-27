@@ -11,9 +11,9 @@ from zoneinfo import ZoneInfo
 import pytest
 import yaml
 
-from hari_lari_analytics.reporting import reports
-from hari_lari_analytics.reporting.components import load_components
-from hari_lari_analytics.reporting.reports import (
+from hari_lari_analytics.presentation import reports
+from hari_lari_analytics.presentation.components import load_components
+from hari_lari_analytics.presentation.reports import (
     ReportError,
     cron_problem,
     expand,
