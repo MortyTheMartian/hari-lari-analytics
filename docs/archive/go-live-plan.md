@@ -1,5 +1,7 @@
 # Go-live plan: weekly Moka extraction and report in Google Cloud
 
+> **Archived on 26 Nov 2026.** Superseded first by the Cursor plan next to this file, then by [the platform plan](../hari_lari_analytics_platform.plan.md).
+
 Status: draft, 22 Nov 2026. Every task is sized to take roughly one sitting (S under an hour,
 M a few hours, L about a day) and ends with a check that tells you it is done.
 
