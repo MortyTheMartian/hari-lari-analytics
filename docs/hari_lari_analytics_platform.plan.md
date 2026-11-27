@@ -11,9 +11,9 @@ todos:
   llm: claude-opus-5-5-high
   status: completed
 - id: t3-architecture
-  content: "[agent] Write docs/architecture.md from the 'Target architecture' section of this plan: modules with their responsibility and allowed dependencies, the engine and content split, the storage layout, the run ledger, the warehouse principle (rebuildable from landing plus config), the end-state warehouse model and the cost budget. Move the decisions D1 to D19 out of docs/components.md ('Decisions') into docs/decisions.md, leave a link behind, and add D20 to D23 from this plan's 'Decisions'. Local check: every relative link in the three files resolves (a small script or rg), and docs/components.md no longer holds the decisions table."
+  content: "[agent] Write docs/architecture.md from the 'Target architecture' section of this plan: modules with their responsibility and allowed dependencies, the engine and content split, the storage layout, the run ledger, the warehouse principle (rebuildable from landing plus config), the end-state warehouse model and the cost budget. Move the decisions D1 to D19 out of docs/components.md ('Decisions') into docs/decisions.md, leave a link behind, and add D20 to D23 from this plan's 'Decisions'. Local check: every relative link in the three files resolves (a small script or rg), and docs/components.md no longer holds the decisions table. Result 27 Nov 2026: done; owner decided D25 (insight rules, facets and the semantic manifest in presentation)."
   llm: claude-opus-5-5-high
-  status: pending
+  status: completed
 - id: t4-housekeeping
   content: "[agent] Delete the merged local branches (framework-core, go-live-extraction, initial-version, presentation, prove-port, remove-old-report, report-contributive-aov-pr, sales-report-redesign, chart-insights) and, after the owner confirms, the merged remote branches. Add paths-ignore (docs/**, *.md) to the push trigger of .github/workflows/release.yml, so a docs-only merge does not rebuild and promote the image. [owner] Find out why git push over the github-personal SSH alias is refused (publickey) in agent sessions; until then agents push over HTTPS with the gh login (git -c 'credential.helper=!gh auth git-credential' push https://github.com/MortyTheMartian/hari-lari-analytics.git <branch>). Local check: git branch -a lists main and origin/main only."
   llm: gpt-5.4-nano-medium
@@ -233,6 +233,7 @@ graph TD
 - **D21. dbt-core with dbt-duckdb for the warehouse, adopted when the second source lands** (spike t26, go or no-go D24). The semantic layer, the KPI tree, the compiler, transforms, insights and the presentation stay our own: that is the part no tool does better for this café. D8 rejected dbt for cost; dbt-core is free and runs in-process, so the trade-off is one dependency against snapshots of history, sources and freshness, multi-source staging, lineage, and a manifest that Lightdash, Evidence and MetricFlow read.
 - **D22. One daily tick.** One Cloud Scheduler job starts one Cloud Run job a day: extract the sources that are due, build the warehouse, then run the reports that are due. A report's `schedule` says on which days it is due, the tick says when.
 - **D23. Jibble is the first new source**, because it unlocks labour cost % and sales per labour hour, which no Moka data can.
+- **D25 (27 Nov 2026, t3). Insight rules, facets and the semantic manifest belong to `presentation`**, not `analysis`, where each would import upwards. All decisions are now in [docs/decisions.md](decisions.md).
 - **Principles:** the warehouse holds nothing that cannot be rebuilt from landing and config; `distribution` and `sources` import only `core`; reports name audiences, never channels; a frontend renders bundles and never computes a metric.
 
 ## Target architecture
@@ -247,8 +248,8 @@ Each module may import only the modules above it in this list; `sources` and `di
 | `sources/<name>` | one extractor per source system, writes `landing/<source>/<date>/` and nothing else | |
 | `warehouse` | staging per source, history models, marts, seeds, data tests; dbt-duckdb from t27 | SQL models, `sources.yml`, `models.yml`, config CSVs |
 | `semantic` | metrics, dimensions, KPI tree, model metadata, semantic manifest | `metrics.yml`, `dimensions.yml`, `kpi_tree.yml` |
-| `analysis` | query compiler, windows, transforms, decompose, facets, insight rules | `insights.yml` |
-| `presentation` | components, visuals, layouts, formats, report engine and renderers (PDF, PNG, XLSX, text, bundle) | `components/*.yml`, `reports/*.yml` |
+| `analysis` | query compiler, windows, transforms, decompose, `@query` sources | |
+| `presentation` | components, facets, insight rules (D25), visuals, layouts, formats, report engine and renderers (PDF, PNG, XLSX, text, bundle), semantic manifest | `components/*.yml`, `reports/*.yml`, `insights.yml` |
 | `orchestration` | the daily tick, due rules, run ledger, idempotency, ops alerts, CLIs that run things | |
 | `distribution` | channels (Telegram, later email) and publishing sinks (Drive) behind one message type | audiences in `project.yml` |
 | `frontend/` | static app over `bundle.json` and `reports/index.json` | |
