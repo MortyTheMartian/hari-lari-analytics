@@ -61,7 +61,35 @@ D24 is reserved for the dbt spike. D25 was agreed on 27 Nov 2026 with
   upwards. `analysis` is the layer of numbers only: the compiler, windows, results, transforms
   (with `decompose`) and the `@query` sources.
 
+### Phase B (D26 to D31)
+
+Agreed by the owner on 27 Nov 2026 (plan task t10); the design is in
+[architecture.md](architecture.md), sections "Storage layout" to "The run ledger".
+
+- **D26. Storage layout and the landing manifest as designed.** Every folder is named by its
+  run date, never by the last day of its data; one landing run per source and date, whose
+  `manifest.json` is written last and is the commit; tables are `events` (the window) or
+  `snapshot` (the state at the run). Retention: landing tables, manifests, reports and the
+  ledger are kept; raw JSON goes after 90 days, `warehouse/<date>/` after 30 days, `dry-run/`
+  after 14 days.
+- **D27. The tick at 04:00 WITA, with a retry tick at 06:00** from the same scheduler job
+  (`0 4,6 * * *`). Every step is idempotent on the ledger, so the 06:00 tick does only what the
+  04:00 tick left undone.
+- **D28. A report is due when the day fields of its cron match the date** in the project time
+  zone. Hour and minute must be single numbers and are not read; the per-report `timezone` key
+  goes. No catch-up: a report not sent on its due date is sent by hand
+  (`tick --date <due date> --only <report>`).
+- **D29. A report's sources are derived** from the models its components read, down to the
+  `raw_` tables and `sources.yml`; shown by `hari-lari-report list` and pinned by a test.
+- **D30. Failure policy.** A failed source does not land and alerts the admin once per tick;
+  reports that need it are skipped, the others run; no fallback to an older landing run. A
+  failed data test of severity error stops every report and keeps the previous `latest.json`.
+  A report still not sent after the last tick of its due date is announced to its own chats as
+  a plain message (the admin's alert has the error and the command). A good day is silent.
+- **D31. One ledger record per step**; a report's record holds its deliveries, each with its own
+  status, so a re-run sends only to the targets that missed it. Targets by name, never chat ids.
+
 ### Open
 
 - **D24.** dbt-duckdb go or no-go, decided by the owner after the spike (t26).
-- The choices of phase B (t10) and phase C (t20) are recorded here as they are answered.
+- The choices of phase C (t20) are recorded here as they are answered.
