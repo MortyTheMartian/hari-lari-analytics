@@ -26,7 +26,7 @@ class Telegram:
         self.calls.append((method, chat, body))
         if method == self.fail_on:
             return 400, b'{"ok": false, "description": "Bad Request: chat not found"}'
-        return 200, b'{"ok": true, "result": {}}'
+        return 200, b'{"ok": true, "result": {"message_id": %d}}' % (800 + len(self.calls))
 
     def sent(self, chat: str) -> list[str]:
         return [m for m, c, _ in self.calls if c == chat]

@@ -393,7 +393,14 @@ sends only to the targets that did not get the report.
 - **"Already sent"** for a report and anchor is the newest record with status `sent`, not a dry
   run and without `--to`, or one of the old sent-markers. A dry run writes its ledger under
   `dry-run/runs/`; a run with `--to` is recorded with `to` set and never counts as sent.
-- `hari-lari-runs list [--report] [--since]` prints the history (t15).
+- `hari-lari-runs list [--report] [--since] [--dry-run]` prints the history (t15).
+- **Built in t15** (`orchestration/ledger.py`): `hari-lari-report run` writes the records of
+  its extraction, warehouse and report, sharing one run id. A failed extraction or warehouse
+  records the report as `skipped`; a failed delivery keeps the targets that did get it, and a
+  re-run without `--force` skips them. `reports/index.json` (`orchestration/report_index.py`)
+  is regenerated from the listing of `reports/<report>/<anchor>/` after each report run. The
+  sent-marker is still written next to the record until the end of t17, so an image from
+  before the ledger, after a rollback, does not send a report twice.
 
 ## Delivery
 

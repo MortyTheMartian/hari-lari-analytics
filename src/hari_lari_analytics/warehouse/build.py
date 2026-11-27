@@ -311,7 +311,7 @@ def open_warehouse(
     """The models of a `warehouse.duckdb`, opened read-only, with its stored check results.
 
     With an `anchor` (or a first weekday) other than the stored one, the models are rebuilt in
-    memory from the stored raw_ and seed_ tables and checked again.
+    memory from the stored raw_ and seed_ tables (with the landing runs) and checked again.
     """
     settings = settings or project()
     con = duckdb.connect(str(path), read_only=True)
@@ -324,7 +324,9 @@ def open_warehouse(
     inputs = [
         name
         for (name,) in con.execute("select table_name from duckdb_tables()").fetchall()
-        if name.startswith("raw_") or name in {f"seed_{n}" for n in SEED_SOURCES}
+        if name.startswith("raw_")
+        or name in {f"seed_{n}" for n in SEED_SOURCES}
+        or name == "warehouse_landing"
     ]
     con.close()
     memory = duckdb.connect()

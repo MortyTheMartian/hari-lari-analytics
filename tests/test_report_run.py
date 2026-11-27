@@ -54,7 +54,7 @@ class Env:
         self.drive_session = DriveSession(settings.pop("drive_fails", False))
         self.extract_calls = 0
         self.extract_error: Exception | None = None
-        self.manifest = {"token_expires_at": "2027-05-11T00:00:00+08:00", "warnings": []}
+        self.token_expires_at = "2027-05-11T00:00:00+08:00"
         self.settings = RunSettings(
             store=LocalStore(self.root),
             config=settings.pop("config", str(FIXTURES)),
@@ -75,7 +75,10 @@ class Env:
         self.extract_calls += 1
         if self.extract_error:
             raise self.extract_error
-        return RunResult(land_fixture(LocalStore(out)), self.manifest)
+        location = land_fixture(LocalStore(out))
+        manifest = json.loads((Path(location) / "manifest.json").read_text())
+        manifest["source_info"]["token_expires_at"] = self.token_expires_at
+        return RunResult(location, manifest)
 
     def run(self, the_report=None) -> int:
         return run_report_job(the_report or report(), self.settings, self.services, self.log_())
@@ -279,7 +282,7 @@ def test_a_marker_failure_warns_but_does_not_fail(env, monkeypatch):
 
 
 def test_the_token_reminder_goes_to_the_admin_chat(env):
-    env.manifest = {"token_expires_at": "2026-11-01T00:00:00+08:00", "warnings": []}
+    env.token_expires_at = "2026-11-01T00:00:00+08:00"
     assert env.run() == 0
     assert "Moka API token expires" in env.telegram.text(ADMIN, "sendMessage")
 
@@ -337,7 +340,7 @@ def test_scheduled_runs_only_the_reports_with_a_schedule_on_one_extraction(env):
     reports = [scheduled, other, on_demand]
     assert run_scheduled(reports, env.settings, env.services, env.log_()) == 0
     assert env.extract_calls == 1
-    built = sorted(p.name for p in (env.root / "dry-run" / "reports").iterdir())
+    built = sorted(p.name for p in (env.root / "dry-run" / "reports").iterdir() if p.is_dir())
     assert built == ["other", "weekly"]
 
 

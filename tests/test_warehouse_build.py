@@ -107,6 +107,7 @@ def test_another_anchor_rebuilds_the_models_in_memory(root):
     query = "select count(*), sum(net_sales) from fct_sales_lines"
     assert stored.con.execute(query).fetchone() == memory.execute(query).fetchone()
     assert stored.con.execute("select anchor from run_context").fetchone() == (date(2026, 10, 12),)
+    assert stored.con.execute("select source from warehouse_landing").fetchall() == [("moka",)]
 
 
 def test_the_newest_landing_run_up_to_the_date_is_read(root):

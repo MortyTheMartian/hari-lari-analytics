@@ -78,7 +78,9 @@ Files in the data root:
 | `landing/moka/<run date>/` | The extraction: Parquet tables, `manifest.json`, gzipped raw JSON |
 | `warehouse/<run date>/`, `warehouse/latest.json` | The models built from it (`warehouse.duckdb`), the marts, `build.json` |
 | `reports/<report>/<anchor>/` | The PDF, the PNG pages, the Excel workbook, the Telegram texts, `bundle.json` |
-| `sent/<report>/<anchor>.json` | The sent-marker. Its existence means "this report went out for this anchor" |
+| `runs/<run date>/<run id>-<step>.json` | The run ledger: one record per extraction, warehouse build and report, with its deliveries. A `sent` record (not a dry run, not `--to`) means "this report went out for this anchor" |
+| `reports/index.json` | Every report and anchor that has outputs, regenerated after each report run |
+| `sent/<report>/<anchor>.json` | The sent-marker, still written next to the ledger until phase B is confirmed; also read as "already sent" |
 | `reports/<anchor>/`, `sent/<anchor>.json` | The same, written by the old weekly command before the cut-over (9.7); the weekly report also respects that old marker |
 | `dry-run/...` | The same layout, written by dry runs |
 
@@ -99,6 +101,14 @@ gcloud run jobs execute hari-lari-weekly --region asia-southeast2 --project hari
 
 The job has no arguments of its own: started without `--args` it only prints the usage and fails.
 
+Every run writes the run ledger, one JSON record per step under `runs/<run date>/` (dry runs
+under `dry-run/runs/`). To see what ran, what was sent to whom and what failed:
+
+```bash
+uv run --extra gcp hari-lari-runs list --data-root gs://hari-lari-data --since 2026-11-30
+uv run hari-lari-runs list --report weekly          # local: data/runs/
+```
+
 Logs are JSON lines. In Cloud Logging, filter by step:
 `resource.type="cloud_run_job" jsonPayload.step="deliver"`.
 
@@ -118,7 +128,8 @@ Logs are JSON lines. In Cloud Logging, filter by step:
 | --- | --- |
 | `Hari Lari report <id> failed at step: X` | Step X (`check`, `extract`, `model`, `report`, `upload`, `deliver`) failed and the run ended with an error. `model` includes the data checks (`checks.yml`): an error-level check fails the run and names the failing rows. Open the logs link, fix, re-run. Nothing reached the group unless X is after `deliver`. |
 | `step drive failed ... without the Drive link` | The Drive upload failed. The group still got the cover and the PDF, just no link. Run `hari-lari-drive whoami`; if it says `invalid_grant`, redo the consent (see Drive below). |
-| `step marker failed ... could not be written` | The report was sent, but the "already sent" marker is missing. A plain re-run would send the report again. Create `sent/<report>/<anchor>.json` by hand. |
+| `step marker failed ... could not be written` | The report was sent and the ledger says so, so a re-run does not send it again; only an image from before the ledger (after a rollback) would. Create `sent/<report>/<anchor>.json` by hand before such a rollback. |
+| `the ledger record ... could not be written` | The step ran, but its record is missing. If it was a report that went out, a re-run would send it again unless its sent-marker exists (`sent/<report>/<anchor>.json`). |
 | `The Moka API token expires on ...` | See below. |
 
 ### The cut-over (plan 9.7, done 25 Nov 2026)
