@@ -174,6 +174,13 @@ uv run --extra gcp hari-lari-extract --token-store secret --gcp-project hari-lar
 ```
 
 The second command adds a new version of the secret `moka-oauth-token`; the next run uses it.
+Whenever the token is saved, by the second command or by the automatic refresh, the store then
+destroys every older version of the secret, because Secret Manager bills enabled and disabled
+versions and only a destroyed one is free. That cannot be undone, and an older Moka token is
+useless anyway. It needs the job's account to hold `secretVersionManager` on the secret
+(`deploy/setup.sh token-versions`, once); without it the token is still saved, a warning
+"could not destroy the older versions" is logged, and `gcloud secrets versions list
+moka-oauth-token` shows more than one version.
 
 ### The business config (`CONFIG_DIR`)
 
@@ -269,6 +276,7 @@ deploy/setup.sh dryrun-job    # the job hari-lari-weekly-dryrun, with the live j
 deploy/setup.sh cleanup-policy
 deploy/setup.sh wif           # pool, provider, release service account, roles
 deploy/setup.sh report-scheduler   # 9.7: scheduler jobs per report, run with arguments
+deploy/setup.sh token-versions     # t18: the job may destroy the older versions of moka-oauth-token
 ```
 
 Each step is safe to re-run. `GITHUB_REPO=owner/name` overrides the repository the provider

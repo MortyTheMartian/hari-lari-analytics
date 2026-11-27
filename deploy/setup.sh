@@ -8,6 +8,7 @@
 #   deploy/setup.sh dryrun-job | cleanup-policy | wif    (see docs/runbook.md, "Release path")
 # Phase 9.7 (not part of `all`; run once after `wif`, before the first release that syncs the
 #   scheduler jobs): deploy/setup.sh report-scheduler
+# Plan t18 (not part of `all`; run once, any time): deploy/setup.sh token-versions
 # Manual (console): billing budget (3.4), notification channel email check.
 set -euo pipefail
 
@@ -274,6 +275,17 @@ step_report_scheduler() {
   echo "Done: the release can now sync the ${SCHEDULE_PREFIX}* scheduler jobs."
 }
 
+# t18. After a token refresh the job destroys the older versions of moka-oauth-token (Secret
+# Manager bills every enabled or disabled version beyond the free six; only a destroyed one is
+# free). Listing and destroying need secretmanager.versions.list and .destroy, which
+# secretVersionAdder does not have and secretVersionManager does (it can also enable and
+# disable). Only on this one secret. Without the grant the job still saves the token and logs a
+# warning ("could not destroy the older versions"); it never fails because of it.
+step_token_versions() {
+  grant_secret moka-oauth-token roles/secretmanager.secretVersionManager
+  echo "Done: the job can destroy the older versions of moka-oauth-token after a refresh."
+}
+
 step_alert() { # 3.13
   local ch
   ch="$(g beta monitoring channels list --filter "displayName='Hari Lari admin email'" --format 'value(name)' | head -1)"
@@ -310,8 +322,9 @@ case "${1:-}" in
   cleanup-policy) step_cleanup_policy ;;
   wif) step_wif ;;
   report-scheduler) step_report_scheduler ;;
+  token-versions) step_token_versions ;;
   telegram-token) step_telegram_token ;;
   telegram-chat) step_telegram_chat "${2:-}" "${3:-}" ;;
   all) for s in apis bucket sa secrets registry build job alert; do echo "== $s"; "step_$s"; done ;;
-  *) echo "usage: $0 {apis|bucket|sa|secrets|registry|build|job|alert|drive-secrets|dryrun-job|cleanup-policy|wif|report-scheduler|all|telegram-token|telegram-chat}"; exit 1 ;;
+  *) echo "usage: $0 {apis|bucket|sa|secrets|registry|build|job|alert|drive-secrets|dryrun-job|cleanup-policy|wif|report-scheduler|token-versions|all|telegram-token|telegram-chat}"; exit 1 ;;
 esac

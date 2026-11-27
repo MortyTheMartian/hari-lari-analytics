@@ -12,8 +12,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
+from hari_lari_analytics.core.log import JsonLog
+
 BASE = "https://api.mokapos.com"
 SCOPES = "profile report customer library transaction sales_type checkout checkout_api"
+ACTIVE_STATES = ("ENABLED", "DISABLED")  # the secret version states Secret Manager bills
 REFRESH_WITHIN_DAYS = 30
 DAY = 86400
 
@@ -40,14 +43,18 @@ class FileTokenStore:
 
 
 class SecretManagerTokenStore:
-    """Token JSON in a Secret Manager secret. A save adds a new secret version."""
+    """Token JSON in a Secret Manager secret. A save adds a new secret version and then destroys
+    the older ones, so exactly one version stays."""
 
-    def __init__(self, project: str, secret: str = "moka-oauth-token", client=None) -> None:
+    def __init__(
+        self, project: str, secret: str = "moka-oauth-token", client=None, log=None
+    ) -> None:
         if client is None:
             from google.cloud import secretmanager  # needs the `gcp` extra
 
             client = secretmanager.SecretManagerServiceClient()
         self.client = client
+        self.log = log or JsonLog()
         self.parent = f"projects/{project}/secrets/{secret}"
 
     def load(self) -> dict:
@@ -58,6 +65,36 @@ class SecretManagerTokenStore:
         self.client.add_secret_version(
             parent=self.parent, payload={"data": json.dumps(token).encode()}
         )
+        self._destroy_older_versions()
+
+    def _destroy_older_versions(self) -> None:
+        """Secret Manager bills every active version beyond the free six, and a version is
+        active when it is enabled or disabled; only a destroyed one is free (plan t18). So once
+        the new token is stored, every older version that is not destroyed yet is destroyed.
+        That cannot be undone, which is fine here: Moka revokes an older token, so an older
+        version holds nothing usable. Best effort: the new version is already stored, so a
+        failure (the job's account lacks `secretmanager.versions.list` or `.destroy`, or the API
+        is down) costs a few cents and must never fail the run. A warning is logged, which does
+        not raise the admin alert."""
+        try:
+            live = sorted(
+                (
+                    version
+                    for version in self.client.list_secret_versions(
+                        request={"parent": self.parent}
+                    )
+                    if getattr(version.state, "name", str(version.state)) in ACTIVE_STATES
+                ),
+                key=lambda version: int(version.name.rsplit("/", 1)[1]),
+            )
+            for old in live[:-1]:  # the newest is the one just saved
+                self.client.destroy_secret_version(request={"name": old.name})
+        except Exception as error:  # noqa: BLE001 - see the docstring
+            self.log.warning(
+                f"could not destroy the older versions of {self.parent}: "
+                f"{type(error).__name__}: {str(error)[:300]}",
+                step="token",
+            )
 
 
 def expires_at(token: dict) -> int:
